@@ -4,14 +4,12 @@ import fs from 'fs'
 import { TextConfig, ImageVariant, WatermarkConfig, WatermarkPosition } from '../types'
 import { config } from '../config'
 
-function watermarkOverlayExpr(position: WatermarkPosition): string {
-  const m = 20
-  switch (position) {
-    case 'topLeft':     return `x=${m}:y=${m}`
-    case 'topRight':    return `x=W-w-${m}:y=${m}`
-    case 'bottomLeft':  return `x=${m}:y=H-h-${m}`
-    case 'bottomRight': return `x=W-w-${m}:y=H-h-${m}`
-  }
+function wmXExpr(position: WatermarkPosition, isText = false): string {
+  return position === 'left' ? '20' : isText ? 'w-tw-20' : 'W-w-20'
+}
+
+function wmYExpr(y: number): string {
+  return `H*${(y / 100).toFixed(4)}`
 }
 
 export interface ImageGenerateResult {
@@ -163,22 +161,35 @@ export async function generateImage(opts: ImageGenerateOptions): Promise<ImageGe
 
   const vfilter = buildVideoFilter(opts.text, opts.resolution, variant)
 
-  const wmPath = config.watermark.path
-  const wmEnabled = opts.watermark?.enabled && wmPath && fs.existsSync(wmPath)
+  const wm = opts.watermark
+  const wmEnabled = wm?.enabled ?? false
+  const wmType = wm?.type ?? 'text'
+  const wmPos = wm?.position ?? 'right'
+  const wmY = wm?.y ?? 90
 
   return new Promise((resolve, reject) => {
     const cmd = ffmpeg(opts.imagePath)
 
-    if (wmEnabled) {
-      const wmSize = Math.round(opts.resolution.width * 0.15)
-      const posExpr = watermarkOverlayExpr(opts.watermark!.position ?? 'bottomRight')
-      cmd
-        .input(wmPath)
-        .complexFilter([
-          `[0:v]${vfilter}[v]`,
-          `[1:v]scale=${wmSize}:-1[wm]`,
-          `[v][wm]overlay=${posExpr}[out]`,
-        ], 'out')
+    if (wmEnabled && wmType === 'text') {
+      const wmText = (wm!.text ?? '@bebetter.path').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/:/g, '\\:')
+      const opacity = (wm!.opacity ?? 0.35).toFixed(2)
+      const fontPath = `${WINDOWS_FONTS}/arial.ttf`.replace(/^([A-Z]):/, '$1\\:')
+      const wmFilter = `drawtext=text='${wmText}':fontfile='${fontPath}':fontsize=22:fontcolor=white@${opacity}:x=${wmXExpr(wmPos, true)}:y=${wmYExpr(wmY)}`
+      cmd.videoFilters(vfilter + `,${wmFilter}`)
+    } else if (wmEnabled && wmType === 'image') {
+      const wmPath = config.watermark.path
+      if (wmPath && fs.existsSync(wmPath)) {
+        const wmSize = Math.round(opts.resolution.width * 0.15)
+        cmd
+          .input(wmPath)
+          .complexFilter([
+            `[0:v]${vfilter}[v]`,
+            `[1:v]scale=${wmSize}:-1[wm]`,
+            `[v][wm]overlay=x=${wmXExpr(wmPos)}:y=${wmYExpr(wmY)}-h/2[out]`,
+          ], 'out')
+      } else {
+        cmd.videoFilters(vfilter)
+      }
     } else {
       cmd.videoFilters(vfilter)
     }

@@ -60,12 +60,16 @@ export interface VideoRecord {
 export type TransitionType = 'fade' | 'fadeBlack' | 'none'
 export type TextAlign = 'left' | 'center' | 'right'
 export type TextEffect = 'none' | 'fadeIn' | 'slideUp' | 'glowPulse'
-export type WatermarkPosition = 'topLeft' | 'topRight' | 'bottomLeft' | 'bottomRight'
+export type WatermarkPosition = 'left' | 'right'
 export type VisualStyle = 'bebetter' | 'serene' | 'raw' | 'minimal' | 'cinematic' | 'bold'
 
 export interface WatermarkConfig {
   enabled: boolean
   position: WatermarkPosition
+  y?: number
+  type?: 'image' | 'text'
+  text?: string
+  opacity?: number
 }
 
 export type ImageVariant = 'combined' | 'hook' | 'punchline'

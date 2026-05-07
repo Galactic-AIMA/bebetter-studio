@@ -1,5 +1,5 @@
 import { useRef, useEffect } from 'react'
-import { VideoConfig, WatermarkPosition } from '../../types'
+import { VideoConfig, WatermarkConfig } from '../../types'
 
 interface Props {
   config: VideoConfig
@@ -37,9 +37,13 @@ export default function VideoPreview({ config }: Props) {
         img.onerror = () => resolve(null)
       })
 
+    const wmEnabled = config.watermark?.enabled
+    const wmType = config.watermark?.type ?? 'text'
+    const needsWmImage = wmEnabled && wmType === 'image'
+
     const tasks: Promise<HTMLImageElement | null>[] = [
       config.imagePreviewUrl ? loadImg(config.imagePreviewUrl) : Promise.resolve(null),
-      config.watermark?.enabled ? loadImg('/api/watermark') : Promise.resolve(null),
+      needsWmImage ? loadImg('/api/watermark') : Promise.resolve(null),
     ]
 
     Promise.all(tasks).then(([bg, wm]) => {
@@ -53,8 +57,10 @@ export default function VideoPreview({ config }: Props) {
         ctx.fillRect(0, 0, W, H)
       }
       drawText(ctx, config, W, H)
-      if (wm && config.watermark?.enabled) {
-        drawWatermark(ctx, wm, config.watermark.position, W, H)
+      if (wmEnabled && wmType === 'text') {
+        drawTextWatermark(ctx, config.watermark!, W, H)
+      } else if (wmEnabled && wm) {
+        drawImageWatermark(ctx, wm, config.watermark!, W, H)
       }
     })
   }, [config])
@@ -133,22 +139,37 @@ function drawText(
   ctx.shadowColor = 'transparent'
 }
 
-function drawWatermark(
+function drawTextWatermark(
+  ctx: CanvasRenderingContext2D,
+  wm: WatermarkConfig,
+  W: number,
+  H: number
+) {
+  const text = wm.text ?? '@bebetter.path'
+  const opacity = wm.opacity ?? 0.35
+  const yPx = H * ((wm.y ?? 90) / 100)
+  const fontSize = Math.round(W * 0.02)
+  ctx.font = `${fontSize}px Arial, sans-serif`
+  ctx.globalAlpha = opacity
+  ctx.fillStyle = '#ffffff'
+  ctx.textBaseline = 'middle'
+  ctx.textAlign = wm.position === 'left' ? 'left' : 'right'
+  const x = wm.position === 'left' ? 20 : W - 20
+  ctx.fillText(text, x, yPx)
+  ctx.globalAlpha = 1
+}
+
+function drawImageWatermark(
   ctx: CanvasRenderingContext2D,
   wm: HTMLImageElement,
-  position: WatermarkPosition,
+  wmCfg: WatermarkConfig,
   W: number,
   H: number
 ) {
   const wmW = Math.round(W * 0.15)
   const wmH = Math.round(wm.height * (wmW / wm.width))
   const margin = 20
-  let x: number, y: number
-  switch (position) {
-    case 'topLeft':     x = margin;             y = margin; break
-    case 'topRight':    x = W - wmW - margin;   y = margin; break
-    case 'bottomLeft':  x = margin;             y = H - wmH - margin; break
-    case 'bottomRight': x = W - wmW - margin;   y = H - wmH - margin; break
-  }
-  ctx.drawImage(wm, x!, y!, wmW, wmH)
+  const x = wmCfg.position === 'left' ? margin : W - wmW - margin
+  const y = H * ((wmCfg.y ?? 90) / 100) - wmH / 2
+  ctx.drawImage(wm, x, y, wmW, wmH)
 }

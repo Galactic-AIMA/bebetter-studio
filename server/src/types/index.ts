@@ -1,9 +1,13 @@
 export type TextEffect = 'none' | 'fadeIn' | 'slideUp' | 'glowPulse'
-export type WatermarkPosition = 'topLeft' | 'topRight' | 'bottomLeft' | 'bottomRight'
+export type WatermarkPosition = 'left' | 'right'
 
 export interface WatermarkConfig {
   enabled: boolean
   position: WatermarkPosition
+  y?: number
+  type?: 'image' | 'text'
+  text?: string
+  opacity?: number
 }
 
 export interface TextConfig {

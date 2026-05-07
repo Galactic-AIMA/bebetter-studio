@@ -14,7 +14,11 @@ const TextConfigSchema = z.object({
 
 const WatermarkConfigSchema = z.object({
   enabled: z.boolean(),
-  position: z.enum(['topLeft', 'topRight', 'bottomLeft', 'bottomRight']),
+  position: z.enum(['left', 'right']),
+  y: z.number().min(0).max(100).optional(),
+  type: z.enum(['image', 'text']).optional(),
+  text: z.string().optional(),
+  opacity: z.number().min(0).max(1).optional(),
 })
 
 const ResolutionSchema = z.object({

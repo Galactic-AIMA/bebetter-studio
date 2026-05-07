@@ -27,7 +27,7 @@ const DEFAULT_CONFIG: VideoConfig = {
   grain: false,
   visualStyle: 'bebetter',
   resolution: { width: 1080, height: 1920 },
-  watermark: { enabled: false, position: 'bottomRight' },
+  watermark: { enabled: false, position: 'right', y: 90, type: 'text', text: '@bebetter.path', opacity: 0.35 },
 }
 
 export type ContentMode = 'video' | 'image'

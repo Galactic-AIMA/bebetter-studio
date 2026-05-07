@@ -4,14 +4,12 @@ import fs from 'fs'
 import { VideoConfig, WatermarkPosition, TextEffect } from '../types'
 import { config } from '../config'
 
-function watermarkOverlayExpr(position: WatermarkPosition): string {
-  const m = 20
-  switch (position) {
-    case 'topLeft':     return `x=${m}:y=${m}`
-    case 'topRight':    return `x=W-w-${m}:y=${m}`
-    case 'bottomLeft':  return `x=${m}:y=H-h-${m}`
-    case 'bottomRight': return `x=W-w-${m}:y=H-h-${m}`
-  }
+function wmXExpr(position: WatermarkPosition, isText = false): string {
+  return position === 'left' ? '20' : isText ? 'w-tw-20' : 'W-w-20'
+}
+
+function wmYExpr(y: number): string {
+  return `H*${(y / 100).toFixed(4)}`
 }
 
 export interface GenerateResult {
@@ -173,22 +171,35 @@ export async function generateVideo(
     '-an',
   ]
 
-  const wmPath = config.watermark.path
-  const wmEnabled = cfg.watermark?.enabled && wmPath && fs.existsSync(wmPath)
+  const wm = cfg.watermark
+  const wmEnabled = wm?.enabled ?? false
+  const wmType = wm?.type ?? 'text'
+  const wmPos = wm?.position ?? 'right'
+  const wmY = wm?.y ?? 90
 
   return new Promise((resolve, reject) => {
     const cmd = ffmpeg(cfg.imagePath).inputOptions(['-loop 1', `-t ${duration}`])
 
-    if (wmEnabled) {
-      const wmSize = Math.round(width * 0.15)
-      const posExpr = watermarkOverlayExpr(cfg.watermark!.position ?? 'bottomRight')
-      cmd
-        .input(wmPath)
-        .complexFilter([
-          `[0:v]${vfilter}[v]`,
-          `[1:v]scale=${wmSize}:-1[wm]`,
-          `[v][wm]overlay=${posExpr}[out]`,
-        ], 'out')
+    if (wmEnabled && wmType === 'text') {
+      const wmText = escapeLine(wm!.text ?? '@bebetter.path')
+      const opacity = (wm!.opacity ?? 0.35).toFixed(2)
+      const fontPath = `${WINDOWS_FONTS}/arial.ttf`.replace(/^([A-Z]):/, '$1\\:')
+      const wmFilter = `drawtext=text='${wmText}':fontfile='${fontPath}':fontsize=22:fontcolor=white@${opacity}:x=${wmXExpr(wmPos, true)}:y=${wmYExpr(wmY)}`
+      cmd.videoFilters(vfilter + `,${wmFilter}`)
+    } else if (wmEnabled && wmType === 'image') {
+      const wmPath = config.watermark.path
+      if (wmPath && fs.existsSync(wmPath)) {
+        const wmSize = Math.round(width * 0.15)
+        cmd
+          .input(wmPath)
+          .complexFilter([
+            `[0:v]${vfilter}[v]`,
+            `[1:v]scale=${wmSize}:-1[wm]`,
+            `[v][wm]overlay=x=${wmXExpr(wmPos)}:y=${wmYExpr(wmY)}-h/2[out]`,
+          ], 'out')
+      } else {
+        cmd.videoFilters(vfilter)
+      }
     } else {
       cmd.videoFilters(vfilter)
     }

@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { useVideoStore } from '../../store/videoStore'
-import { TransitionType, TextAlign, WatermarkPosition, TextEffect, VisualStyle } from '../../types'
+import { TransitionType, TextAlign, TextEffect, VisualStyle } from '../../types'
 import { PRESETS } from '../../presets'
 import { usePresets, PresetConfig } from '../../hooks/usePresets'
 
@@ -21,12 +21,6 @@ const TRANSITIONS: { value: TransitionType; label: string }[] = [
   { value: 'none',      label: 'Sin transición' },
 ]
 
-const WATERMARK_POSITIONS: { value: WatermarkPosition; label: string }[] = [
-  { value: 'topLeft',     label: '↖ Sup. izq.' },
-  { value: 'topRight',    label: '↗ Sup. der.' },
-  { value: 'bottomLeft',  label: '↙ Inf. izq.' },
-  { value: 'bottomRight', label: '↘ Inf. der.' },
-]
 
 const TEXT_EFFECTS: { value: TextEffect; label: string }[] = [
   { value: 'none',      label: 'Sin efecto' },
@@ -327,15 +321,57 @@ export default function VideoEditor() {
             <label htmlFor="wm-enabled" className="text-xs text-bone-500">Activar watermark</label>
           </div>
           {watermark?.enabled && (
-            <div className="grid grid-cols-2 gap-1">
-              {WATERMARK_POSITIONS.map((p) => (
-                <button key={p.value} onClick={() => setWatermark({ position: p.value })}
-                  className={`py-1.5 rounded text-xs border transition-colors ${watermark.position === p.value ? activeBtn : idleBtn}`}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
+            <>
+              {/* Tipo */}
+              <div className="grid grid-cols-2 gap-1">
+                {(['image', 'text'] as const).map((t) => (
+                  <button key={t} onClick={() => setWatermark({ type: t })}
+                    className={`py-1.5 rounded text-xs border transition-colors ${(watermark.type ?? 'text') === t ? activeBtn : idleBtn}`}
+                  >
+                    {t === 'image' ? 'Imagen' : 'Texto'}
+                  </button>
+                ))}
+              </div>
+              {/* Handle (solo texto) */}
+              {(watermark.type ?? 'text') === 'text' && (
+                <input
+                  type="text"
+                  value={watermark.text ?? '@bebetter.path'}
+                  onChange={(e) => setWatermark({ text: e.target.value })}
+                  className="w-full bg-[#1C1C1C] border border-white/10 rounded-lg px-3 py-1.5 text-xs text-[#E8E4DC] focus:outline-none focus:ring-0 focus:border-white/30"
+                />
+              )}
+              {/* Posición horizontal */}
+              <div className="grid grid-cols-2 gap-1">
+                {(['left', 'right'] as const).map((p) => (
+                  <button key={p} onClick={() => setWatermark({ position: p })}
+                    className={`py-1.5 rounded text-xs border transition-colors ${(watermark.position ?? 'right') === p ? activeBtn : idleBtn}`}
+                  >
+                    {p === 'left' ? '← Izquierda' : 'Derecha →'}
+                  </button>
+                ))}
+              </div>
+              {/* Posición vertical */}
+              <div>
+                <label className="text-xs text-bone-700 mb-1 block">Vertical: {watermark.y ?? 90}%</label>
+                <input type="range" min={0} max={100} value={watermark.y ?? 90}
+                  onChange={(e) => setWatermark({ y: Number(e.target.value) })}
+                  className="w-full accent-gold-500"
+                />
+              </div>
+              {/* Opacidad (solo texto) */}
+              {(watermark.type ?? 'text') === 'text' && (
+                <div>
+                  <label className="text-xs text-bone-700 mb-1 block">
+                    Opacidad: {Math.round((watermark.opacity ?? 0.35) * 100)}%
+                  </label>
+                  <input type="range" min={5} max={100} value={Math.round((watermark.opacity ?? 0.35) * 100)}
+                    onChange={(e) => setWatermark({ opacity: Number(e.target.value) / 100 })}
+                    className="w-full accent-gold-500"
+                  />
+                </div>
+              )}
+            </>
           )}
         </div>
       </section>
