@@ -100,11 +100,11 @@ export default function Editor() {
         onPublish={publish}
       />
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden bg-carbon-700">
         <LeftPanel />
 
         {/* Center */}
-        <main className="flex-1 flex flex-col items-center justify-center bg-carbon-900 p-6 gap-3 overflow-hidden">
+        <main className="flex-1 flex flex-col items-center justify-center bg-carbon-900 p-6 gap-3 overflow-hidden rounded-md m-0">
           {/* Variant selector */}
           {mode === 'image' && hasDelimiter && (
             <div className="flex rounded-lg overflow-hidden border border-carbon-600 text-xs">

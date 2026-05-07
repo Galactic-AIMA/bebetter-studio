@@ -148,7 +148,7 @@ export default function VideoEditor() {
       <section>
         <SectionHeader label="Frase" />
         <textarea
-          className="w-full bg-carbon-700 border border-carbon-600 rounded-lg p-3 text-sm text-bone-500 resize-none focus:outline-none focus:ring-1 focus:ring-neon-red placeholder:text-bone-700"
+          className="w-full bg-[#1C1C1C] border border-white/10 rounded-lg p-3 text-sm text-[#E8E4DC] resize-none focus:outline-none focus:ring-0 focus:border-white/30 placeholder:text-[#E8E4DC]/40"
           rows={3}
           value={text.content}
           onChange={(e) => setText({ content: e.target.value })}

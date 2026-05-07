@@ -16,17 +16,17 @@ export default function LeftPanel() {
   const [tab, setTab] = useState<Tab>('images')
 
   return (
-    <aside className="w-60 min-w-60 flex flex-col bg-carbon-800 border-r border-carbon-600 overflow-hidden">
+    <aside className="w-80 min-w-80 flex flex-col bg-carbon-700 overflow-hidden">
       {/* Tab nav */}
-      <nav className="flex flex-col gap-0.5 p-2 border-b border-carbon-600">
+      <nav className="flex flex-col gap-0.5 p-2">
         {TABS.map(({ id, icon: Icon, label }) => (
           <button
             key={id}
             onClick={() => setTab(id)}
             className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs transition-colors text-left ${
               tab === id
-                ? 'bg-carbon-700 text-bone-500 border-l-2 border-neon-red'
-                : 'text-bone-700 hover:text-bone-500 hover:bg-carbon-700 border-l-2 border-transparent'
+                ? 'bg-carbon-700 text-[#E8E4DC] border-l-2 border-neon-red'
+                : 'text-[#E8E4DC]/70 hover:text-[#E8E4DC] hover:bg-carbon-700 border-l-2 border-transparent'
             }`}
           >
             <Icon size={13} />

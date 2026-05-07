@@ -31,12 +31,11 @@ export default function Header({ lastVideoId, lastImageId, isGenerating, toast, 
   const busy = toast?.state === 'loading'
 
   return (
-    <header className="flex items-center justify-between px-5 h-12 bg-carbon-800 border-b border-carbon-600 shrink-0 z-10">
+    <header className="flex items-center justify-between px-5 h-12 bg-carbon-700 shrink-0 z-10">
       {/* Wordmark */}
       <div className="flex items-center gap-0.5 select-none">
-        <span className="text-sm font-semibold tracking-widest text-bone-500">BE</span>
-        <span className="text-sm font-semibold tracking-widest text-blood-500">BETTER</span>
-        <span className="text-sm font-semibold tracking-widest text-bone-700 ml-1.5">STUDIO</span>
+        <span className="text-sm font-semibold tracking-widest text-[#E8E4DC]">BEBETTER</span>
+        <span className="text-sm font-semibold tracking-widest text-[#E8E4DC]/70 ml-1.5">STUDIO</span>
       </div>
 
       {/* Mode toggle */}

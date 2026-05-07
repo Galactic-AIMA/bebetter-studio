@@ -223,7 +223,7 @@ export default function PhraseBank() {
           onClick={() => setHideUsed(!hideUsed)}
           className="text-xs text-bone-700 hover:text-bone-500 transition-colors text-left"
         >
-          {hideUsed ? '+ Mostrar todas' : 'â—‹ Ocultar usadas'}
+          {hideUsed ? '+ Mostrar todas' : '○ Ocultar usadas'}
         </button>
       )}
 
@@ -241,7 +241,7 @@ export default function PhraseBank() {
             <div className="flex items-center gap-1 shrink-0">
               {(phrase.usageCount ?? 0) > 0 && (
                 <span className="text-xs bg-neon-red/20 text-gold-500 rounded px-1.5 py-0.5 font-medium">
-                  Ã—{phrase.usageCount}
+                  ×{phrase.usageCount}
                 </span>
               )}
               <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
