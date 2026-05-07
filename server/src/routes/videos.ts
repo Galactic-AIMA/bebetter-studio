@@ -59,7 +59,7 @@ router.post('/generate', async (req, res) => {
     const base = rawTitle.replace(/[\\/:*?"<>|]/g, '').trim() || 'video'
     let outputName = base
     let counter = 2
-    while (fs.existsSync(path.join(config.paths.output, `${outputName}.mp4`))) {
+    while (fs.existsSync(path.join(config.paths.output, 'videos', `${outputName}.mp4`))) {
       outputName = `${base} (${counter++})`
     }
 

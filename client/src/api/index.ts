@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { Phrase, ImageItem, VideoRecord, VideoConfig } from '../types'
+import { Phrase, ImageItem, VideoRecord, VideoConfig, ImageRecord, ImageVariant } from '../types'
 
 const api = axios.create({ baseURL: '/api' })
 
@@ -47,6 +47,34 @@ export const pinterestApi = {
   status: () => api.get<PinterestStatus>('/pinterest/status').then((r) => r.data),
   sync: () => api.post<PinterestSyncResult>('/pinterest/sync').then((r) => r.data),
   boards: () => api.get('/pinterest/boards').then((r) => r.data),
+}
+
+export interface ImageGenerateConfig {
+  imageId: string
+  imagePath: string
+  text: {
+    content: string
+    font: string
+    fontSize: number
+    color: string
+    position: { x: number; y: number }
+    align: 'left' | 'center' | 'right'
+    shadow: boolean
+    maxWidth: number
+    lineHeight: number
+  }
+  resolution: { width: number; height: number }
+}
+
+export const imagesOutputApi = {
+  list: () => api.get<ImageRecord[]>('/images-output').then((r) => r.data),
+  generate: (config: ImageGenerateConfig, phraseId?: string, variant?: ImageVariant) =>
+    api
+      .post<{ image: ImageRecord }>('/images-output/generate', { config, phraseId, variant })
+      .then((r) => r.data.image),
+  uploadToDrive: (id: string) =>
+    api.post<{ driveUrl: string }>(`/images-output/${id}/upload-drive`).then((r) => r.data),
+  remove: (id: string) => api.delete(`/images-output/${id}`),
 }
 
 export const videosApi = {

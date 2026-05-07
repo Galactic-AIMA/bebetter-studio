@@ -65,7 +65,7 @@ export async function generateVideo(
   cfg: VideoConfig,
   outputName: string
 ): Promise<GenerateResult> {
-  const outputDir = path.resolve(config.paths.output)
+  const outputDir = path.join(path.resolve(config.paths.output), 'videos')
   if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true })
 
   const filename = `${outputName}.mp4`
@@ -142,7 +142,7 @@ export async function generateVideo(
         resolve({
           filename,
           localPath: outputPath,
-          publicUrl: `${config.publicBaseUrl}/output/${filename}`,
+          publicUrl: `${config.publicBaseUrl}/output/videos/${filename}`,
         })
       })
       .on('error', (err) => reject(new Error(`FFmpeg error: ${err.message}`)))

@@ -1,0 +1,153 @@
+[
+  {
+    "id": "ef7bdd56-d591-41ae-a40e-75c67900e583",
+    "filename": "Es mejor ser un lobo que todos quieran callar que una oveja que nadie escucha.jpg",
+    "localPath": "C:\\Users\\David\\Documents\\bebetter\\contentCreator\\output\\images\\Es mejor ser un lobo que todos quieran callar que una oveja que nadie escucha.jpg",
+    "publicUrl": "http://localhost:3001/output/images/Es mejor ser un lobo que todos quieran callar que una oveja que nadie escucha.jpg",
+    "variant": "combined",
+    "phraseId": "1",
+    "createdAt": "2026-05-07T02:59:12.417Z",
+    "config": {
+      "imageId": "🩸.jfif",
+      "imagePath": "C:\\Users\\David\\Documents\\bebetter\\Imagenes de referencia\\🩸.jfif",
+      "text": {
+        "content": "Es mejor ser un lobo que todos quieran callar que una oveja que nadie escucha.",
+        "font": "Montserrat-Bold",
+        "fontSize": 42,
+        "color": "#ffffff",
+        "position": {
+          "x": 50,
+          "y": 25
+        },
+        "align": "center",
+        "shadow": true,
+        "maxWidth": 60,
+        "lineHeight": 1.4
+      },
+      "resolution": {
+        "width": 1080,
+        "height": 1920
+      }
+    }
+  },
+  {
+    "id": "ea24fa5b-8fb7-4f95-b679-2698137438dd",
+    "filename": "Test separacion.jpg",
+    "localPath": "C:\\Users\\David\\Documents\\bebetter\\contentCreator\\output\\images\\Test separacion.jpg",
+    "publicUrl": "http://localhost:3001/output/images/Test separacion.jpg",
+    "variant": "combined",
+    "createdAt": "2026-05-07T02:58:13.164Z",
+    "config": {
+      "imageId": "Berserk.jfif",
+      "imagePath": "C:/Users/David/Documents/bebetter/Imagenes de referencia/Berserk.jfif",
+      "text": {
+        "content": "Test separacion",
+        "font": "Montserrat-Bold",
+        "fontSize": 42,
+        "color": "#ffffff",
+        "position": {
+          "x": 50,
+          "y": 25
+        },
+        "align": "center",
+        "shadow": true,
+        "maxWidth": 60,
+        "lineHeight": 1.4
+      },
+      "resolution": {
+        "width": 1080,
+        "height": 1920
+      }
+    }
+  },
+  {
+    "id": "46e14c11-88f8-4f29-b644-b8630880969b",
+    "filename": "La disciplina no se negocia_punchline.jpg",
+    "localPath": "C:\\Users\\David\\Documents\\bebetter\\contentCreator\\output\\La disciplina no se negocia_punchline.jpg",
+    "publicUrl": "http://localhost:3001/output/La disciplina no se negocia_punchline.jpg",
+    "variant": "punchline",
+    "createdAt": "2026-05-07T02:53:44.804Z",
+    "config": {
+      "imageId": "Berserk.jfif",
+      "imagePath": "C:/Users/David/Documents/bebetter/Imagenes de referencia/Berserk.jfif",
+      "text": {
+        "content": "La disciplina no se negocia // El proceso es el camino",
+        "font": "Montserrat-Bold",
+        "fontSize": 42,
+        "color": "#ffffff",
+        "position": {
+          "x": 50,
+          "y": 25
+        },
+        "align": "center",
+        "shadow": true,
+        "maxWidth": 60,
+        "lineHeight": 1.4
+      },
+      "resolution": {
+        "width": 1080,
+        "height": 1920
+      }
+    }
+  },
+  {
+    "id": "4eb1d85b-f4a1-4a91-b2f8-10cb80f2297d",
+    "filename": "La disciplina no se negocia (2).jpg",
+    "localPath": "C:\\Users\\David\\Documents\\bebetter\\contentCreator\\output\\La disciplina no se negocia (2).jpg",
+    "publicUrl": "http://localhost:3001/output/La disciplina no se negocia (2).jpg",
+    "variant": "combined",
+    "createdAt": "2026-05-07T02:53:18.702Z",
+    "config": {
+      "imageId": "Berserk.jfif",
+      "imagePath": "C:/Users/David/Documents/bebetter/Imagenes de referencia/Berserk.jfif",
+      "text": {
+        "content": "La disciplina no se negocia // El proceso es el camino",
+        "font": "Montserrat-Bold",
+        "fontSize": 42,
+        "color": "#ffffff",
+        "position": {
+          "x": 50,
+          "y": 25
+        },
+        "align": "center",
+        "shadow": true,
+        "maxWidth": 60,
+        "lineHeight": 1.4
+      },
+      "resolution": {
+        "width": 1080,
+        "height": 1920
+      }
+    }
+  },
+  {
+    "id": "82ed1144-3fe2-4047-b928-26d6d578eb61",
+    "filename": "La disciplina no se negocia.jpg",
+    "localPath": "C:\\Users\\David\\Documents\\bebetter\\contentCreator\\output\\La disciplina no se negocia.jpg",
+    "publicUrl": "http://localhost:3001/output/La disciplina no se negocia.jpg",
+    "variant": "combined",
+    "createdAt": "2026-05-07T02:52:31.779Z",
+    "config": {
+      "imageId": "Berserk.jfif",
+      "imagePath": "C:/Users/David/Documents/bebetter/Imagenes de referencia/Berserk.jfif",
+      "text": {
+        "content": "La disciplina no se negocia",
+        "font": "Montserrat-Bold",
+        "fontSize": 42,
+        "color": "#ffffff",
+        "position": {
+          "x": 50,
+          "y": 25
+        },
+        "align": "center",
+        "shadow": true,
+        "maxWidth": 60,
+        "lineHeight": 1.4
+      },
+      "resolution": {
+        "width": 1080,
+        "height": 1920
+      }
+    }
+  }
+]

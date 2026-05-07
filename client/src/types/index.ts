@@ -55,3 +55,16 @@ export interface VideoRecord {
 
 export type TransitionType = 'fade' | 'fadeBlack' | 'none'
 export type TextAlign = 'left' | 'center' | 'right'
+
+export type ImageVariant = 'combined' | 'hook' | 'punchline'
+
+export interface ImageRecord {
+  id: string
+  filename: string
+  localPath: string
+  publicUrl: string
+  driveUrl?: string
+  phraseId?: string
+  variant: ImageVariant
+  createdAt: string
+}

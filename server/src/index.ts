@@ -8,6 +8,7 @@ import imagesRouter from './routes/images'
 import phrasesRouter from './routes/phrases'
 import uploadRouter from './routes/upload'
 import pinterestRouter from './routes/pinterest'
+import imagesOutputRouter from './routes/imagesOutput'
 import { syncBoardImages } from './services/pinterestService'
 
 const app = express()
@@ -23,6 +24,7 @@ app.use('/api/images', imagesRouter)
 app.use('/api/phrases', phrasesRouter)
 app.use('/api/upload', uploadRouter)
 app.use('/api/pinterest', pinterestRouter)
+app.use('/api/images-output', imagesOutputRouter)
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }))
 

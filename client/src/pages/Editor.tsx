@@ -1,23 +1,27 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { Wand2, Send, RotateCcw, HardDrive, ChevronDown } from 'lucide-react'
+import { Wand2, Send, RotateCcw, HardDrive, ChevronDown, Film, Image } from 'lucide-react'
 import VideoPreview from '../components/Preview/VideoPreview'
 import VideoEditor from '../components/VideoEditor/VideoEditor'
 import ImageBank from '../components/ImageBank/ImageBank'
 import PhraseBank from '../components/PhraseBank/PhraseBank'
 import { useVideoStore } from '../store/videoStore'
-import { videosApi } from '../api'
-import { VideoRecord } from '../types'
+import { videosApi, imagesOutputApi } from '../api'
+import { VideoRecord, ImageRecord, ImageVariant } from '../types'
 
 type Tab = 'editor' | 'images' | 'phrases'
 
 export default function Editor() {
-  const { config, selectedPhraseId, isGenerating, setGenerating, reset } = useVideoStore()
+  const { config, selectedPhraseId, isGenerating, setGenerating, reset, mode, setMode } = useVideoStore()
   const [tab, setTab] = useState<Tab>('editor')
   const [lastVideo, setLastVideo] = useState<VideoRecord | null>(null)
+  const [lastImage, setLastImage] = useState<ImageRecord | null>(null)
+  const [imageVariant, setImageVariant] = useState<ImageVariant>('combined')
   const [error, setError] = useState<string | null>(null)
   const [showEnvMenu, setShowEnvMenu] = useState(false)
   const envMenuRef = useRef<HTMLDivElement>(null)
   const [toast, setToast] = useState<{ state: 'loading' | 'success' | 'error'; loadingText?: string; successText?: string; message?: string } | null>(null)
+
+  const hasDelimiter = config.text.content.includes('//')
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -62,9 +66,23 @@ export default function Editor() {
     setError(null)
     setGenerating(true)
     try {
-      const wrappedLines = computeWrappedLines()
-      const video = await videosApi.generate({ ...config, wrappedLines }, selectedPhraseId ?? undefined)
-      setLastVideo(video)
+      if (mode === 'video') {
+        const wrappedLines = computeWrappedLines()
+        const video = await videosApi.generate({ ...config, wrappedLines }, selectedPhraseId ?? undefined)
+        setLastVideo(video)
+        setLastImage(null)
+      } else {
+        const imgConfig = {
+          imageId: config.imageId,
+          imagePath: config.imagePath,
+          text: config.text,
+          resolution: config.resolution,
+        }
+        const variant = hasDelimiter ? imageVariant : 'combined'
+        const image = await imagesOutputApi.generate(imgConfig, selectedPhraseId ?? undefined, variant)
+        setLastImage(image)
+        setLastVideo(null)
+      }
     } catch (e: any) {
       setError(e.response?.data?.error || e.message)
     } finally {
@@ -73,11 +91,15 @@ export default function Editor() {
   }
 
   const uploadToDrive = async () => {
-    if (!lastVideo) return
     setToast({ state: 'loading', loadingText: 'Subiendo a Drive...', successText: 'Subido a Drive' })
     try {
-      const { driveUrl } = await videosApi.uploadToDrive(lastVideo.id)
-      setLastVideo({ ...lastVideo, driveUrl })
+      if (lastVideo) {
+        const { driveUrl } = await videosApi.uploadToDrive(lastVideo.id)
+        setLastVideo({ ...lastVideo, driveUrl })
+      } else if (lastImage) {
+        const { driveUrl } = await imagesOutputApi.uploadToDrive(lastImage.id)
+        setLastImage({ ...lastImage, driveUrl })
+      }
       setToast({ state: 'success', successText: 'Subido a Drive' })
       setTimeout(() => setToast(null), 4000)
     } catch (e: any) {
@@ -135,7 +157,51 @@ export default function Editor() {
 
       {/* ── Centro: preview ── */}
       <main className="flex-1 flex flex-col items-center justify-center bg-gray-950 p-6 gap-4">
-        <div className="h-full max-h-[calc(100vh-120px)]" style={{ aspectRatio: '9/16' }}>
+
+        {/* Toggle Video / Imagen */}
+        <div className="flex rounded-xl overflow-hidden border border-gray-700 text-sm">
+          <button
+            onClick={() => setMode('video')}
+            className={`flex items-center gap-2 px-4 py-2 transition-colors ${
+              mode === 'video'
+                ? 'bg-brand-500 text-white'
+                : 'bg-gray-900 text-gray-400 hover:text-gray-200'
+            }`}
+          >
+            <Film size={14} /> Video
+          </button>
+          <button
+            onClick={() => setMode('image')}
+            className={`flex items-center gap-2 px-4 py-2 transition-colors ${
+              mode === 'image'
+                ? 'bg-brand-500 text-white'
+                : 'bg-gray-900 text-gray-400 hover:text-gray-200'
+            }`}
+          >
+            <Image size={14} /> Imagen
+          </button>
+        </div>
+
+        {/* Selector de variante (solo en modo imagen con delimiter //) */}
+        {mode === 'image' && hasDelimiter && (
+          <div className="flex rounded-xl overflow-hidden border border-gray-700 text-xs">
+            {(['combined', 'hook', 'punchline'] as ImageVariant[]).map((v) => (
+              <button
+                key={v}
+                onClick={() => setImageVariant(v)}
+                className={`px-3 py-1.5 transition-colors ${
+                  imageVariant === v
+                    ? 'bg-gray-700 text-white'
+                    : 'bg-gray-900 text-gray-500 hover:text-gray-300'
+                }`}
+              >
+                {v === 'combined' ? 'Combinada' : v === 'hook' ? 'Solo hook' : 'Solo remate'}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="h-full max-h-[calc(100vh-180px)]" style={{ aspectRatio: '9/16' }}>
           <VideoPreview config={config} />
         </div>
 
@@ -151,10 +217,12 @@ export default function Editor() {
             className="flex items-center gap-2 bg-brand-500 hover:bg-brand-600 disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-medium rounded-xl px-6 py-3 transition-colors"
           >
             <Wand2 size={16} />
-            {isGenerating ? 'Generando...' : 'Generar video'}
+            {isGenerating
+              ? 'Generando...'
+              : mode === 'video' ? 'Generar video' : 'Generar imagen'}
           </button>
 
-          {lastVideo && (
+          {(lastVideo || lastImage) && (
             <>
               <button
                 onClick={uploadToDrive}
@@ -164,33 +232,35 @@ export default function Editor() {
                 <HardDrive size={15} /> Subir a Drive
               </button>
 
-              {/* Split button: Publicar */}
-              <div ref={envMenuRef} className="relative flex">
-                <button
-                  onClick={() => { publish('prod'); setShowEnvMenu(false) }}
-                  disabled={toast?.state === 'loading'}
-                  className="flex items-center gap-2 bg-green-900/40 hover:bg-green-900/60 disabled:opacity-50 disabled:cursor-not-allowed border border-green-700/50 text-green-300 rounded-l-xl px-4 py-3 transition-colors text-sm"
-                >
-                  <Send size={15} /> Publicar
-                </button>
-                <button
-                  onClick={() => setShowEnvMenu((v) => !v)}
-                  disabled={toast?.state === 'loading'}
-                  className="flex items-center bg-green-900/40 hover:bg-green-900/60 disabled:opacity-50 disabled:cursor-not-allowed border-t border-b border-r border-green-700/50 text-green-300 rounded-r-xl px-2 py-3 transition-colors"
-                >
-                  <ChevronDown size={14} />
-                </button>
-                {showEnvMenu && (
-                  <div className="absolute top-full right-0 mt-1 bg-gray-800 border border-gray-700 rounded-xl overflow-hidden z-10 min-w-max">
-                    <button
-                      onClick={() => { publish('test'); setShowEnvMenu(false) }}
-                      className="flex items-center gap-2 w-full px-4 py-2 text-sm text-yellow-300 hover:bg-gray-700 transition-colors"
-                    >
-                      <Send size={13} /> Publicar en test
-                    </button>
-                  </div>
-                )}
-              </div>
+              {/* Publicar solo aplica en modo video */}
+              {lastVideo && (
+                <div ref={envMenuRef} className="relative flex">
+                  <button
+                    onClick={() => { publish('prod'); setShowEnvMenu(false) }}
+                    disabled={toast?.state === 'loading'}
+                    className="flex items-center gap-2 bg-green-900/40 hover:bg-green-900/60 disabled:opacity-50 disabled:cursor-not-allowed border border-green-700/50 text-green-300 rounded-l-xl px-4 py-3 transition-colors text-sm"
+                  >
+                    <Send size={15} /> Publicar
+                  </button>
+                  <button
+                    onClick={() => setShowEnvMenu((v) => !v)}
+                    disabled={toast?.state === 'loading'}
+                    className="flex items-center bg-green-900/40 hover:bg-green-900/60 disabled:opacity-50 disabled:cursor-not-allowed border-t border-b border-r border-green-700/50 text-green-300 rounded-r-xl px-2 py-3 transition-colors"
+                  >
+                    <ChevronDown size={14} />
+                  </button>
+                  {showEnvMenu && (
+                    <div className="absolute top-full right-0 mt-1 bg-gray-800 border border-gray-700 rounded-xl overflow-hidden z-10 min-w-max">
+                      <button
+                        onClick={() => { publish('test'); setShowEnvMenu(false) }}
+                        className="flex items-center gap-2 w-full px-4 py-2 text-sm text-yellow-300 hover:bg-gray-700 transition-colors"
+                      >
+                        <Send size={13} /> Publicar en test
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </>
           )}
 
@@ -203,17 +273,17 @@ export default function Editor() {
           </button>
         </div>
 
-        {lastVideo && (
+        {(lastVideo || lastImage) && (
           <div className="text-center">
             <p className="text-xs text-gray-500">
-              Video guardado:{' '}
+              {lastVideo ? 'Video' : 'Imagen'} guardado:{' '}
               <a
-                href={lastVideo.publicUrl}
+                href={(lastVideo ?? lastImage)!.publicUrl}
                 target="_blank"
                 rel="noreferrer"
                 className="text-brand-500 hover:underline"
               >
-                {lastVideo.filename}
+                {(lastVideo ?? lastImage)!.filename}
               </a>
             </p>
           </div>

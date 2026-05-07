@@ -64,3 +64,24 @@ export interface GenerateVideoRequest {
   config: VideoConfig
   phraseId?: string
 }
+
+export interface ImageConfig {
+  imageId: string
+  imagePath: string
+  text: TextConfig
+  resolution: { width: number; height: number }
+}
+
+export type ImageVariant = 'combined' | 'hook' | 'punchline'
+
+export interface ImageRecord {
+  id: string
+  filename: string
+  localPath: string
+  publicUrl: string
+  driveUrl?: string
+  phraseId?: string
+  variant: ImageVariant
+  createdAt: string
+  config: ImageConfig
+}
