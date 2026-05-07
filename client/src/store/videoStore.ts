@@ -1,5 +1,6 @@
 import { create } from 'zustand'
-import { VideoConfig, TextConfig, WatermarkConfig, TextEffect } from '../types'
+import { VideoConfig, TextConfig, WatermarkConfig, TextEffect, VisualStyle } from '../types'
+import { PRESETS } from '../presets'
 
 const DEFAULT_TEXT: TextConfig = {
   content: 'Tu frase aquí...',
@@ -22,6 +23,7 @@ const DEFAULT_CONFIG: VideoConfig = {
   transitionDuration: 1.0,
   text: DEFAULT_TEXT,
   textEffect: 'none',
+  visualStyle: 'bebetter',
   resolution: { width: 1080, height: 1920 },
   watermark: { enabled: false, position: 'bottomRight' },
 }
@@ -40,6 +42,7 @@ interface VideoStore {
   setMode: (mode: ContentMode) => void
   setWatermark: (partial: Partial<WatermarkConfig>) => void
   setTextEffect: (effect: TextEffect) => void
+  applyPreset: (style: VisualStyle) => void
   reset: () => void
 }
 
@@ -59,5 +62,15 @@ export const useVideoStore = create<VideoStore>((set) => ({
     set((s) => ({ config: { ...s.config, watermark: { ...s.config.watermark!, ...partial } } })),
   setTextEffect: (effect) =>
     set((s) => ({ config: { ...s.config, textEffect: effect } })),
+  applyPreset: (style) => {
+    const { positionY, label: _label, ...textFields } = PRESETS[style]
+    set((s) => ({
+      config: {
+        ...s.config,
+        visualStyle: style,
+        text: { ...s.config.text, ...textFields, position: { ...s.config.text.position, y: positionY } },
+      },
+    }))
+  },
   reset: () => set({ config: DEFAULT_CONFIG, selectedPhraseId: null }),
 }))

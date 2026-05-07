@@ -19,6 +19,7 @@ export interface VideoConfig {
   transitionDuration: number
   text: TextConfig
   textEffect?: TextEffect
+  visualStyle?: VisualStyle
   resolution: { width: number; height: number }
   outputName?: string
   wrappedLines?: string[]  // calculadas en el cliente con measureText para que el servidor las use directamente
@@ -59,6 +60,7 @@ export type TransitionType = 'fade' | 'fadeBlack' | 'none'
 export type TextAlign = 'left' | 'center' | 'right'
 export type TextEffect = 'none' | 'fadeIn' | 'slideUp' | 'glowPulse'
 export type WatermarkPosition = 'topLeft' | 'topRight' | 'bottomLeft' | 'bottomRight'
+export type VisualStyle = 'bebetter' | 'serene' | 'raw' | 'minimal' | 'cinematic' | 'bold'
 
 export interface WatermarkConfig {
   enabled: boolean

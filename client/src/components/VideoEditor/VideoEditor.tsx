@@ -1,6 +1,9 @@
 import React from 'react'
 import { useVideoStore } from '../../store/videoStore'
-import { TransitionType, TextAlign, WatermarkPosition, TextEffect } from '../../types'
+import { TransitionType, TextAlign, WatermarkPosition, TextEffect, VisualStyle } from '../../types'
+import { PRESETS } from '../../presets'
+
+const VISUAL_STYLES = Object.entries(PRESETS) as [VisualStyle, (typeof PRESETS)[VisualStyle]][]
 
 const FONTS = [
   'Montserrat-Bold',
@@ -32,11 +35,33 @@ const TEXT_EFFECTS: { value: TextEffect; label: string }[] = [
 ]
 
 export default function VideoEditor() {
-  const { config, setText, setConfig, setWatermark, setTextEffect } = useVideoStore()
-  const { text, duration, transition, transitionDuration, watermark, textEffect } = config
+  const { config, setText, setConfig, setWatermark, setTextEffect, applyPreset } = useVideoStore()
+  const { text, duration, transition, transitionDuration, watermark, textEffect, visualStyle } = config
 
   return (
     <div className="flex flex-col gap-6 p-4">
+      {/* Estilo visual */}
+      <section>
+        <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-3">
+          Estilo visual
+        </h3>
+        <div className="grid grid-cols-3 gap-1.5">
+          {VISUAL_STYLES.map(([key, preset]) => (
+            <button
+              key={key}
+              onClick={() => applyPreset(key as VisualStyle)}
+              className={`py-1.5 rounded text-xs border transition-colors ${
+                visualStyle === key
+                  ? 'bg-brand-500 border-brand-500 text-white'
+                  : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-500'
+              }`}
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
+      </section>
+
       {/* Texto */}
       <section>
         <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-3">
