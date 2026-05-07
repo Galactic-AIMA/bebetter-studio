@@ -1,6 +1,7 @@
 import express from 'express'
 import cors from 'cors'
 import path from 'path'
+import fs from 'fs'
 import cron from 'node-cron'
 import { config } from './config'
 import videosRouter from './routes/videos'
@@ -25,6 +26,12 @@ app.use('/api/phrases', phrasesRouter)
 app.use('/api/upload', uploadRouter)
 app.use('/api/pinterest', pinterestRouter)
 app.use('/api/images-output', imagesOutputRouter)
+
+app.get('/api/watermark', (req, res) => {
+  const wmPath = config.watermark.path
+  if (!wmPath || !fs.existsSync(wmPath)) return res.status(404).json({ error: 'Watermark not configured' })
+  res.sendFile(path.resolve(wmPath))
+})
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }))
 

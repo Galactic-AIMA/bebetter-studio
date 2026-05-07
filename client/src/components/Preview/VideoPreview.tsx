@@ -1,5 +1,5 @@
 import { useRef, useEffect } from 'react'
-import { VideoConfig } from '../../types'
+import { VideoConfig, WatermarkPosition } from '../../types'
 
 interface Props {
   config: VideoConfig
@@ -25,34 +25,38 @@ export default function VideoPreview({ config }: Props) {
     canvas.width = W
     canvas.height = H
 
-    // Fondo negro por defecto mientras carga la imagen
     ctx.fillStyle = '#000'
     ctx.fillRect(0, 0, W, H)
 
-    if (!config.imagePreviewUrl) {
-      drawText(ctx, config, W, H)
-      return
-    }
+    const loadImg = (src: string): Promise<HTMLImageElement | null> =>
+      new Promise((resolve) => {
+        const img = new Image()
+        img.crossOrigin = 'anonymous'
+        img.src = src
+        img.onload = () => resolve(img)
+        img.onerror = () => resolve(null)
+      })
 
-    const img = new Image()
-    img.crossOrigin = 'anonymous'
-    img.src = config.imagePreviewUrl
-    img.onload = () => {
-      // Escalar imagen manteniendo aspect-ratio y centrar (igual que FFmpeg crop)
-      const scale = Math.max(W / img.width, H / img.height)
-      const sw = img.width * scale
-      const sh = img.height * scale
-      const sx = (W - sw) / 2
-      const sy = (H - sh) / 2
+    const tasks: Promise<HTMLImageElement | null>[] = [
+      config.imagePreviewUrl ? loadImg(config.imagePreviewUrl) : Promise.resolve(null),
+      config.watermark?.enabled ? loadImg('/api/watermark') : Promise.resolve(null),
+    ]
 
-      ctx.drawImage(img, sx, sy, sw, sh)
+    Promise.all(tasks).then(([bg, wm]) => {
+      if (bg) {
+        const scale = Math.max(W / bg.width, H / bg.height)
+        const sw = bg.width * scale
+        const sh = bg.height * scale
+        ctx.drawImage(bg, (W - sw) / 2, (H - sh) / 2, sw, sh)
+      } else {
+        ctx.fillStyle = '#1a1a2e'
+        ctx.fillRect(0, 0, W, H)
+      }
       drawText(ctx, config, W, H)
-    }
-    img.onerror = () => {
-      ctx.fillStyle = '#1a1a2e'
-      ctx.fillRect(0, 0, W, H)
-      drawText(ctx, config, W, H)
-    }
+      if (wm && config.watermark?.enabled) {
+        drawWatermark(ctx, wm, config.watermark.position, W, H)
+      }
+    })
   }, [config])
 
   return (
@@ -127,4 +131,24 @@ function drawText(
   })
 
   ctx.shadowColor = 'transparent'
+}
+
+function drawWatermark(
+  ctx: CanvasRenderingContext2D,
+  wm: HTMLImageElement,
+  position: WatermarkPosition,
+  W: number,
+  H: number
+) {
+  const wmW = Math.round(W * 0.15)
+  const wmH = Math.round(wm.height * (wmW / wm.width))
+  const margin = 20
+  let x: number, y: number
+  switch (position) {
+    case 'topLeft':     x = margin;             y = margin; break
+    case 'topRight':    x = W - wmW - margin;   y = margin; break
+    case 'bottomLeft':  x = margin;             y = H - wmH - margin; break
+    case 'bottomRight': x = W - wmW - margin;   y = H - wmH - margin; break
+  }
+  ctx.drawImage(wm, x!, y!, wmW, wmH)
 }
