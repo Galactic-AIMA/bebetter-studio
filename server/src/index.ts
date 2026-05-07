@@ -11,6 +11,7 @@ import uploadRouter from './routes/upload'
 import pinterestRouter from './routes/pinterest'
 import imagesOutputRouter from './routes/imagesOutput'
 import { syncBoardImages } from './services/pinterestService'
+import { runCleanup } from './services/cleanupService'
 
 const app = express()
 
@@ -39,6 +40,9 @@ app.listen(config.port, () => {
   console.log(`Server running on http://localhost:${config.port}`)
   console.log(`Output folder: ${config.paths.output}`)
   console.log(`Images folder: ${config.paths.images}`)
+
+  cron.schedule('0 */6 * * *', () => { runCleanup() })
+  console.log('Cleanup: activo (cada 6 horas, archivos >24h)')
 
   if (config.pinterest.appId && config.pinterest.boardId) {
     cron.schedule('0 * * * *', () => { syncBoardImages() })

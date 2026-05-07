@@ -37,7 +37,7 @@ const TEXT_EFFECTS: { value: TextEffect; label: string }[] = [
 
 export default function VideoEditor() {
   const { config, setText, setConfig, setWatermark, setTextEffect, applyPreset, applyConfig } = useVideoStore()
-  const { text, duration, transition, transitionDuration, watermark, textEffect, visualStyle } = config
+  const { text, duration, transition, transitionDuration, watermark, textEffect, visualStyle, grain } = config
   const { presets, savePreset, removePreset } = usePresets()
   const [savingName, setSavingName] = useState<string | null>(null)
 
@@ -278,6 +278,18 @@ export default function VideoEditor() {
             />
             <label htmlFor="shadow" className="text-sm text-gray-300">
               Sombra
+            </label>
+          </div>
+          <div className="flex items-center gap-2 pt-4">
+            <input
+              type="checkbox"
+              id="grain"
+              checked={grain ?? false}
+              onChange={(e) => setConfig({ grain: e.target.checked })}
+              className="accent-brand-500"
+            />
+            <label htmlFor="grain" className="text-sm text-gray-300">
+              Grano cinematográfico
             </label>
           </div>
         </div>

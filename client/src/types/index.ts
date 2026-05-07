@@ -19,6 +19,7 @@ export interface VideoConfig {
   transitionDuration: number
   text: TextConfig
   textEffect?: TextEffect
+  grain?: boolean
   visualStyle?: VisualStyle
   resolution: { width: number; height: number }
   outputName?: string

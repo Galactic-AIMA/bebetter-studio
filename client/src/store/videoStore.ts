@@ -24,6 +24,7 @@ const DEFAULT_CONFIG: VideoConfig = {
   transitionDuration: 1.0,
   text: DEFAULT_TEXT,
   textEffect: 'none',
+  grain: false,
   visualStyle: 'bebetter',
   resolution: { width: 1080, height: 1920 },
   watermark: { enabled: false, position: 'bottomRight' },

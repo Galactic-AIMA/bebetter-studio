@@ -3,11 +3,13 @@ import { v4 as uuidv4 } from 'uuid'
 import path from 'path'
 import fs from 'fs'
 import { generateVideo } from '../services/videoGenerator'
+import { enqueue } from '../services/queueService'
 import { uploadVideoToS3 } from '../services/s3Service'
 import { uploadToDrive } from '../services/driveService'
 import { sendToWebhook } from '../services/webhookService'
 import { GenerateVideoRequest, VideoRecord, Phrase } from '../types'
 import { config } from '../config'
+import { GenerateVideoSchema } from '../schemas'
 
 const router = Router()
 
@@ -49,8 +51,11 @@ router.get('/', (_req, res) => {
 
 // POST /api/videos/generate — generar un video nuevo
 router.post('/generate', async (req, res) => {
+  const parsed = GenerateVideoSchema.safeParse(req.body)
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message, details: parsed.error.issues })
+
   try {
-    const { config: vidConfig, phraseId }: GenerateVideoRequest = req.body
+    const { config: vidConfig, phraseId } = parsed.data
 
     const id = uuidv4()
     const phraseText = vidConfig.text.content || ''
@@ -63,7 +68,7 @@ router.post('/generate', async (req, res) => {
       outputName = `${base} (${counter++})`
     }
 
-    const { filename, localPath, publicUrl } = await generateVideo(vidConfig, outputName)
+    const { filename, localPath, publicUrl } = await enqueue(() => generateVideo(vidConfig as any, outputName))
 
     const record: VideoRecord = {
       id,

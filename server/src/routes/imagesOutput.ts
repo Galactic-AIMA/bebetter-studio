@@ -3,9 +3,11 @@ import { v4 as uuidv4 } from 'uuid'
 import path from 'path'
 import fs from 'fs'
 import { generateImage } from '../services/imageGenerator'
+import { enqueue } from '../services/queueService'
 import { uploadToDrive } from '../services/driveService'
 import { ImageConfig, ImageRecord, ImageVariant, Phrase } from '../types'
 import { config } from '../config'
+import { GenerateImageSchema } from '../schemas'
 
 const router = Router()
 
@@ -53,8 +55,11 @@ router.get('/', (_req, res) => {
 
 // POST /api/images-output/generate
 router.post('/generate', async (req, res) => {
+  const parsed = GenerateImageSchema.safeParse(req.body)
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message, details: parsed.error.issues })
+
   try {
-    const { config: imgConfig, phraseId, variant = 'combined' }: GenerateImageRequest = req.body
+    const { config: imgConfig, phraseId, variant = 'combined' } = parsed.data
 
     const phraseText = imgConfig.text.content || ''
     const cleanText = phraseText.split('//')[0].trim()
@@ -69,14 +74,14 @@ router.post('/generate', async (req, res) => {
       outputName = `${base} (${counter++})`
     }
 
-    const result = await generateImage({
+    const result = await enqueue(() => generateImage({
       imagePath: imgConfig.imagePath,
       text: imgConfig.text,
       resolution: imgConfig.resolution,
       outputName,
       variant,
       watermark: imgConfig.watermark,
-    })
+    }))
 
     const record: ImageRecord = {
       id: uuidv4(),

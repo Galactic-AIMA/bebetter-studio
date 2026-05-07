@@ -26,6 +26,7 @@ export interface VideoConfig {
   transitionDuration: number  // seconds
   text: TextConfig
   textEffect?: TextEffect
+  grain?: boolean
   resolution: { width: number; height: number }  // default 1080x1920
   outputName?: string
   wrappedLines?: string[]  // pre-calculadas en el cliente con measureText real

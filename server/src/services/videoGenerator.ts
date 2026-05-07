@@ -152,11 +152,14 @@ export async function generateVideo(
     ? `,fade=t=out:st=${duration - transitionDuration}:d=${transitionDuration}:color=black`
     : ''
 
+  const grainFilter = cfg.grain ? `,noise=alls=8:allf=t` : ''
+
   const vfilter =
     `scale=${width}:${height}:force_original_aspect_ratio=increase,` +
     `crop=${width}:${height}` +
     fadeIn +
     fadeOut +
+    grainFilter +
     `,${drawTextFilters.join(',')}`
 
   const outputOptions = [
