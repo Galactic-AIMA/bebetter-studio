@@ -1,7 +1,8 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { useVideoStore } from '../../store/videoStore'
 import { TransitionType, TextAlign, WatermarkPosition, TextEffect, VisualStyle } from '../../types'
 import { PRESETS } from '../../presets'
+import { usePresets, PresetConfig } from '../../hooks/usePresets'
 
 const VISUAL_STYLES = Object.entries(PRESETS) as [VisualStyle, (typeof PRESETS)[VisualStyle]][]
 
@@ -35,8 +36,27 @@ const TEXT_EFFECTS: { value: TextEffect; label: string }[] = [
 ]
 
 export default function VideoEditor() {
-  const { config, setText, setConfig, setWatermark, setTextEffect, applyPreset } = useVideoStore()
+  const { config, setText, setConfig, setWatermark, setTextEffect, applyPreset, applyConfig } = useVideoStore()
   const { text, duration, transition, transitionDuration, watermark, textEffect, visualStyle } = config
+  const { presets, savePreset, removePreset } = usePresets()
+  const [savingName, setSavingName] = useState<string | null>(null)
+
+  const handleSave = () => {
+    if (savingName === null) { setSavingName(''); return }
+    if (!savingName.trim()) { setSavingName(null); return }
+    const { content: _content, ...textWithoutContent } = text
+    const presetConfig: PresetConfig = {
+      text: textWithoutContent,
+      textEffect: textEffect ?? 'none',
+      visualStyle,
+      watermark,
+      duration,
+      transition,
+      transitionDuration,
+    }
+    savePreset(savingName, presetConfig)
+    setSavingName(null)
+  }
 
   return (
     <div className="flex flex-col gap-6 p-4">
@@ -60,6 +80,66 @@ export default function VideoEditor() {
             </button>
           ))}
         </div>
+      </section>
+
+      {/* Mis presets */}
+      <section>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-500">
+            Mis presets
+          </h3>
+          <button
+            onClick={handleSave}
+            className="text-xs text-brand-400 hover:text-brand-300 transition-colors"
+          >
+            {savingName === null ? '+ Guardar actual' : 'Cancelar'}
+          </button>
+        </div>
+
+        {savingName !== null && (
+          <div className="flex gap-2 mb-3">
+            <input
+              autoFocus
+              type="text"
+              value={savingName}
+              onChange={(e) => setSavingName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') setSavingName(null) }}
+              placeholder="Nombre del preset..."
+              className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-brand-500"
+            />
+            <button
+              onClick={handleSave}
+              disabled={!savingName.trim()}
+              className="px-3 py-1.5 bg-brand-500 hover:bg-brand-600 disabled:bg-gray-700 disabled:cursor-not-allowed text-white text-xs rounded-lg transition-colors"
+            >
+              Guardar
+            </button>
+          </div>
+        )}
+
+        {presets.length === 0 && savingName === null ? (
+          <p className="text-xs text-gray-600">No hay presets guardados.</p>
+        ) : (
+          <div className="flex flex-col gap-1">
+            {presets.map((p) => (
+              <div key={p.id} className="flex items-center gap-2 group">
+                <button
+                  onClick={() => applyConfig(p.config)}
+                  className="flex-1 text-left px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 hover:border-gray-500 text-sm text-gray-200 transition-colors truncate"
+                >
+                  {p.name}
+                </button>
+                <button
+                  onClick={() => removePreset(p.id)}
+                  className="opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-400 transition-all text-xs px-1"
+                  title="Eliminar"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* Texto */}
