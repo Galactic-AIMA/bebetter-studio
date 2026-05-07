@@ -4,11 +4,12 @@ import VideoPreview from '../components/Preview/VideoPreview'
 import VideoEditor from '../components/VideoEditor/VideoEditor'
 import ImageBank from '../components/ImageBank/ImageBank'
 import PhraseBank from '../components/PhraseBank/PhraseBank'
+import BatchGenerator from '../components/BatchGenerator/BatchGenerator'
 import { useVideoStore } from '../store/videoStore'
 import { videosApi, imagesOutputApi } from '../api'
 import { VideoRecord, ImageRecord, ImageVariant } from '../types'
 
-type Tab = 'editor' | 'images' | 'phrases'
+type Tab = 'editor' | 'images' | 'phrases' | 'batch'
 
 export default function Editor() {
   const { config, selectedPhraseId, isGenerating, setGenerating, reset, mode, setMode } = useVideoStore()
@@ -124,6 +125,7 @@ export default function Editor() {
     { id: 'editor', label: 'Estilo' },
     { id: 'images', label: 'Imágenes' },
     { id: 'phrases', label: 'Frases' },
+    { id: 'batch', label: 'Lotes' },
   ]
 
   return (
@@ -152,6 +154,7 @@ export default function Editor() {
           {tab === 'editor' && <VideoEditor />}
           {tab === 'images' && <ImageBank />}
           {tab === 'phrases' && <PhraseBank />}
+          {tab === 'batch' && <BatchGenerator />}
         </div>
 
       </aside>
