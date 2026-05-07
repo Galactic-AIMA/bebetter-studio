@@ -14,6 +14,15 @@ server/credentials/
 data/images/
 data/pinterest-sync.json
 
+# Runtime data (generated content records & usage counters)
+data/videos.json
+data/images-output.json
+data/images-usage.json
+data/phrases.json
+
+# Lockfile
+package-lock.json
+
 # Claude Code local config
 .claude/
 
