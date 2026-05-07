@@ -20,8 +20,8 @@ export default function VideoPreview({ config }: Props) {
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    const W = 1080
-    const H = 1920
+    const W = config.resolution.width
+    const H = config.resolution.height
     canvas.width = W
     canvas.height = H
 
@@ -66,7 +66,7 @@ export default function VideoPreview({ config }: Props) {
         style={{
           maxHeight: '100%',
           maxWidth: '100%',
-          aspectRatio: '9/16',
+          aspectRatio: `${config.resolution.width}/${config.resolution.height}`,
           borderRadius: '8px',
           objectFit: 'contain',
         }}

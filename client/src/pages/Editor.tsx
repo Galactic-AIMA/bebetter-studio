@@ -202,7 +202,7 @@ export default function Editor() {
           </div>
         )}
 
-        <div className="h-full max-h-[calc(100vh-180px)]" style={{ aspectRatio: '9/16' }}>
+        <div className="h-full max-h-[calc(100vh-180px)]" style={{ aspectRatio: `${config.resolution.width}/${config.resolution.height}` }}>
           <VideoPreview config={config} />
         </div>
 

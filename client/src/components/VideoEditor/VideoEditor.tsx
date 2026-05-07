@@ -289,6 +289,30 @@ export default function VideoEditor() {
           Video
         </h3>
         <div className="grid grid-cols-2 gap-3">
+          <div className="col-span-2">
+            <label className="text-xs text-gray-400 mb-1 block">Resolución</label>
+            <div className="flex gap-1">
+              {([
+                { label: '9:16 Vertical', w: 1080, h: 1920 },
+                { label: '1:1 Cuadrado', w: 1080, h: 1080 },
+              ] as const).map((r) => {
+                const active = config.resolution.width === r.w && config.resolution.height === r.h
+                return (
+                  <button
+                    key={r.label}
+                    onClick={() => setConfig({ resolution: { width: r.w, height: r.h } })}
+                    className={`flex-1 py-1 rounded text-xs border transition-colors ${
+                      active
+                        ? 'bg-brand-500 border-brand-500 text-white'
+                        : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-500'
+                    }`}
+                  >
+                    {r.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
           <div>
             <label className="text-xs text-gray-400 mb-1 block">
               Duración: {duration}s
