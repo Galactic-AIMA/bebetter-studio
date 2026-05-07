@@ -17,8 +17,8 @@ const FONTS = [
 
 const TRANSITIONS: { value: TransitionType; label: string }[] = [
   { value: 'fadeBlack', label: 'Fade desde negro' },
-  { value: 'fade', label: 'Fade suave' },
-  { value: 'none', label: 'Sin transición' },
+  { value: 'fade',      label: 'Fade suave' },
+  { value: 'none',      label: 'Sin transición' },
 ]
 
 const WATERMARK_POSITIONS: { value: WatermarkPosition; label: string }[] = [
@@ -31,9 +31,16 @@ const WATERMARK_POSITIONS: { value: WatermarkPosition; label: string }[] = [
 const TEXT_EFFECTS: { value: TextEffect; label: string }[] = [
   { value: 'none',      label: 'Sin efecto' },
   { value: 'fadeIn',    label: 'Fade in' },
-  { value: 'slideUp',   label: 'Deslizar arriba' },
-  { value: 'glowPulse', label: 'Glow pulse' },
+  { value: 'slideUp',   label: 'Deslizar' },
+  { value: 'glowPulse', label: 'Glow' },
 ]
+
+const SectionHeader = ({ label }: { label: string }) => (
+  <p className="text-[10px] font-semibold uppercase tracking-widest text-bone-700 mb-3">{label}</p>
+)
+
+const activeBtn = 'border-neon-red text-neon-red bg-carbon-700'
+const idleBtn   = 'border-carbon-600 text-bone-700 bg-carbon-700 hover:text-bone-500 hover:border-bone-700'
 
 export default function VideoEditor() {
   const { config, setText, setConfig, setWatermark, setTextEffect, applyPreset, applyConfig } = useVideoStore()
@@ -59,21 +66,18 @@ export default function VideoEditor() {
   }
 
   return (
-    <div className="flex flex-col gap-6 p-4">
+    <div className="flex flex-col gap-5 p-4">
+
       {/* Estilo visual */}
       <section>
-        <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-3">
-          Estilo visual
-        </h3>
-        <div className="grid grid-cols-3 gap-1.5">
+        <SectionHeader label="Estilo visual" />
+        <div className="grid grid-cols-3 gap-1">
           {VISUAL_STYLES.map(([key, preset]) => (
             <button
               key={key}
               onClick={() => applyPreset(key as VisualStyle)}
               className={`py-1.5 rounded text-xs border transition-colors ${
-                visualStyle === key
-                  ? 'bg-brand-500 border-brand-500 text-white'
-                  : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-500'
+                visualStyle === key ? activeBtn : idleBtn
               }`}
             >
               {preset.label}
@@ -85,19 +89,17 @@ export default function VideoEditor() {
       {/* Mis presets */}
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-500">
-            Mis presets
-          </h3>
+          <SectionHeader label="Mis presets" />
           <button
             onClick={handleSave}
-            className="text-xs text-brand-400 hover:text-brand-300 transition-colors"
+            className="text-[10px] text-gold-500 hover:text-gold-600 transition-colors -mt-3"
           >
             {savingName === null ? '+ Guardar actual' : 'Cancelar'}
           </button>
         </div>
 
         {savingName !== null && (
-          <div className="flex gap-2 mb-3">
+          <div className="flex gap-2 mb-2">
             <input
               autoFocus
               type="text"
@@ -105,12 +107,12 @@ export default function VideoEditor() {
               onChange={(e) => setSavingName(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') setSavingName(null) }}
               placeholder="Nombre del preset..."
-              className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-brand-500"
+              className="flex-1 bg-carbon-700 border border-carbon-600 rounded-lg px-3 py-1.5 text-xs text-bone-500 focus:outline-none focus:ring-1 focus:ring-neon-red placeholder:text-bone-700"
             />
             <button
               onClick={handleSave}
               disabled={!savingName.trim()}
-              className="px-3 py-1.5 bg-brand-500 hover:bg-brand-600 disabled:bg-gray-700 disabled:cursor-not-allowed text-white text-xs rounded-lg transition-colors"
+              className="px-3 py-1.5 bg-gold-500 hover:bg-gold-600 disabled:opacity-40 disabled:cursor-not-allowed text-carbon-900 text-xs rounded-lg transition-colors font-medium"
             >
               Guardar
             </button>
@@ -118,20 +120,20 @@ export default function VideoEditor() {
         )}
 
         {presets.length === 0 && savingName === null ? (
-          <p className="text-xs text-gray-600">No hay presets guardados.</p>
+          <p className="text-xs text-bone-700">No hay presets guardados.</p>
         ) : (
           <div className="flex flex-col gap-1">
             {presets.map((p) => (
               <div key={p.id} className="flex items-center gap-2 group">
                 <button
                   onClick={() => applyConfig(p.config)}
-                  className="flex-1 text-left px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 hover:border-gray-500 text-sm text-gray-200 transition-colors truncate"
+                  className="flex-1 text-left px-3 py-1.5 rounded-lg bg-carbon-700 border border-carbon-600 hover:border-bone-700 text-xs text-bone-500 transition-colors truncate"
                 >
                   {p.name}
                 </button>
                 <button
                   onClick={() => removePreset(p.id)}
-                  className="opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-400 transition-all text-xs px-1"
+                  className="opacity-0 group-hover:opacity-100 text-bone-700 hover:text-neon-red transition-all text-xs px-1"
                   title="Eliminar"
                 >
                   ✕
@@ -142,13 +144,11 @@ export default function VideoEditor() {
         )}
       </section>
 
-      {/* Texto */}
+      {/* Frase */}
       <section>
-        <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-3">
-          Frase
-        </h3>
+        <SectionHeader label="Frase" />
         <textarea
-          className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-sm text-white resize-none focus:outline-none focus:ring-1 focus:ring-brand-500"
+          className="w-full bg-carbon-700 border border-carbon-600 rounded-lg p-3 text-sm text-bone-500 resize-none focus:outline-none focus:ring-1 focus:ring-neon-red placeholder:text-bone-700"
           rows={3}
           value={text.content}
           onChange={(e) => setText({ content: e.target.value })}
@@ -158,58 +158,40 @@ export default function VideoEditor() {
 
       {/* Tipografía */}
       <section>
-        <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-3">
-          Tipografía
-        </h3>
+        <SectionHeader label="Tipografía" />
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="text-xs text-gray-400 mb-1 block">Fuente</label>
+            <label className="text-xs text-bone-700 mb-1 block">Fuente</label>
             <select
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg p-2 text-sm text-white"
+              className="w-full bg-carbon-700 border border-carbon-600 rounded-lg p-2 text-xs text-bone-500"
               value={text.font}
               onChange={(e) => setText({ font: e.target.value })}
             >
               {FONTS.map((f) => (
-                <option key={f} value={f}>
-                  {f.replace(/-/g, ' ')}
-                </option>
+                <option key={f} value={f}>{f.replace(/-/g, ' ')}</option>
               ))}
             </select>
           </div>
           <div>
-            <label className="text-xs text-gray-400 mb-1 block">
-              Tamaño: {text.fontSize}px
-            </label>
-            <input
-              type="range"
-              min={24}
-              max={120}
-              value={text.fontSize}
+            <label className="text-xs text-bone-700 mb-1 block">Tamaño: {text.fontSize}px</label>
+            <input type="range" min={24} max={120} value={text.fontSize}
               onChange={(e) => setText({ fontSize: Number(e.target.value) })}
-              className="w-full accent-brand-500"
+              className="w-full accent-gold-500"
             />
           </div>
           <div>
-            <label className="text-xs text-gray-400 mb-1 block">Color</label>
-            <input
-              type="color"
-              value={text.color}
+            <label className="text-xs text-bone-700 mb-1 block">Color</label>
+            <input type="color" value={text.color}
               onChange={(e) => setText({ color: e.target.value })}
-              className="w-full h-9 rounded-lg bg-gray-800 border border-gray-700 cursor-pointer"
+              className="w-full h-9 rounded-lg bg-carbon-700 border border-carbon-600 cursor-pointer"
             />
           </div>
           <div>
-            <label className="text-xs text-gray-400 mb-1 block">Alineación</label>
+            <label className="text-xs text-bone-700 mb-1 block">Alineación</label>
             <div className="flex gap-1">
               {(['left', 'center', 'right'] as TextAlign[]).map((a) => (
-                <button
-                  key={a}
-                  onClick={() => setText({ align: a })}
-                  className={`flex-1 py-1 rounded text-xs border transition-colors ${
-                    text.align === a
-                      ? 'bg-brand-500 border-brand-500 text-white'
-                      : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-500'
-                  }`}
+                <button key={a} onClick={() => setText({ align: a })}
+                  className={`flex-1 py-1 rounded text-xs border transition-colors ${text.align === a ? activeBtn : idleBtn}`}
                 >
                   {a === 'left' ? '←' : a === 'center' ? '↔' : '→'}
                 </button>
@@ -221,103 +203,78 @@ export default function VideoEditor() {
 
       {/* Posición */}
       <section>
-        <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-3">
-          Posición del texto
-        </h3>
+        <SectionHeader label="Posición" />
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="text-xs text-gray-400 mb-1 block">
-              Horizontal: {text.position.x}%
-            </label>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              value={text.position.x}
-              onChange={(e) =>
-                setText({ position: { ...text.position, x: Number(e.target.value) } })
-              }
-              className="w-full accent-brand-500"
+            <label className="text-xs text-bone-700 mb-1 block">Horizontal: {text.position.x}%</label>
+            <input type="range" min={0} max={100} value={text.position.x}
+              onChange={(e) => setText({ position: { ...text.position, x: Number(e.target.value) } })}
+              className="w-full accent-gold-500"
             />
           </div>
           <div>
-            <label className="text-xs text-gray-400 mb-1 block">
-              Vertical: {text.position.y}%
-            </label>
-            <input
-              type="range"
-              min={5}
-              max={95}
-              value={text.position.y}
-              onChange={(e) =>
-                setText({ position: { ...text.position, y: Number(e.target.value) } })
-              }
-              className="w-full accent-brand-500"
+            <label className="text-xs text-bone-700 mb-1 block">Vertical: {text.position.y}%</label>
+            <input type="range" min={5} max={95} value={text.position.y}
+              onChange={(e) => setText({ position: { ...text.position, y: Number(e.target.value) } })}
+              className="w-full accent-gold-500"
             />
           </div>
           <div>
-            <label className="text-xs text-gray-400 mb-1 block">
-              Ancho máx: {text.maxWidth}%
-            </label>
-            <input
-              type="range"
-              min={30}
-              max={95}
-              value={text.maxWidth}
+            <label className="text-xs text-bone-700 mb-1 block">Ancho máx: {text.maxWidth}%</label>
+            <input type="range" min={30} max={95} value={text.maxWidth}
               onChange={(e) => setText({ maxWidth: Number(e.target.value) })}
-              className="w-full accent-brand-500"
+              className="w-full accent-gold-500"
             />
           </div>
-          <div className="flex items-center gap-2 pt-4">
-            <input
-              type="checkbox"
-              id="shadow"
-              checked={text.shadow}
+          <div className="flex items-center gap-2 pt-3">
+            <input type="checkbox" id="shadow" checked={text.shadow}
               onChange={(e) => setText({ shadow: e.target.checked })}
-              className="accent-brand-500"
+              className="accent-gold-500"
             />
-            <label htmlFor="shadow" className="text-sm text-gray-300">
-              Sombra
-            </label>
+            <label htmlFor="shadow" className="text-xs text-bone-500">Sombra</label>
           </div>
-          <div className="flex items-center gap-2 pt-4">
-            <input
-              type="checkbox"
-              id="grain"
-              checked={grain ?? false}
+        </div>
+      </section>
+
+      {/* Efectos */}
+      <section>
+        <SectionHeader label="Efectos" />
+        <div className="flex flex-col gap-3">
+          <div>
+            <label className="text-xs text-bone-700 mb-1 block">Efecto de texto</label>
+            <div className="grid grid-cols-2 gap-1">
+              {TEXT_EFFECTS.map((ef) => (
+                <button key={ef.value} onClick={() => setTextEffect(ef.value)}
+                  className={`py-1.5 rounded text-xs border transition-colors ${textEffect === ef.value ? activeBtn : idleBtn}`}
+                >
+                  {ef.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <input type="checkbox" id="grain" checked={grain ?? false}
               onChange={(e) => setConfig({ grain: e.target.checked })}
-              className="accent-brand-500"
+              className="accent-gold-500"
             />
-            <label htmlFor="grain" className="text-sm text-gray-300">
-              Grano cinematográfico
-            </label>
+            <label htmlFor="grain" className="text-xs text-bone-500">Grano cinematográfico</label>
           </div>
         </div>
       </section>
 
       {/* Video */}
       <section>
-        <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-3">
-          Video
-        </h3>
+        <SectionHeader label="Video" />
         <div className="grid grid-cols-2 gap-3">
           <div className="col-span-2">
-            <label className="text-xs text-gray-400 mb-1 block">Resolución</label>
+            <label className="text-xs text-bone-700 mb-1 block">Resolución</label>
             <div className="flex gap-1">
-              {([
-                { label: '9:16 Vertical', w: 1080, h: 1920 },
-                { label: '1:1 Cuadrado', w: 1080, h: 1080 },
-              ] as const).map((r) => {
+              {([{ label: '9:16', w: 1080, h: 1920 }, { label: '1:1', w: 1080, h: 1080 }] as const).map((r) => {
                 const active = config.resolution.width === r.w && config.resolution.height === r.h
                 return (
-                  <button
-                    key={r.label}
+                  <button key={r.label}
                     onClick={() => setConfig({ resolution: { width: r.w, height: r.h } })}
-                    className={`flex-1 py-1 rounded text-xs border transition-colors ${
-                      active
-                        ? 'bg-brand-500 border-brand-500 text-white'
-                        : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-500'
-                    }`}
+                    className={`flex-1 py-1 rounded text-xs border transition-colors ${active ? activeBtn : idleBtn}`}
                   >
                     {r.label}
                   </button>
@@ -326,101 +283,54 @@ export default function VideoEditor() {
             </div>
           </div>
           <div>
-            <label className="text-xs text-gray-400 mb-1 block">
-              Duración: {duration}s
-            </label>
-            <input
-              type="range"
-              min={5}
-              max={30}
-              value={duration}
+            <label className="text-xs text-bone-700 mb-1 block">Duración: {duration}s</label>
+            <input type="range" min={5} max={30} value={duration}
               onChange={(e) => setConfig({ duration: Number(e.target.value) })}
-              className="w-full accent-brand-500"
+              className="w-full accent-gold-500"
             />
           </div>
           <div>
-            <label className="text-xs text-gray-400 mb-1 block">Transición</label>
+            <label className="text-xs text-bone-700 mb-1 block">Transición</label>
             <select
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg p-2 text-sm text-white"
+              className="w-full bg-carbon-700 border border-carbon-600 rounded-lg p-2 text-xs text-bone-500"
               value={transition}
-              onChange={(e) =>
-                setConfig({ transition: e.target.value as TransitionType })
-              }
+              onChange={(e) => setConfig({ transition: e.target.value as TransitionType })}
             >
               {TRANSITIONS.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.label}
-                </option>
+                <option key={t.value} value={t.value}>{t.label}</option>
               ))}
             </select>
           </div>
           {transition !== 'none' && (
-            <div>
-              <label className="text-xs text-gray-400 mb-1 block">
-                Duración transición: {transitionDuration}s
+            <div className="col-span-2">
+              <label className="text-xs text-bone-700 mb-1 block">
+                Dur. transición: {transitionDuration}s
               </label>
-              <input
-                type="range"
-                min={0.3}
-                max={2}
-                step={0.1}
-                value={transitionDuration}
-                onChange={(e) =>
-                  setConfig({ transitionDuration: Number(e.target.value) })
-                }
-                className="w-full accent-brand-500"
+              <input type="range" min={0.3} max={2} step={0.1} value={transitionDuration}
+                onChange={(e) => setConfig({ transitionDuration: Number(e.target.value) })}
+                className="w-full accent-gold-500"
               />
             </div>
           )}
-          <div className="col-span-2">
-            <label className="text-xs text-gray-400 mb-1 block">Efecto de texto</label>
-            <div className="grid grid-cols-2 gap-1">
-              {TEXT_EFFECTS.map((ef) => (
-                <button
-                  key={ef.value}
-                  onClick={() => setTextEffect(ef.value)}
-                  className={`py-1.5 rounded text-xs border transition-colors ${
-                    textEffect === ef.value
-                      ? 'bg-brand-500 border-brand-500 text-white'
-                      : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-500'
-                  }`}
-                >
-                  {ef.label}
-                </button>
-              ))}
-            </div>
-          </div>
         </div>
       </section>
+
       {/* Watermark */}
       <section>
-        <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-3">
-          Marca de agua
-        </h3>
-        <div className="flex flex-col gap-3">
+        <SectionHeader label="Marca de agua" />
+        <div className="flex flex-col gap-2">
           <div className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              id="wm-enabled"
-              checked={watermark?.enabled ?? false}
+            <input type="checkbox" id="wm-enabled" checked={watermark?.enabled ?? false}
               onChange={(e) => setWatermark({ enabled: e.target.checked })}
-              className="accent-brand-500"
+              className="accent-gold-500"
             />
-            <label htmlFor="wm-enabled" className="text-sm text-gray-300">
-              Activar watermark bebetter
-            </label>
+            <label htmlFor="wm-enabled" className="text-xs text-bone-500">Activar watermark</label>
           </div>
           {watermark?.enabled && (
             <div className="grid grid-cols-2 gap-1">
               {WATERMARK_POSITIONS.map((p) => (
-                <button
-                  key={p.value}
-                  onClick={() => setWatermark({ position: p.value })}
-                  className={`py-1.5 rounded text-xs border transition-colors ${
-                    watermark.position === p.value
-                      ? 'bg-brand-500 border-brand-500 text-white'
-                      : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-500'
-                  }`}
+                <button key={p.value} onClick={() => setWatermark({ position: p.value })}
+                  className={`py-1.5 rounded text-xs border transition-colors ${watermark.position === p.value ? activeBtn : idleBtn}`}
                 >
                   {p.label}
                 </button>
@@ -429,6 +339,7 @@ export default function VideoEditor() {
           )}
         </div>
       </section>
+
     </div>
   )
 }

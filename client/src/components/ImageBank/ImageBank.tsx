@@ -84,9 +84,9 @@ export default function ImageBank() {
   return (
     <div className="flex flex-col gap-3 p-4">
       {pinterest?.isConfigured && (
-        <div className="flex items-center justify-between text-xs bg-gray-800/50 rounded-lg px-3 py-2 border border-gray-700/50">
-          <span className="flex items-center gap-1.5 text-gray-500">
-            <span className="text-red-400">◈</span>
+        <div className="flex items-center justify-between text-xs bg-carbon-700/50 rounded-lg px-3 py-2 border border-carbon-600/50">
+          <span className="flex items-center gap-1.5 text-bone-700">
+            <span className="text-neon-red">◈</span>
             {pinterest.lastSync
               ? `${formatTimeAgo(pinterest.lastSync.timestamp)} · ${pinterest.lastSync.newImages} nuevas`
               : 'Sin sincronizar aún'}
@@ -94,7 +94,7 @@ export default function ImageBank() {
           <button
             onClick={handlePinterestSync}
             disabled={syncing}
-            className="flex items-center gap-1 text-gray-400 hover:text-white transition-colors disabled:opacity-50"
+            className="flex items-center gap-1 text-bone-700 hover:text-bone-500 transition-colors disabled:opacity-50"
           >
             <RefreshCw size={11} className={syncing ? 'animate-spin' : ''} />
             {syncing ? 'Sincronizando...' : 'Sincronizar'}
@@ -105,13 +105,13 @@ export default function ImageBank() {
       <div className="flex gap-2">
         <button
           onClick={pickRandom}
-          className="flex items-center gap-1.5 text-xs bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg px-3 py-2 text-gray-300 transition-colors"
+          className="flex items-center gap-1.5 text-xs bg-carbon-700 hover:bg-carbon-600 border border-carbon-600 rounded-lg px-3 py-2 text-bone-500 transition-colors"
         >
           <Shuffle size={13} /> Aleatoria
         </button>
         <button
           onClick={() => fileRef.current?.click()}
-          className="flex items-center gap-1.5 text-xs bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg px-3 py-2 text-gray-300 transition-colors"
+          className="flex items-center gap-1.5 text-xs bg-carbon-700 hover:bg-carbon-600 border border-carbon-600 rounded-lg px-3 py-2 text-bone-500 transition-colors"
         >
           <Upload size={13} /> Subir imagen
         </button>
@@ -121,14 +121,14 @@ export default function ImageBank() {
       {hasUsed && (
         <button
           onClick={() => setHideUsed(!hideUsed)}
-          className="text-xs text-gray-500 hover:text-gray-300 transition-colors text-left"
+          className="text-xs text-bone-700 hover:text-bone-500 transition-colors text-left"
         >
           {hideUsed ? '+ Mostrar todas' : '○ Ocultar usadas'}
         </button>
       )}
 
       {loading ? (
-        <p className="text-xs text-gray-500">Cargando imágenes...</p>
+        <p className="text-xs text-bone-700">Cargando imágenes...</p>
       ) : (
         <div className="grid grid-cols-3 gap-2">
           {visible.map((img) => (
@@ -137,8 +137,8 @@ export default function ImageBank() {
               onClick={() => selectImage(img)}
               className={`relative aspect-[9/16] overflow-hidden rounded-lg border-2 transition-all ${
                 config.imageId === img.id
-                  ? 'border-brand-500'
-                  : 'border-transparent hover:border-gray-600'
+                  ? 'border-neon-red'
+                  : 'border-transparent hover:border-carbon-600'
               }`}
             >
               <img
@@ -147,14 +147,14 @@ export default function ImageBank() {
                 className="w-full h-full object-cover"
               />
               {(img.usageCount ?? 0) > 0 && (
-                <span className="absolute top-1 right-1 text-xs bg-black/70 text-brand-400 rounded px-1 py-0.5 font-medium leading-none">
+                <span className="absolute top-1 right-1 text-xs bg-black/70 text-gold-500 rounded px-1 py-0.5 font-medium leading-none">
                   ×{img.usageCount}
                 </span>
               )}
             </button>
           ))}
           {visible.length === 0 && (
-            <p className="col-span-3 text-xs text-gray-500 text-center py-8">
+            <p className="col-span-3 text-xs text-bone-700 text-center py-8">
               No hay imágenes en el banco.
               <br />
               Sube una o revisa la carpeta configurada.
@@ -165,3 +165,4 @@ export default function ImageBank() {
     </div>
   )
 }
+

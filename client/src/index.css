@@ -10,18 +10,21 @@
 
 body {
   margin: 0;
-  background: #0f1117;
-  color: #e5e7eb;
+  background: #0A0A0A;
+  color: #E8E4DC;
   font-family: 'Inter', sans-serif;
 }
 
 ::-webkit-scrollbar {
-  width: 6px;
+  width: 5px;
 }
 ::-webkit-scrollbar-track {
-  background: #1a1d27;
+  background: #141414;
 }
 ::-webkit-scrollbar-thumb {
-  background: #374151;
+  background: #262626;
   border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #A39F98;
 }
