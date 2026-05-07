@@ -1,0 +1,22 @@
+node_modules/
+dist/
+.env
+server/.env
+
+# Generated videos
+output/
+
+# OAuth credentials & tokens
+credentials/
+server/credentials/
+
+# Pinterest-synced images (local, regenerable)
+data/images/
+data/pinterest-sync.json
+
+# Claude Code local config
+.claude/
+
+*.log
+.DS_Store
+Thumbs.db
