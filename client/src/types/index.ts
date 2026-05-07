@@ -21,6 +21,7 @@ export interface VideoConfig {
   resolution: { width: number; height: number }
   outputName?: string
   wrappedLines?: string[]  // calculadas en el cliente con measureText para que el servidor las use directamente
+  watermark?: WatermarkConfig
 }
 
 export interface Phrase {
@@ -55,6 +56,12 @@ export interface VideoRecord {
 
 export type TransitionType = 'fade' | 'fadeBlack' | 'none'
 export type TextAlign = 'left' | 'center' | 'right'
+export type WatermarkPosition = 'topLeft' | 'topRight' | 'bottomLeft' | 'bottomRight'
+
+export interface WatermarkConfig {
+  enabled: boolean
+  position: WatermarkPosition
+}
 
 export type ImageVariant = 'combined' | 'hook' | 'punchline'
 

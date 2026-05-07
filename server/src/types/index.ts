@@ -1,3 +1,10 @@
+export type WatermarkPosition = 'topLeft' | 'topRight' | 'bottomLeft' | 'bottomRight'
+
+export interface WatermarkConfig {
+  enabled: boolean
+  position: WatermarkPosition
+}
+
 export interface TextConfig {
   content: string
   font: string
@@ -20,6 +27,7 @@ export interface VideoConfig {
   resolution: { width: number; height: number }  // default 1080x1920
   outputName?: string
   wrappedLines?: string[]  // pre-calculadas en el cliente con measureText real
+  watermark?: WatermarkConfig
 }
 
 export interface VideoRecord {
@@ -70,6 +78,7 @@ export interface ImageConfig {
   imagePath: string
   text: TextConfig
   resolution: { width: number; height: number }
+  watermark?: WatermarkConfig
 }
 
 export type ImageVariant = 'combined' | 'hook' | 'punchline'

@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { Phrase, ImageItem, VideoRecord, VideoConfig, ImageRecord, ImageVariant } from '../types'
+import { Phrase, ImageItem, VideoRecord, VideoConfig, ImageRecord, ImageVariant, WatermarkConfig } from '../types'
 
 const api = axios.create({ baseURL: '/api' })
 
@@ -64,6 +64,7 @@ export interface ImageGenerateConfig {
     lineHeight: number
   }
   resolution: { width: number; height: number }
+  watermark?: WatermarkConfig
 }
 
 export const imagesOutputApi = {

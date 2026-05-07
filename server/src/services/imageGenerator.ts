@@ -1,8 +1,18 @@
 import ffmpeg from 'fluent-ffmpeg'
 import path from 'path'
 import fs from 'fs'
-import { TextConfig, ImageVariant } from '../types'
+import { TextConfig, ImageVariant, WatermarkConfig, WatermarkPosition } from '../types'
 import { config } from '../config'
+
+function watermarkOverlayExpr(position: WatermarkPosition): string {
+  const m = 20
+  switch (position) {
+    case 'topLeft':     return `x=${m}:y=${m}`
+    case 'topRight':    return `x=W-w-${m}:y=${m}`
+    case 'bottomLeft':  return `x=${m}:y=H-h-${m}`
+    case 'bottomRight': return `x=W-w-${m}:y=H-h-${m}`
+  }
+}
 
 export interface ImageGenerateResult {
   filename: string
@@ -17,6 +27,7 @@ export interface ImageGenerateOptions {
   resolution: { width: number; height: number }
   outputName: string
   variant?: ImageVariant
+  watermark?: WatermarkConfig
 }
 
 const WINDOWS_FONTS = 'C:/Windows/Fonts'
@@ -152,19 +163,30 @@ export async function generateImage(opts: ImageGenerateOptions): Promise<ImageGe
 
   const vfilter = buildVideoFilter(opts.text, opts.resolution, variant)
 
+  const wmPath = config.watermark.path
+  const wmEnabled = opts.watermark?.enabled && wmPath && fs.existsSync(wmPath)
+
   return new Promise((resolve, reject) => {
-    ffmpeg(opts.imagePath)
-      .videoFilters(vfilter)
+    const cmd = ffmpeg(opts.imagePath)
+
+    if (wmEnabled) {
+      const wmSize = Math.round(opts.resolution.width * 0.15)
+      const posExpr = watermarkOverlayExpr(opts.watermark!.position ?? 'bottomRight')
+      cmd
+        .input(wmPath)
+        .complexFilter([
+          `[0:v]${vfilter}[v]`,
+          `[1:v]scale=${wmSize}:-1[wm]`,
+          `[v][wm]overlay=${posExpr}[out]`,
+        ], 'out')
+    } else {
+      cmd.videoFilters(vfilter)
+    }
+
+    cmd
       .outputOptions(['-frames:v 1', '-q:v 2'])
       .output(outputPath)
-      .on('end', () => {
-        resolve({
-          filename,
-          localPath: outputPath,
-          publicUrl: `${config.publicBaseUrl}/output/images/${filename}`,
-          variant,
-        })
-      })
+      .on('end', () => resolve({ filename, localPath: outputPath, publicUrl: `${config.publicBaseUrl}/output/images/${filename}`, variant }))
       .on('error', (err) => reject(new Error(`FFmpeg error: ${err.message}`)))
       .run()
   })

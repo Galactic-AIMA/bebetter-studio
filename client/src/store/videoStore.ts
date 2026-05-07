@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { VideoConfig, TextConfig } from '../types'
+import { VideoConfig, TextConfig, WatermarkConfig } from '../types'
 
 const DEFAULT_TEXT: TextConfig = {
   content: 'Tu frase aquí...',
@@ -22,6 +22,7 @@ const DEFAULT_CONFIG: VideoConfig = {
   transitionDuration: 1.0,
   text: DEFAULT_TEXT,
   resolution: { width: 1080, height: 1920 },
+  watermark: { enabled: false, position: 'bottomRight' },
 }
 
 export type ContentMode = 'video' | 'image'
@@ -36,6 +37,7 @@ interface VideoStore {
   setSelectedPhraseId: (id: string | null) => void
   setGenerating: (v: boolean) => void
   setMode: (mode: ContentMode) => void
+  setWatermark: (partial: Partial<WatermarkConfig>) => void
   reset: () => void
 }
 
@@ -51,5 +53,7 @@ export const useVideoStore = create<VideoStore>((set) => ({
   setSelectedPhraseId: (id) => set({ selectedPhraseId: id }),
   setGenerating: (v) => set({ isGenerating: v }),
   setMode: (mode) => set({ mode }),
+  setWatermark: (partial) =>
+    set((s) => ({ config: { ...s.config, watermark: { ...s.config.watermark!, ...partial } } })),
   reset: () => set({ config: DEFAULT_CONFIG, selectedPhraseId: null }),
 }))

@@ -77,6 +77,7 @@ export default function Editor() {
           imagePath: config.imagePath,
           text: config.text,
           resolution: config.resolution,
+          watermark: config.watermark,
         }
         const variant = hasDelimiter ? imageVariant : 'combined'
         const image = await imagesOutputApi.generate(imgConfig, selectedPhraseId ?? undefined, variant)

@@ -1,8 +1,18 @@
 import ffmpeg from 'fluent-ffmpeg'
 import path from 'path'
 import fs from 'fs'
-import { VideoConfig } from '../types'
+import { VideoConfig, WatermarkPosition } from '../types'
 import { config } from '../config'
+
+function watermarkOverlayExpr(position: WatermarkPosition): string {
+  const m = 20
+  switch (position) {
+    case 'topLeft':     return `x=${m}:y=${m}`
+    case 'topRight':    return `x=W-w-${m}:y=${m}`
+    case 'bottomLeft':  return `x=${m}:y=H-h-${m}`
+    case 'bottomRight': return `x=W-w-${m}:y=H-h-${m}`
+  }
+}
 
 export interface GenerateResult {
   filename: string
@@ -123,28 +133,41 @@ export async function generateVideo(
     fadeOut +
     `,${drawTextFilters.join(',')}`
 
+  const outputOptions = [
+    '-c:v libx264',
+    '-preset fast',
+    '-crf 23',
+    '-pix_fmt yuv420p',
+    '-movflags +faststart',
+    `-t ${duration}`,
+    '-r 30',
+    '-an',
+  ]
+
+  const wmPath = config.watermark.path
+  const wmEnabled = cfg.watermark?.enabled && wmPath && fs.existsSync(wmPath)
+
   return new Promise((resolve, reject) => {
-    ffmpeg(cfg.imagePath)
-      .inputOptions(['-loop 1', `-t ${duration}`])
-      .videoFilters(vfilter)
-      .outputOptions([
-        '-c:v libx264',
-        '-preset fast',
-        '-crf 23',
-        '-pix_fmt yuv420p',
-        '-movflags +faststart',
-        `-t ${duration}`,
-        '-r 30',
-        '-an',
-      ])
+    const cmd = ffmpeg(cfg.imagePath).inputOptions(['-loop 1', `-t ${duration}`])
+
+    if (wmEnabled) {
+      const wmSize = Math.round(width * 0.15)
+      const posExpr = watermarkOverlayExpr(cfg.watermark!.position ?? 'bottomRight')
+      cmd
+        .input(wmPath)
+        .complexFilter([
+          `[0:v]${vfilter}[v]`,
+          `[1:v]scale=${wmSize}:-1[wm]`,
+          `[v][wm]overlay=${posExpr}[out]`,
+        ], 'out')
+    } else {
+      cmd.videoFilters(vfilter)
+    }
+
+    cmd
+      .outputOptions(outputOptions)
       .output(outputPath)
-      .on('end', () => {
-        resolve({
-          filename,
-          localPath: outputPath,
-          publicUrl: `${config.publicBaseUrl}/output/videos/${filename}`,
-        })
-      })
+      .on('end', () => resolve({ filename, localPath: outputPath, publicUrl: `${config.publicBaseUrl}/output/videos/${filename}` }))
       .on('error', (err) => reject(new Error(`FFmpeg error: ${err.message}`)))
       .run()
   })

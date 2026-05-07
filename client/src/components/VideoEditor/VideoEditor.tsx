@@ -1,6 +1,6 @@
 import React from 'react'
 import { useVideoStore } from '../../store/videoStore'
-import { TransitionType, TextAlign } from '../../types'
+import { TransitionType, TextAlign, WatermarkPosition } from '../../types'
 
 const FONTS = [
   'Montserrat-Bold',
@@ -17,9 +17,16 @@ const TRANSITIONS: { value: TransitionType; label: string }[] = [
   { value: 'none', label: 'Sin transición' },
 ]
 
+const WATERMARK_POSITIONS: { value: WatermarkPosition; label: string }[] = [
+  { value: 'topLeft',     label: '↖ Sup. izq.' },
+  { value: 'topRight',    label: '↗ Sup. der.' },
+  { value: 'bottomLeft',  label: '↙ Inf. izq.' },
+  { value: 'bottomRight', label: '↘ Inf. der.' },
+]
+
 export default function VideoEditor() {
-  const { config, setText, setConfig } = useVideoStore()
-  const { text, duration, transition, transitionDuration } = config
+  const { config, setText, setConfig, setWatermark } = useVideoStore()
+  const { text, duration, transition, transitionDuration, watermark } = config
 
   return (
     <div className="flex flex-col gap-6 p-4">
@@ -215,6 +222,43 @@ export default function VideoEditor() {
                 }
                 className="w-full accent-brand-500"
               />
+            </div>
+          )}
+        </div>
+      </section>
+      {/* Watermark */}
+      <section>
+        <h3 className="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-3">
+          Marca de agua
+        </h3>
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="wm-enabled"
+              checked={watermark?.enabled ?? false}
+              onChange={(e) => setWatermark({ enabled: e.target.checked })}
+              className="accent-brand-500"
+            />
+            <label htmlFor="wm-enabled" className="text-sm text-gray-300">
+              Activar watermark bebetter
+            </label>
+          </div>
+          {watermark?.enabled && (
+            <div className="grid grid-cols-2 gap-1">
+              {WATERMARK_POSITIONS.map((p) => (
+                <button
+                  key={p.value}
+                  onClick={() => setWatermark({ position: p.value })}
+                  className={`py-1.5 rounded text-xs border transition-colors ${
+                    watermark.position === p.value
+                      ? 'bg-brand-500 border-brand-500 text-white'
+                      : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-500'
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
             </div>
           )}
         </div>

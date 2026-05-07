@@ -27,6 +27,10 @@ export const config = {
     prod: process.env.WEBHOOK_PROD_URL || '',
   },
 
+  watermark: {
+    path: process.env.WATERMARK_PATH || '',
+  },
+
   pinterest: {
     appId: process.env.PINTEREST_APP_ID || '',
     appSecret: process.env.PINTEREST_APP_SECRET || '',
