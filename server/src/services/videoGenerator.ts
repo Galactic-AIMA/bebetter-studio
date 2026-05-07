@@ -5,7 +5,9 @@ import { VideoConfig, WatermarkPosition, TextEffect } from '../types'
 import { config } from '../config'
 
 function wmXExpr(position: WatermarkPosition, isText = false): string {
-  return position === 'left' ? '20' : isText ? 'w-tw-20' : 'W-w-20'
+  if (position === 'left') return '20'
+  if (position === 'center') return isText ? '(w-tw)/2' : '(W-w)/2'
+  return isText ? 'w-tw-20' : 'W-w-20'
 }
 
 function wmYExpr(y: number): string {

@@ -342,12 +342,12 @@ export default function VideoEditor() {
                 />
               )}
               {/* Posición horizontal */}
-              <div className="grid grid-cols-2 gap-1">
-                {(['left', 'right'] as const).map((p) => (
+              <div className="grid grid-cols-3 gap-1">
+                {(['left', 'center', 'right'] as const).map((p) => (
                   <button key={p} onClick={() => setWatermark({ position: p })}
                     className={`py-1.5 rounded text-xs border transition-colors ${(watermark.position ?? 'right') === p ? activeBtn : idleBtn}`}
                   >
-                    {p === 'left' ? '← Izquierda' : 'Derecha →'}
+                    {p === 'left' ? '←' : p === 'center' ? '↔' : '→'}
                   </button>
                 ))}
               </div>

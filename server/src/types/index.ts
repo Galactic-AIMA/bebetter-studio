@@ -1,5 +1,5 @@
 export type TextEffect = 'none' | 'fadeIn' | 'slideUp' | 'glowPulse'
-export type WatermarkPosition = 'left' | 'right'
+export type WatermarkPosition = 'left' | 'center' | 'right'
 
 export interface WatermarkConfig {
   enabled: boolean

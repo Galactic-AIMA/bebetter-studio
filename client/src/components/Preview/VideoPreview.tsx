@@ -153,8 +153,8 @@ function drawTextWatermark(
   ctx.globalAlpha = opacity
   ctx.fillStyle = '#ffffff'
   ctx.textBaseline = 'middle'
-  ctx.textAlign = wm.position === 'left' ? 'left' : 'right'
-  const x = wm.position === 'left' ? 20 : W - 20
+  ctx.textAlign = wm.position === 'left' ? 'left' : wm.position === 'center' ? 'center' : 'right'
+  const x = wm.position === 'left' ? 20 : wm.position === 'center' ? W / 2 : W - 20
   ctx.fillText(text, x, yPx)
   ctx.globalAlpha = 1
 }
@@ -169,7 +169,7 @@ function drawImageWatermark(
   const wmW = Math.round(W * 0.15)
   const wmH = Math.round(wm.height * (wmW / wm.width))
   const margin = 20
-  const x = wmCfg.position === 'left' ? margin : W - wmW - margin
+  const x = wmCfg.position === 'left' ? margin : wmCfg.position === 'center' ? (W - wmW) / 2 : W - wmW - margin
   const y = H * ((wmCfg.y ?? 90) / 100) - wmH / 2
   ctx.drawImage(wm, x, y, wmW, wmH)
 }

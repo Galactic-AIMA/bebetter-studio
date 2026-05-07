@@ -60,7 +60,7 @@ export interface VideoRecord {
 export type TransitionType = 'fade' | 'fadeBlack' | 'none'
 export type TextAlign = 'left' | 'center' | 'right'
 export type TextEffect = 'none' | 'fadeIn' | 'slideUp' | 'glowPulse'
-export type WatermarkPosition = 'left' | 'right'
+export type WatermarkPosition = 'left' | 'center' | 'right'
 export type VisualStyle = 'bebetter' | 'serene' | 'raw' | 'minimal' | 'cinematic' | 'bold'
 
 export interface WatermarkConfig {
