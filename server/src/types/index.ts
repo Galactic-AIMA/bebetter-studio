@@ -1,3 +1,4 @@
+export type TextEffect = 'none' | 'fadeIn' | 'slideUp' | 'glowPulse'
 export type WatermarkPosition = 'topLeft' | 'topRight' | 'bottomLeft' | 'bottomRight'
 
 export interface WatermarkConfig {
@@ -24,6 +25,7 @@ export interface VideoConfig {
   transition: 'fade' | 'fadeBlack' | 'none'
   transitionDuration: number  // seconds
   text: TextConfig
+  textEffect?: TextEffect
   resolution: { width: number; height: number }  // default 1080x1920
   outputName?: string
   wrappedLines?: string[]  // pre-calculadas en el cliente con measureText real

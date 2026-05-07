@@ -1,6 +1,6 @@
 import React from 'react'
 import { useVideoStore } from '../../store/videoStore'
-import { TransitionType, TextAlign, WatermarkPosition } from '../../types'
+import { TransitionType, TextAlign, WatermarkPosition, TextEffect } from '../../types'
 
 const FONTS = [
   'Montserrat-Bold',
@@ -24,9 +24,16 @@ const WATERMARK_POSITIONS: { value: WatermarkPosition; label: string }[] = [
   { value: 'bottomRight', label: '↘ Inf. der.' },
 ]
 
+const TEXT_EFFECTS: { value: TextEffect; label: string }[] = [
+  { value: 'none',      label: 'Sin efecto' },
+  { value: 'fadeIn',    label: 'Fade in' },
+  { value: 'slideUp',   label: 'Deslizar arriba' },
+  { value: 'glowPulse', label: 'Glow pulse' },
+]
+
 export default function VideoEditor() {
-  const { config, setText, setConfig, setWatermark } = useVideoStore()
-  const { text, duration, transition, transitionDuration, watermark } = config
+  const { config, setText, setConfig, setWatermark, setTextEffect } = useVideoStore()
+  const { text, duration, transition, transitionDuration, watermark, textEffect } = config
 
   return (
     <div className="flex flex-col gap-6 p-4">
@@ -224,6 +231,24 @@ export default function VideoEditor() {
               />
             </div>
           )}
+          <div className="col-span-2">
+            <label className="text-xs text-gray-400 mb-1 block">Efecto de texto</label>
+            <div className="grid grid-cols-2 gap-1">
+              {TEXT_EFFECTS.map((ef) => (
+                <button
+                  key={ef.value}
+                  onClick={() => setTextEffect(ef.value)}
+                  className={`py-1.5 rounded text-xs border transition-colors ${
+                    textEffect === ef.value
+                      ? 'bg-brand-500 border-brand-500 text-white'
+                      : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-500'
+                  }`}
+                >
+                  {ef.label}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </section>
       {/* Watermark */}

@@ -1,7 +1,7 @@
 import ffmpeg from 'fluent-ffmpeg'
 import path from 'path'
 import fs from 'fs'
-import { VideoConfig, WatermarkPosition } from '../types'
+import { VideoConfig, WatermarkPosition, TextEffect } from '../types'
 import { config } from '../config'
 
 function watermarkOverlayExpr(position: WatermarkPosition): string {
@@ -71,6 +71,29 @@ function escapeLine(text: string): string {
     .replace(/\]/g, '\\]')
 }
 
+// Retorna los parámetros FFmpeg adicionales para el efecto de texto
+function effectOpts(effect: TextEffect, baseY: number): { yExpr: string; extraOpts: string } {
+  switch (effect) {
+    case 'fadeIn':
+      return {
+        yExpr: String(baseY),
+        extraOpts: `:alpha='if(lt(t\\,1),t,1)'`,
+      }
+    case 'slideUp':
+      return {
+        yExpr: `'if(lt(t\\,0.8),${baseY}+60*(1-t/0.8),${baseY})'`,
+        extraOpts: `:alpha='if(lt(t\\,0.8),t/0.8,1)'`,
+      }
+    case 'glowPulse':
+      return {
+        yExpr: String(baseY),
+        extraOpts: `:borderw=6:bordercolor=white@'0.4+0.3*sin(6.28318*t)'`,
+      }
+    default:
+      return { yExpr: String(baseY), extraOpts: '' }
+  }
+}
+
 export async function generateVideo(
   cfg: VideoConfig,
   outputName: string
@@ -103,19 +126,22 @@ export async function generateVideo(
     ? `w-tw-${width - Math.round((text.position.x / 100) * width)}`
     : `${Math.round((text.position.x / 100) * width)}`
 
-  const shadowOpts = text.shadow
+  const effect = cfg.textEffect ?? 'none'
+  const shadowOpts = (text.shadow && effect !== 'glowPulse')
     ? ':borderw=1:bordercolor=black@0.45'
     : ''
 
   const drawTextFilters = lines.map((line, i) => {
-    const y = startY + i * lineH
+    const baseY = startY + i * lineH
+    const { yExpr, extraOpts } = effectOpts(effect, baseY)
     return (
       `drawtext=text='${escapeLine(line)}':` +
       `fontfile='${fontPath}':` +
       `fontsize=${text.fontSize}:` +
       `fontcolor=${text.color}:` +
-      `x=${xExpr}:y=${y}` +
-      shadowOpts
+      `x=${xExpr}:y=${yExpr}` +
+      shadowOpts +
+      extraOpts
     )
   })
 
