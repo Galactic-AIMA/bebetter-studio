@@ -33,9 +33,12 @@ export default function Header({ lastVideoId, lastImageId, isGenerating, toast, 
   return (
     <header className="flex items-center justify-between px-5 h-12 bg-carbon-700 shrink-0 z-10">
       {/* Wordmark */}
-      <div className="flex items-center gap-0.5 select-none">
-        <span className="text-sm font-semibold tracking-widest text-[#E8E4DC]">BEBETTER</span>
-        <span className="text-sm font-semibold tracking-widest text-[#E8E4DC]/70 ml-1.5">STUDIO</span>
+      <div className="flex items-center gap-2.5 select-none">
+        <img src="/favicon.svg" alt="" className="w-6 h-6" />
+        <div className="flex items-center gap-0.5">
+          <span className="text-sm font-semibold tracking-widest text-[#E8E4DC]">BEBETTER</span>
+          <span className="text-sm font-semibold tracking-widest text-[#E8E4DC]/70 ml-1.5">STUDIO</span>
+        </div>
       </div>
 
       {/* Mode toggle */}
