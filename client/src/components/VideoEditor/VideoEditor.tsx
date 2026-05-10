@@ -13,6 +13,11 @@ const FONTS = [
   'Lato-Regular',
   'Oswald-Bold',
   'RobotoCondensed-Bold',
+  'Anton-Regular',
+  'Inter-Bold',
+  'Inter-Regular',
+  'IBMPlexSans-Bold',
+  'IBMPlexSans-Regular',
 ]
 
 const TRANSITIONS: { value: TransitionType; label: string }[] = [

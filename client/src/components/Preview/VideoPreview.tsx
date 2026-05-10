@@ -5,12 +5,26 @@ interface Props {
   config: VideoConfig
 }
 
-/**
- * Simulación visual del video final sobre canvas HTML5.
- * El canvas replica la composición exacta que FFmpeg generará:
- * imagen de fondo + texto superpuesto con la misma posición y estilo.
- * Formato fijo 9:16 escalado al contenedor.
- */
+const FONT_MAP: Record<string, { weight: string; family: string }> = {
+  'Montserrat-Bold':      { weight: '700', family: 'Montserrat' },
+  'Montserrat-Regular':   { weight: '400', family: 'Montserrat' },
+  'Playfair-Bold':        { weight: '700', family: '"Playfair Display"' },
+  'Lato-Regular':         { weight: '400', family: 'Lato' },
+  'Oswald-Bold':          { weight: '700', family: 'Oswald' },
+  'RobotoCondensed-Bold': { weight: '700', family: '"Roboto Condensed"' },
+  'Anton-Regular':        { weight: '400', family: 'Anton' },
+  'Inter-Bold':           { weight: '700', family: 'Inter' },
+  'Inter-Regular':        { weight: '400', family: 'Inter' },
+  'IBMPlexSans-Bold':     { weight: '700', family: '"IBM Plex Sans"' },
+  'IBMPlexSans-Regular':  { weight: '400', family: '"IBM Plex Sans"' },
+}
+
+function fontToCSS(fontName: string, sizePx: number): string {
+  const entry = FONT_MAP[fontName]
+  if (!entry) return `${sizePx}px sans-serif`
+  return `${entry.weight} ${sizePx}px ${entry.family}, sans-serif`
+}
+
 export default function VideoPreview({ config }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
@@ -46,7 +60,11 @@ export default function VideoPreview({ config }: Props) {
       needsWmImage ? loadImg('/api/watermark') : Promise.resolve(null),
     ]
 
-    Promise.all(tasks).then(([bg, wm]) => {
+    const { weight, family } = FONT_MAP[config.text.font] ?? { weight: '400', family: 'sans-serif' }
+    const fontSpec = `${weight} ${config.text.fontSize}px ${family}`
+
+    Promise.all(tasks).then(async ([bg, wm]) => {
+      await document.fonts.load(fontSpec)
       if (bg) {
         const scale = Math.max(W / bg.width, H / bg.height)
         const sw = bg.width * scale
@@ -91,7 +109,7 @@ function drawText(
   if (!text.content) return
 
   const fontSize = text.fontSize
-  ctx.font = `${fontSize}px ${text.font.replace(/-/g, ' ')}, sans-serif`
+  ctx.font = fontToCSS(text.font, fontSize)
   ctx.fillStyle = text.color
   ctx.textAlign = text.align
   ctx.textBaseline = 'middle'
@@ -112,7 +130,6 @@ function drawText(
     ctx.shadowOffsetY = 2
   }
 
-  // Wrap text
   const words = text.content.split(' ')
   const lines: string[] = []
   let current = ''
