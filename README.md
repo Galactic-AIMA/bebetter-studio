@@ -17,7 +17,7 @@ Herramienta interna para generar contenido visual (videos y posts) para la marca
 ## Estructura del proyecto
 
 ```
-contentCreator/
+beBetterStudio/
 ├── client/          # Frontend React + Vite
 │   └── src/
 │       ├── components/
