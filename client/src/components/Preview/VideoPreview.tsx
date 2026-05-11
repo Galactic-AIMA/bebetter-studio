@@ -1,28 +1,18 @@
 import { useRef, useEffect } from 'react'
 import { VideoConfig, WatermarkConfig } from '../../types'
+import { buildFontMap } from '../../config/fonts'
 
 interface Props {
   config: VideoConfig
 }
 
-const FONT_MAP: Record<string, { weight: string; family: string }> = {
-  'Montserrat-Bold':      { weight: '700', family: 'Montserrat' },
-  'Montserrat-Regular':   { weight: '400', family: 'Montserrat' },
-  'Playfair-Bold':        { weight: '700', family: '"Playfair Display"' },
-  'Lato-Regular':         { weight: '400', family: 'Lato' },
-  'Oswald-Bold':          { weight: '700', family: 'Oswald' },
-  'RobotoCondensed-Bold': { weight: '700', family: '"Roboto Condensed"' },
-  'Anton-Regular':        { weight: '400', family: 'Anton' },
-  'Inter-Bold':           { weight: '700', family: 'Inter' },
-  'Inter-Regular':        { weight: '400', family: 'Inter' },
-  'IBMPlexSans-Bold':     { weight: '700', family: '"IBM Plex Sans"' },
-  'IBMPlexSans-Regular':  { weight: '400', family: '"IBM Plex Sans"' },
-}
+const FONT_MAP = buildFontMap()
 
 function fontToCSS(fontName: string, sizePx: number): string {
   const entry = FONT_MAP[fontName]
   if (!entry) return `${sizePx}px sans-serif`
-  return `${entry.weight} ${sizePx}px ${entry.family}, sans-serif`
+  const italic = entry.italic ? 'italic ' : ''
+  return `${italic}${entry.weight} ${sizePx}px ${entry.family}, sans-serif`
 }
 
 export default function VideoPreview({ config }: Props) {
@@ -60,8 +50,9 @@ export default function VideoPreview({ config }: Props) {
       needsWmImage ? loadImg('/api/watermark') : Promise.resolve(null),
     ]
 
-    const { weight, family } = FONT_MAP[config.text.font] ?? { weight: '400', family: 'sans-serif' }
-    const fontSpec = `${weight} ${config.text.fontSize}px ${family}`
+    const entry = FONT_MAP[config.text.font] ?? { weight: '400', family: 'sans-serif' }
+    const italic = entry.italic ? 'italic ' : ''
+    const fontSpec = `${italic}${entry.weight} ${config.text.fontSize}px ${entry.family}`
 
     Promise.all(tasks).then(async ([bg, wm]) => {
       await document.fonts.load(fontSpec)
@@ -114,6 +105,11 @@ function drawText(
   ctx.textAlign = text.align
   ctx.textBaseline = 'middle'
 
+  if ('letterSpacing' in ctx) {
+    (ctx as CanvasRenderingContext2D & { letterSpacing: string }).letterSpacing =
+      `${text.letterSpacing ?? 0}px`
+  }
+
   const maxPx = (text.maxWidth / 100) * W
   const x =
     text.align === 'center'
@@ -149,11 +145,31 @@ function drawText(
   const totalH = lines.length * lineH
   const startY = y - totalH / 2 + lineH / 2
 
+  const strokeW = text.strokeWidth ?? 0
+  if (strokeW > 0) {
+    ctx.lineWidth = strokeW * 2
+    ctx.strokeStyle = text.strokeColor ?? '#000000'
+    ctx.lineJoin = 'round'
+    ctx.shadowColor = 'transparent'
+    lines.forEach((line, i) => {
+      ctx.strokeText(line, x, startY + i * lineH)
+    })
+    if (text.shadow) {
+      ctx.shadowColor = 'rgba(0,0,0,0.7)'
+      ctx.shadowBlur = 8
+      ctx.shadowOffsetX = 2
+      ctx.shadowOffsetY = 2
+    }
+  }
+
   lines.forEach((line, i) => {
     ctx.fillText(line, x, startY + i * lineH)
   })
 
   ctx.shadowColor = 'transparent'
+  if ('letterSpacing' in ctx) {
+    (ctx as CanvasRenderingContext2D & { letterSpacing: string }).letterSpacing = '0px'
+  }
 }
 
 function drawTextWatermark(

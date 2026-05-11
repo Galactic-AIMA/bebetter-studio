@@ -8,6 +8,9 @@ export interface TextConfig {
   shadow: boolean
   maxWidth: number
   lineHeight: number
+  letterSpacing?: number
+  strokeWidth?: number
+  strokeColor?: string
 }
 
 export interface VideoConfig {

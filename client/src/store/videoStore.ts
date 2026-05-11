@@ -13,6 +13,9 @@ const DEFAULT_TEXT: TextConfig = {
   shadow: true,
   maxWidth: 60,
   lineHeight: 1.4,
+  letterSpacing: 0,
+  strokeWidth: 0,
+  strokeColor: '#000000',
 }
 
 const DEFAULT_CONFIG: VideoConfig = {

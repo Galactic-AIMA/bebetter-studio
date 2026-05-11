@@ -10,6 +10,9 @@ const TextConfigSchema = z.object({
   shadow: z.boolean(),
   maxWidth: z.number().min(10).max(100),
   lineHeight: z.number().min(0.5).max(3),
+  letterSpacing: z.number().optional(),
+  strokeWidth: z.number().min(0).max(15).optional(),
+  strokeColor: z.string().optional(),
 })
 
 const WatermarkConfigSchema = z.object({

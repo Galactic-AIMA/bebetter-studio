@@ -23,12 +23,14 @@ export interface GenerateResult {
 const WINDOWS_FONTS = 'C:/Windows/Fonts'
 
 const FONT_FALLBACKS: Record<string, string> = {
-  'Montserrat-Bold':       `${WINDOWS_FONTS}/arialbd.ttf`,
-  'Montserrat-Regular':    `${WINDOWS_FONTS}/arial.ttf`,
-  'Playfair-Bold':         `${WINDOWS_FONTS}/georgiab.ttf`,
-  'Lato-Regular':          `${WINDOWS_FONTS}/calibri.ttf`,
-  'Oswald-Bold':           `${WINDOWS_FONTS}/arialbd.ttf`,
-  'RobotoCondensed-Bold':  `${WINDOWS_FONTS}/arialbd.ttf`,
+  'Montserrat-Bold':          `${WINDOWS_FONTS}/arialbd.ttf`,
+  'Montserrat-Regular':       `${WINDOWS_FONTS}/arial.ttf`,
+  'PlayfairDisplay-Bold':     `${WINDOWS_FONTS}/georgiab.ttf`,
+  'PlayfairDisplay-Regular':  `${WINDOWS_FONTS}/georgia.ttf`,
+  'Lato-Regular':             `${WINDOWS_FONTS}/calibri.ttf`,
+  'Lato-Bold':                `${WINDOWS_FONTS}/calibrib.ttf`,
+  'Oswald-Bold':              `${WINDOWS_FONTS}/arialbd.ttf`,
+  'RobotoCondensed-Bold':     `${WINDOWS_FONTS}/arialbd.ttf`,
 }
 
 function estimateTextWidth(text: string, fontSize: number): number {
@@ -128,7 +130,10 @@ export async function generateVideo(
 
   const effect = cfg.textEffect ?? 'none'
   const shadowOpts = (text.shadow && effect !== 'glowPulse')
-    ? ':borderw=1:bordercolor=black@0.45'
+    ? ':shadowx=2:shadowy=2:shadowcolor=black@0.7'
+    : ''
+  const strokeOpts = (text.strokeWidth && text.strokeWidth > 0)
+    ? `:borderw=${text.strokeWidth}:bordercolor=${(text.strokeColor ?? '#000000').replace('#', '0x')}`
     : ''
 
   const drawTextFilters = lines.map((line, i) => {
@@ -141,6 +146,7 @@ export async function generateVideo(
       `fontcolor=${text.color}:` +
       `x=${xExpr}:y=${yExpr}` +
       shadowOpts +
+      strokeOpts +
       extraOpts
     )
   })

@@ -1,23 +1,18 @@
-import React, { useState } from 'react'
+import React, { useState, useRef } from 'react'
+import { ChevronDown } from 'lucide-react'
 import { useVideoStore } from '../../store/videoStore'
 import { TransitionType, TextAlign, TextEffect, VisualStyle } from '../../types'
 import { PRESETS } from '../../presets'
 import { usePresets, PresetConfig } from '../../hooks/usePresets'
+import { FONT_FAMILIES, FontStyleKey, parseFontKey } from '../../config/fonts'
 
 const VISUAL_STYLES = Object.entries(PRESETS) as [VisualStyle, (typeof PRESETS)[VisualStyle]][]
 
-const FONTS = [
-  'Montserrat-Bold',
-  'Montserrat-Regular',
-  'Playfair-Bold',
-  'Lato-Regular',
-  'Oswald-Bold',
-  'RobotoCondensed-Bold',
-  'Anton-Regular',
-  'Inter-Bold',
-  'Inter-Regular',
-  'IBMPlexSans-Bold',
-  'IBMPlexSans-Regular',
+const STYLE_LABELS: { key: FontStyleKey; label: string }[] = [
+  { key: 'Regular', label: 'Normal' },
+  { key: 'Thin',    label: 'Thin'   },
+  { key: 'Italic',  label: 'Italic' },
+  { key: 'Bold',    label: 'Bold'   },
 ]
 
 const TRANSITIONS: { value: TransitionType; label: string }[] = [
@@ -26,7 +21,6 @@ const TRANSITIONS: { value: TransitionType; label: string }[] = [
   { value: 'none',      label: 'Sin transición' },
 ]
 
-
 const TEXT_EFFECTS: { value: TextEffect; label: string }[] = [
   { value: 'none',      label: 'Sin efecto' },
   { value: 'fadeIn',    label: 'Fade in' },
@@ -34,18 +28,63 @@ const TEXT_EFFECTS: { value: TextEffect; label: string }[] = [
   { value: 'glowPulse', label: 'Glow' },
 ]
 
-const SectionHeader = ({ label }: { label: string }) => (
-  <p className="text-[10px] font-semibold uppercase tracking-widest text-bone-700 mb-3">{label}</p>
-)
-
 const activeBtn = 'border-neon-red text-neon-red bg-carbon-700'
 const idleBtn   = 'border-carbon-600 text-bone-700 bg-carbon-700 hover:text-bone-500 hover:border-bone-700'
+
+function SectionPanel({
+  label, isOpen, onToggle, children,
+}: {
+  label: string; isOpen: boolean; onToggle: () => void; children: React.ReactNode
+}) {
+  return (
+    <div className="border-b border-carbon-600 last:border-b-0">
+      <button
+        onClick={onToggle}
+        className="flex w-full items-center justify-between px-4 py-2.5 text-[10px] font-semibold uppercase tracking-widest text-bone-700 hover:text-bone-500 transition-colors"
+      >
+        {label}
+        <ChevronDown
+          size={12}
+          className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+        />
+      </button>
+      {isOpen && <div className="px-4 pb-4">{children}</div>}
+    </div>
+  )
+}
 
 export default function VideoEditor() {
   const { config, setText, setConfig, setWatermark, setTextEffect, applyPreset, applyConfig } = useVideoStore()
   const { text, duration, transition, transitionDuration, watermark, textEffect, visualStyle, grain } = config
   const { presets, savePreset, removePreset } = usePresets()
   const [savingName, setSavingName] = useState<string | null>(null)
+  const [open, setOpen] = useState<Set<string>>(new Set(['frase', 'tipografia', 'video']))
+  const lastStrokeWidthRef = useRef(2)
+
+  const toggle = (id: string) =>
+    setOpen(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s })
+
+  const { family: currentFamily, style: currentStyle } = parseFontKey(text.font)
+  const familyDef = FONT_FAMILIES.find(f => f.key === currentFamily)
+
+  const handleFamilyChange = (familyKey: string) => {
+    const fam = FONT_FAMILIES.find(f => f.key === familyKey)!
+    const styleOk = !!fam.variants[currentStyle as FontStyleKey]
+    setText({ font: `${familyKey}-${styleOk ? currentStyle : 'Regular'}` })
+  }
+
+  const handleStyleChange = (style: FontStyleKey) => {
+    setText({ font: `${currentFamily}-${style}` })
+  }
+
+  const handleStrokeToggle = (checked: boolean) => {
+    if (checked) {
+      setText({ strokeWidth: lastStrokeWidthRef.current })
+    } else {
+      if ((text.strokeWidth ?? 0) > 0) lastStrokeWidthRef.current = text.strokeWidth!
+      setText({ strokeWidth: 0 })
+    }
+  }
 
   const handleSave = () => {
     if (savingName === null) { setSavingName(''); return }
@@ -64,39 +103,36 @@ export default function VideoEditor() {
     setSavingName(null)
   }
 
+  const strokeEnabled = (text.strokeWidth ?? 0) > 0
+
   return (
-    <div className="flex flex-col gap-5 p-4">
+    <div className="flex flex-col divide-y divide-carbon-600">
 
       {/* Estilo visual */}
-      <section>
-        <SectionHeader label="Estilo visual" />
+      <SectionPanel label="Estilo visual" isOpen={open.has('estilos')} onToggle={() => toggle('estilos')}>
         <div className="grid grid-cols-3 gap-1">
           {VISUAL_STYLES.map(([key, preset]) => (
             <button
               key={key}
               onClick={() => applyPreset(key as VisualStyle)}
-              className={`py-1.5 rounded text-xs border transition-colors ${
-                visualStyle === key ? activeBtn : idleBtn
-              }`}
+              className={`py-1.5 rounded text-xs border transition-colors ${visualStyle === key ? activeBtn : idleBtn}`}
             >
               {preset.label}
             </button>
           ))}
         </div>
-      </section>
+      </SectionPanel>
 
       {/* Mis presets */}
-      <section>
+      <SectionPanel label="Mis presets" isOpen={open.has('presets')} onToggle={() => toggle('presets')}>
         <div className="flex items-center justify-between mb-3">
-          <SectionHeader label="Mis presets" />
           <button
             onClick={handleSave}
-            className="text-[10px] text-gold-500 hover:text-gold-600 transition-colors -mt-3"
+            className="text-[10px] text-gold-500 hover:text-gold-600 transition-colors"
           >
             {savingName === null ? '+ Guardar actual' : 'Cancelar'}
           </button>
         </div>
-
         {savingName !== null && (
           <div className="flex gap-2 mb-2">
             <input
@@ -117,7 +153,6 @@ export default function VideoEditor() {
             </button>
           </div>
         )}
-
         {presets.length === 0 && savingName === null ? (
           <p className="text-xs text-bone-700">No hay presets guardados.</p>
         ) : (
@@ -141,11 +176,10 @@ export default function VideoEditor() {
             ))}
           </div>
         )}
-      </section>
+      </SectionPanel>
 
       {/* Frase */}
-      <section>
-        <SectionHeader label="Frase" />
+      <SectionPanel label="Frase" isOpen={open.has('frase')} onToggle={() => toggle('frase')}>
         <textarea
           className="w-full bg-[#1C1C1C] border border-white/10 rounded-lg p-3 text-sm text-[#E8E4DC] resize-none focus:outline-none focus:ring-0 focus:border-white/30 placeholder:text-[#E8E4DC]/40"
           rows={3}
@@ -153,56 +187,123 @@ export default function VideoEditor() {
           onChange={(e) => setText({ content: e.target.value })}
           placeholder="Escribe tu frase..."
         />
-      </section>
+      </SectionPanel>
 
       {/* Tipografía */}
-      <section>
-        <SectionHeader label="Tipografía" />
-        <div className="grid grid-cols-2 gap-3">
+      <SectionPanel label="Tipografía" isOpen={open.has('tipografia')} onToggle={() => toggle('tipografia')}>
+        <div className="flex flex-col gap-3">
+
+          {/* Familia */}
           <div>
             <label className="text-xs text-bone-700 mb-1 block">Fuente</label>
             <select
               className="w-full bg-carbon-700 border border-carbon-600 rounded-lg p-2 text-xs text-bone-500"
-              value={text.font}
-              onChange={(e) => setText({ font: e.target.value })}
+              value={currentFamily}
+              onChange={(e) => handleFamilyChange(e.target.value)}
             >
-              {FONTS.map((f) => (
-                <option key={f} value={f}>{f.replace(/-/g, ' ')}</option>
+              {FONT_FAMILIES.map((f) => (
+                <option key={f.key} value={f.key}>{f.displayName}</option>
               ))}
             </select>
           </div>
+
+          {/* Estilo */}
           <div>
-            <label className="text-xs text-bone-700 mb-1 block">Tamaño: {text.fontSize}px</label>
-            <input type="range" min={24} max={120} value={text.fontSize}
-              onChange={(e) => setText({ fontSize: Number(e.target.value) })}
-              className="w-full accent-gold-500"
-            />
-          </div>
-          <div>
-            <label className="text-xs text-bone-700 mb-1 block">Color</label>
-            <input type="color" value={text.color}
-              onChange={(e) => setText({ color: e.target.value })}
-              className="w-full h-9 rounded-lg bg-carbon-700 border border-carbon-600 cursor-pointer"
-            />
-          </div>
-          <div>
-            <label className="text-xs text-bone-700 mb-1 block">Alineación</label>
-            <div className="flex gap-1">
-              {(['left', 'center', 'right'] as TextAlign[]).map((a) => (
-                <button key={a} onClick={() => setText({ align: a })}
-                  className={`flex-1 py-1 rounded text-xs border transition-colors ${text.align === a ? activeBtn : idleBtn}`}
-                >
-                  {a === 'left' ? '←' : a === 'center' ? '↔' : '→'}
-                </button>
-              ))}
+            <label className="text-xs text-bone-700 mb-1 block">Estilo</label>
+            <div className="grid grid-cols-4 gap-1">
+              {STYLE_LABELS.map(({ key, label }) => {
+                const available = !!familyDef?.variants[key]
+                return (
+                  <button
+                    key={key}
+                    onClick={() => available && handleStyleChange(key)}
+                    disabled={!available}
+                    className={`py-1.5 rounded text-xs border transition-colors disabled:opacity-25 disabled:cursor-not-allowed ${
+                      currentStyle === key && available ? activeBtn : idleBtn
+                    }`}
+                  >
+                    {label}
+                  </button>
+                )
+              })}
             </div>
           </div>
+
+          {/* Tamaño + Espaciado */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-bone-700 mb-1 block">Tamaño: {text.fontSize}px</label>
+              <input type="range" min={24} max={120} value={text.fontSize}
+                onChange={(e) => setText({ fontSize: Number(e.target.value) })}
+                className="w-full accent-gold-500"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-bone-700 mb-1 block">Espaciado: {text.letterSpacing ?? 0}px</label>
+              <input type="range" min={-5} max={30} step={1} value={text.letterSpacing ?? 0}
+                onChange={(e) => setText({ letterSpacing: Number(e.target.value) })}
+                className="w-full accent-gold-500"
+              />
+            </div>
+          </div>
+
+          {/* Color + Alineación */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-bone-700 mb-1 block">Color</label>
+              <input type="color" value={text.color}
+                onChange={(e) => setText({ color: e.target.value })}
+                className="w-full h-9 rounded-lg bg-carbon-700 border border-carbon-600 cursor-pointer"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-bone-700 mb-1 block">Alineación</label>
+              <div className="flex gap-1">
+                {(['left', 'center', 'right'] as TextAlign[]).map((a) => (
+                  <button key={a} onClick={() => setText({ align: a })}
+                    className={`flex-1 py-1 rounded text-xs border transition-colors ${text.align === a ? activeBtn : idleBtn}`}
+                  >
+                    {a === 'left' ? '←' : a === 'center' ? '↔' : '→'}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Contorno */}
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <input type="checkbox" id="stroke-enabled"
+                  checked={strokeEnabled}
+                  onChange={(e) => handleStrokeToggle(e.target.checked)}
+                  className="accent-gold-500"
+                />
+                <label htmlFor="stroke-enabled" className="text-xs text-bone-500">Contorno</label>
+              </div>
+              {strokeEnabled && (
+                <input type="color" value={text.strokeColor ?? '#000000'}
+                  onChange={(e) => setText({ strokeColor: e.target.value })}
+                  className="w-8 h-6 rounded cursor-pointer border border-carbon-600"
+                />
+              )}
+            </div>
+            {strokeEnabled && (
+              <div>
+                <label className="text-xs text-bone-700 mb-1 block">Grosor: {text.strokeWidth}px</label>
+                <input type="range" min={1} max={15} value={text.strokeWidth ?? 1}
+                  onChange={(e) => setText({ strokeWidth: Number(e.target.value) })}
+                  className="w-full accent-gold-500"
+                />
+              </div>
+            )}
+          </div>
+
         </div>
-      </section>
+      </SectionPanel>
 
       {/* Posición */}
-      <section>
-        <SectionHeader label="Posición" />
+      <SectionPanel label="Posición" isOpen={open.has('posicion')} onToggle={() => toggle('posicion')}>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="text-xs text-bone-700 mb-1 block">Horizontal: {text.position.x}%</label>
@@ -225,7 +326,14 @@ export default function VideoEditor() {
               className="w-full accent-gold-500"
             />
           </div>
-          <div className="flex items-center gap-2 pt-3">
+          <div>
+            <label className="text-xs text-bone-700 mb-1 block">Interlineado: {text.lineHeight}</label>
+            <input type="range" min={0.8} max={2.5} step={0.1} value={text.lineHeight}
+              onChange={(e) => setText({ lineHeight: Number(e.target.value) })}
+              className="w-full accent-gold-500"
+            />
+          </div>
+          <div className="flex items-center gap-2 pt-1">
             <input type="checkbox" id="shadow" checked={text.shadow}
               onChange={(e) => setText({ shadow: e.target.checked })}
               className="accent-gold-500"
@@ -233,11 +341,10 @@ export default function VideoEditor() {
             <label htmlFor="shadow" className="text-xs text-bone-500">Sombra</label>
           </div>
         </div>
-      </section>
+      </SectionPanel>
 
       {/* Efectos */}
-      <section>
-        <SectionHeader label="Efectos" />
+      <SectionPanel label="Efectos" isOpen={open.has('efectos')} onToggle={() => toggle('efectos')}>
         <div className="flex flex-col gap-3">
           <div>
             <label className="text-xs text-bone-700 mb-1 block">Efecto de texto</label>
@@ -259,11 +366,10 @@ export default function VideoEditor() {
             <label htmlFor="grain" className="text-xs text-bone-500">Grano cinematográfico</label>
           </div>
         </div>
-      </section>
+      </SectionPanel>
 
       {/* Video */}
-      <section>
-        <SectionHeader label="Video" />
+      <SectionPanel label="Video" isOpen={open.has('video')} onToggle={() => toggle('video')}>
         <div className="grid grid-cols-2 gap-3">
           <div className="col-span-2">
             <label className="text-xs text-bone-700 mb-1 block">Resolución</label>
@@ -312,11 +418,10 @@ export default function VideoEditor() {
             </div>
           )}
         </div>
-      </section>
+      </SectionPanel>
 
-      {/* Watermark */}
-      <section>
-        <SectionHeader label="Marca de agua" />
+      {/* Marca de agua */}
+      <SectionPanel label="Marca de agua" isOpen={open.has('watermark')} onToggle={() => toggle('watermark')}>
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-2">
             <input type="checkbox" id="wm-enabled" checked={watermark?.enabled ?? false}
@@ -327,7 +432,6 @@ export default function VideoEditor() {
           </div>
           {watermark?.enabled && (
             <>
-              {/* Tipo */}
               <div className="grid grid-cols-2 gap-1">
                 {(['image', 'text'] as const).map((t) => (
                   <button key={t} onClick={() => setWatermark({ type: t })}
@@ -337,7 +441,6 @@ export default function VideoEditor() {
                   </button>
                 ))}
               </div>
-              {/* Handle (solo texto) */}
               {(watermark.type ?? 'text') === 'text' && (
                 <input
                   type="text"
@@ -346,7 +449,6 @@ export default function VideoEditor() {
                   className="w-full bg-[#1C1C1C] border border-white/10 rounded-lg px-3 py-1.5 text-xs text-[#E8E4DC] focus:outline-none focus:ring-0 focus:border-white/30"
                 />
               )}
-              {/* Posición horizontal */}
               <div className="grid grid-cols-3 gap-1">
                 {(['left', 'center', 'right'] as const).map((p) => (
                   <button key={p} onClick={() => setWatermark({ position: p })}
@@ -356,7 +458,6 @@ export default function VideoEditor() {
                   </button>
                 ))}
               </div>
-              {/* Posición vertical */}
               <div>
                 <label className="text-xs text-bone-700 mb-1 block">Vertical: {watermark.y ?? 90}%</label>
                 <input type="range" min={0} max={100} value={watermark.y ?? 90}
@@ -364,7 +465,6 @@ export default function VideoEditor() {
                   className="w-full accent-gold-500"
                 />
               </div>
-              {/* Opacidad (solo texto) */}
               {(watermark.type ?? 'text') === 'text' && (
                 <div>
                   <label className="text-xs text-bone-700 mb-1 block">
@@ -379,7 +479,7 @@ export default function VideoEditor() {
             </>
           )}
         </div>
-      </section>
+      </SectionPanel>
 
     </div>
   )

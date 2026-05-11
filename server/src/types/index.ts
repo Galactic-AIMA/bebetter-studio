@@ -20,6 +20,9 @@ export interface TextConfig {
   shadow: boolean
   maxWidth: number  // percentage of video width
   lineHeight: number
+  letterSpacing?: number
+  strokeWidth?: number
+  strokeColor?: string
 }
 
 export interface VideoConfig {
