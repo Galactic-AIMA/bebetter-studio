@@ -3,6 +3,7 @@ import fs from 'fs'
 import path from 'path'
 import { config } from '../config'
 import { ImageItem } from '../types'
+import { loadMetadata } from './imageTags'
 
 const IMAGES_USAGE_PATH = path.join(__dirname, '../../../data/images-usage.json')
 
@@ -34,12 +35,15 @@ router.get('/', (_req, res) => {
     )
 
     const usage = loadUsage()
+    const metadata = loadMetadata()
     const images: ImageItem[] = files.map((filename) => ({
       id: filename,
       filename,
       path: path.join(dir, filename),
       url: `/api/images/file/${encodeURIComponent(filename)}`,
       usageCount: usage[filename] ?? 0,
+      tags: metadata[filename]?.tags,
+      analyzedAt: metadata[filename]?.analyzedAt,
     }))
 
     res.json(images)
@@ -58,11 +62,14 @@ router.get('/random', (_req, res) => {
     if (!files.length) return res.status(404).json({ error: 'No images found' })
 
     const filename = files[Math.floor(Math.random() * files.length)]
+    const metadata = loadMetadata()
     res.json({
       id: filename,
       filename,
       path: path.join(dir, filename),
       url: `/api/images/file/${encodeURIComponent(filename)}`,
+      tags: metadata[filename]?.tags,
+      analyzedAt: metadata[filename]?.analyzedAt,
     })
   } catch (err: any) {
     res.status(500).json({ error: err.message })

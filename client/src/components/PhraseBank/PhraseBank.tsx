@@ -1,5 +1,5 @@
 ﻿import React, { useEffect, useState } from 'react'
-import { Shuffle, Plus, Trash2, Pencil, ClipboardList, X, Check } from 'lucide-react'
+import { Shuffle, Plus, Trash2, Pencil, ClipboardList, X, Check, Sparkles } from 'lucide-react'
 import { phrasesApi } from '../../api'
 import { Phrase } from '../../types'
 import { useVideoStore } from '../../store/videoStore'
@@ -43,11 +43,38 @@ export default function PhraseBank() {
   const [preview, setPreview] = useState<string[]>([])
   const [importing, setImporting] = useState(false)
   const [hideUsed, setHideUsed] = useState(false)
-  const { setText, setSelectedPhraseId } = useVideoStore()
+  const [analyzing, setAnalyzing] = useState(false)
+  const [analyzeResult, setAnalyzeResult] = useState<string | null>(null)
+  const { setText, setSelectedPhraseId, selectedImageTags } = useVideoStore()
 
   const load = async () => {
     const data = await phrasesApi.list()
     setPhrases(data)
+  }
+
+  const handleAnalyzeAll = async () => {
+    setAnalyzing(true)
+    setAnalyzeResult(null)
+    try {
+      const { processed, skipped, errors } = await phrasesApi.analyzeAll()
+      await load()
+      if (errors.length > 0) {
+        setAnalyzeResult(`Error: ${errors[0]}`)
+      } else {
+        setAnalyzeResult(`${processed} analizadas, ${skipped} ya tenían keywords`)
+        setTimeout(() => setAnalyzeResult(null), 5000)
+      }
+    } catch {
+      setAnalyzeResult('Error al analizar')
+    } finally {
+      setAnalyzing(false)
+    }
+  }
+
+  function scorePhrase(phrase: Phrase): number {
+    if (!selectedImageTags.length || !phrase.moodKeywords?.length) return 0
+    const matches = selectedImageTags.filter((t) => phrase.moodKeywords!.includes(t)).length
+    return matches / phrase.moodKeywords.length
   }
 
   useEffect(() => { load() }, [])
@@ -217,6 +244,29 @@ export default function PhraseBank() {
         </div>
       </div>
 
+      {/* Botón analizar frases */}
+      <button
+        onClick={handleAnalyzeAll}
+        disabled={analyzing}
+        className="flex items-center justify-between gap-2 text-xs bg-carbon-700/50 hover:bg-carbon-700 border border-carbon-600/50 rounded-lg px-3 py-2 text-bone-700 hover:text-bone-500 transition-colors disabled:opacity-50"
+      >
+        <span className="flex items-center gap-1.5">
+          <Sparkles size={11} className={analyzing ? 'animate-pulse text-gold-500' : ''} />
+          {analyzing ? 'Analizando... (puede tardar varios minutos)' : 'Analizar frases con IA'}
+        </span>
+        {phrases.filter((p) => !p.moodKeywords?.length).length > 0 && !analyzing && (
+          <span className="text-[10px] bg-gold-500/10 text-gold-500 px-1.5 py-0.5 rounded">
+            {phrases.filter((p) => !p.moodKeywords?.length).length} sin analizar
+          </span>
+        )}
+      </button>
+
+      {analyzeResult && (
+        <p className={`text-[11px] px-1 ${analyzeResult.startsWith('Error') ? 'text-neon-red' : 'text-gold-500'}`}>
+          {analyzeResult}
+        </p>
+      )}
+
       {/* Toggle ocultar usadas */}
       {phrases.some((p) => (p.usageCount ?? 0) > 0) && (
         <button
@@ -227,40 +277,63 @@ export default function PhraseBank() {
         </button>
       )}
 
+      {selectedImageTags.length > 0 && phrases.some((p) => scorePhrase(p) > 0) && (
+        <p className="text-[10px] text-gold-500/70 px-1">✦ Ordenadas por compatibilidad con la imagen</p>
+      )}
+
       {/* Lista de frases */}
       <div className="flex flex-col gap-2">
-        {phrases
-          .filter((p) => !hideUsed || (p.usageCount ?? 0) === 0)
-          .map((phrase) => (
-          <div
-            key={phrase.id}
-            className="group relative flex items-start gap-2 bg-carbon-700 hover:bg-carbon-600 rounded-lg p-3 cursor-pointer"
-            onClick={() => selectPhrase(phrase)}
-          >
-            <p className="flex-1 text-sm text-bone-500 leading-relaxed pr-1">{phrase.text}</p>
-            <div className="flex items-center gap-1 shrink-0">
-              {(phrase.usageCount ?? 0) > 0 && (
-                <span className="text-xs bg-neon-red/20 text-gold-500 rounded px-1.5 py-0.5 font-medium">
-                  ×{phrase.usageCount}
-                </span>
-              )}
-              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button
-                  onClick={(e) => { e.stopPropagation(); startEdit(phrase) }}
-                  className="text-bone-700 hover:text-bone-500 p-1"
-                >
-                  <Pencil size={12} />
-                </button>
-                <button
-                  onClick={(e) => { e.stopPropagation(); deletePhrase(phrase.id) }}
-                  className="text-bone-700 hover:text-neon-red p-1"
-                >
-                  <Trash2 size={12} />
-                </button>
+        {(() => {
+          const filtered = phrases.filter((p) => !hideUsed || (p.usageCount ?? 0) === 0)
+          const hasRecs = selectedImageTags.length > 0
+          const sorted = hasRecs
+            ? [
+                ...filtered.filter((p) => scorePhrase(p) > 0).sort((a, b) => scorePhrase(b) - scorePhrase(a)),
+                ...filtered.filter((p) => scorePhrase(p) === 0),
+              ]
+            : filtered
+          return sorted.map((phrase) => {
+            const score = scorePhrase(phrase)
+            const isCompatible = score > 0
+            return (
+              <div
+                key={phrase.id}
+                className={`group relative flex items-start gap-2 rounded-lg p-3 cursor-pointer transition-colors ${
+                  isCompatible
+                    ? 'bg-carbon-700 hover:bg-carbon-600 border border-gold-500/30'
+                    : 'bg-carbon-700 hover:bg-carbon-600 border border-transparent'
+                }`}
+                onClick={() => selectPhrase(phrase)}
+              >
+                <p className="flex-1 text-sm text-bone-500 leading-relaxed pr-1">{phrase.text}</p>
+                <div className="flex items-center gap-1 shrink-0">
+                  {isCompatible && (
+                    <span className="text-[10px] text-gold-500 font-bold">✦</span>
+                  )}
+                  {(phrase.usageCount ?? 0) > 0 && (
+                    <span className="text-xs bg-neon-red/20 text-gold-500 rounded px-1.5 py-0.5 font-medium">
+                      ×{phrase.usageCount}
+                    </span>
+                  )}
+                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); startEdit(phrase) }}
+                      className="text-bone-700 hover:text-bone-500 p-1"
+                    >
+                      <Pencil size={12} />
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); deletePhrase(phrase.id) }}
+                      className="text-bone-700 hover:text-neon-red p-1"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-        ))}
+            )
+          })
+        })()}
         {phrases.length === 0 && (
           <p className="text-xs text-bone-700 text-center py-6">
             No hay frases. Agrega la primera o importa una lista.

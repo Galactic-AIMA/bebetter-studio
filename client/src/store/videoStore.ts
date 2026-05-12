@@ -38,11 +38,13 @@ export type ContentMode = 'video' | 'image'
 interface VideoStore {
   config: VideoConfig
   selectedPhraseId: string | null
+  selectedImageTags: string[]
   isGenerating: boolean
   mode: ContentMode
   setConfig: (partial: Partial<VideoConfig>) => void
   setText: (partial: Partial<TextConfig>) => void
   setSelectedPhraseId: (id: string | null) => void
+  setSelectedImageTags: (tags: string[]) => void
   setGenerating: (v: boolean) => void
   setMode: (mode: ContentMode) => void
   setWatermark: (partial: Partial<WatermarkConfig>) => void
@@ -57,6 +59,7 @@ interface VideoStore {
 export const useVideoStore = create<VideoStore>((set) => ({
   config: DEFAULT_CONFIG,
   selectedPhraseId: null,
+  selectedImageTags: [],
   isGenerating: false,
   mode: 'video',
   setConfig: (partial) =>
@@ -64,6 +67,7 @@ export const useVideoStore = create<VideoStore>((set) => ({
   setText: (partial) =>
     set((s) => ({ config: { ...s.config, text: { ...s.config.text, ...partial } } })),
   setSelectedPhraseId: (id) => set({ selectedPhraseId: id }),
+  setSelectedImageTags: (tags) => set({ selectedImageTags: tags }),
   setGenerating: (v) => set({ isGenerating: v }),
   setMode: (mode) => set({ mode }),
   setWatermark: (partial) =>

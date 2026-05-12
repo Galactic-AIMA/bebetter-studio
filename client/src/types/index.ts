@@ -36,6 +36,7 @@ export interface Phrase {
   category?: string
   author?: string
   usageCount?: number
+  moodKeywords?: string[]
 }
 
 export interface ImageItem {
@@ -44,6 +45,13 @@ export interface ImageItem {
   path: string
   url: string
   usageCount?: number
+  tags?: string[]
+  analyzedAt?: string
+}
+
+export interface ImageRecommendation {
+  imageId: string
+  score: number
 }
 
 export interface ImageConfig {

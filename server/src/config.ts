@@ -31,6 +31,10 @@ export const config = {
     path: process.env.WATERMARK_PATH || '',
   },
 
+  google: {
+    apiKey: process.env.GOOGLE_API_KEY || '',
+  },
+
   pinterest: {
     appId: process.env.PINTEREST_APP_ID || '',
     appSecret: process.env.PINTEREST_APP_SECRET || '',

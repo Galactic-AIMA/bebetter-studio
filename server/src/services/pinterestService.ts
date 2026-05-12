@@ -2,6 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import axios from 'axios'
 import { config } from '../config'
+import { analyzeImage } from './geminiService'
 
 interface PinterestToken {
   access_token: string
@@ -181,6 +182,13 @@ export async function syncBoardImages(): Promise<SyncResult> {
       await downloadImage(imageUrl, destPath)
       syncData.downloadedPinIds.push(pin.id)
       downloaded++
+      // Analizar en background
+      analyzeImage(destPath).then((tags) => {
+        const metaPath = path.join(__dirname, '../../../data/images-metadata.json')
+        const meta = fs.existsSync(metaPath) ? JSON.parse(fs.readFileSync(metaPath, 'utf-8')) : {}
+        meta[filename] = { tags, analyzedAt: new Date().toISOString() }
+        fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2))
+      }).catch(() => {})
     }
 
     const result: SyncResult = { newImages: downloaded, totalChecked: allPins.length, status: 'success' }

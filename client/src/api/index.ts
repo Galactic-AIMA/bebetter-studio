@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { Phrase, ImageItem, VideoRecord, VideoConfig, ImageRecord, ImageVariant, WatermarkConfig, HistoryItem } from '../types'
+import { Phrase, ImageItem, VideoRecord, VideoConfig, ImageRecord, ImageVariant, WatermarkConfig, HistoryItem, ImageRecommendation } from '../types'
 
 const api = axios.create({ baseURL: '/api' })
 
@@ -11,6 +11,10 @@ export const imagesApi = {
     fd.append('image', file)
     return api.post<ImageItem>('/upload/image', fd).then((r) => r.data)
   },
+  analyzeAll: () =>
+    api.post<{ processed: number; skipped: number; errors: string[] }>('/images/analyze-all').then((r) => r.data),
+  recommend: (phrase: string) =>
+    api.post<{ keywords: string[]; recommendations: ImageRecommendation[] }>('/images/recommend', { phrase }).then((r) => r.data),
 }
 
 export const phrasesApi = {
@@ -23,6 +27,8 @@ export const phrasesApi = {
   update: (id: string, data: Partial<Phrase>) =>
     api.put<Phrase>(`/phrases/${id}`, data).then((r) => r.data),
   remove: (id: string) => api.delete(`/phrases/${id}`),
+  analyzeAll: () =>
+    api.post<{ processed: number; skipped: number; errors: string[] }>('/phrases/analyze-all').then((r) => r.data),
 }
 
 export interface PinterestSyncResult {

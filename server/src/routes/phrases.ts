@@ -1,9 +1,25 @@
 import { Router } from 'express'
 import fs from 'fs'
+import path from 'path'
 import { v4 as uuidv4 } from 'uuid'
 import { Phrase } from '../types'
 import { config } from '../config'
+import { extractMoodKeywords } from '../services/geminiService'
+
 const router = Router()
+
+const PHRASES_META_PATH = path.join(__dirname, '../../../data/phrases-metadata.json')
+
+interface PhraseMeta { keywords: string[]; analyzedAt: string }
+
+function loadPhrasesMetadata(): Record<string, PhraseMeta> {
+  if (!fs.existsSync(PHRASES_META_PATH)) return {}
+  try { return JSON.parse(fs.readFileSync(PHRASES_META_PATH, 'utf-8')) } catch { return {} }
+}
+
+function savePhrasesMetadata(data: Record<string, PhraseMeta>) {
+  fs.writeFileSync(PHRASES_META_PATH, JSON.stringify(data, null, 2))
+}
 
 function loadPhrases(): Phrase[] {
   if (!fs.existsSync(config.paths.phrases)) return []
@@ -16,7 +32,37 @@ function savePhrases(phrases: Phrase[]) {
 
 // GET /api/phrases
 router.get('/', (_req, res) => {
-  res.json(loadPhrases())
+  const phrases = loadPhrases()
+  const metadata = loadPhrasesMetadata()
+  const enriched = phrases.map((p) => ({
+    ...p,
+    moodKeywords: metadata[p.id]?.keywords,
+  }))
+  res.json(enriched)
+})
+
+// POST /api/phrases/analyze-all — extrae mood keywords de todas las frases sin analizar
+router.post('/analyze-all', async (_req, res) => {
+  const phrases = loadPhrases()
+  const metadata = loadPhrasesMetadata()
+  let processed = 0
+  let skipped = 0
+  const errors: string[] = []
+
+  for (const phrase of phrases) {
+    if (metadata[phrase.id]?.keywords?.length > 0) { skipped++; continue }
+    try {
+      const keywords = await extractMoodKeywords(phrase.text)
+      metadata[phrase.id] = { keywords, analyzedAt: new Date().toISOString() }
+      savePhrasesMetadata(metadata)
+      processed++
+      await new Promise((r) => setTimeout(r, 4000))
+    } catch (err: any) {
+      errors.push(`${phrase.id}: ${err.message}`)
+    }
+  }
+
+  res.json({ processed, skipped, errors })
 })
 
 // GET /api/phrases/random

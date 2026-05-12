@@ -19,6 +19,8 @@ data/videos.json
 data/images-output.json
 data/images-usage.json
 data/phrases.json
+data/images-metadata.json
+data/phrases-metadata.json
 
 # Lockfile
 package-lock.json
