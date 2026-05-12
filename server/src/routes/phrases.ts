@@ -71,7 +71,8 @@ router.get('/random', (_req, res) => {
   const phrases = loadPhrases()
   if (!phrases.length) return res.status(404).json({ error: 'No phrases found' })
   const phrase = phrases[Math.floor(Math.random() * phrases.length)]
-  res.json(phrase)
+  const metadata = loadPhrasesMetadata()
+  res.json({ ...phrase, moodKeywords: metadata[phrase.id]?.keywords })
 })
 
 // POST /api/phrases
