@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { Phrase, ImageItem, VideoRecord, VideoConfig, ImageRecord, ImageVariant, WatermarkConfig } from '../types'
+import { Phrase, ImageItem, VideoRecord, VideoConfig, ImageRecord, ImageVariant, WatermarkConfig, HistoryItem } from '../types'
 
 const api = axios.create({ baseURL: '/api' })
 
@@ -76,6 +76,12 @@ export const imagesOutputApi = {
   uploadToDrive: (id: string) =>
     api.post<{ driveUrl: string }>(`/images-output/${id}/upload-drive`).then((r) => r.data),
   remove: (id: string) => api.delete(`/images-output/${id}`),
+}
+
+export const historyApi = {
+  list: () => api.get<HistoryItem[]>('/history').then((r) => r.data),
+  setViral: (kind: 'video' | 'image', id: string, viral: boolean) =>
+    api.patch<{ viral: boolean }>(`/history/${kind}s/${id}/viral`, { viral }).then((r) => r.data),
 }
 
 export const videosApi = {

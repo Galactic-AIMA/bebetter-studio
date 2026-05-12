@@ -51,6 +51,7 @@ export interface VideoRecord {
   s3Url?: string
   driveUrl?: string
   phraseId?: string
+  viral?: boolean
   createdAt: string
   config: VideoConfig
 }
@@ -101,6 +102,7 @@ export interface ImageRecord {
   driveUrl?: string
   phraseId?: string
   variant: ImageVariant
+  viral?: boolean
   createdAt: string
   config: ImageConfig
 }

@@ -46,6 +46,14 @@ export interface ImageItem {
   usageCount?: number
 }
 
+export interface ImageConfig {
+  imageId: string
+  imagePath: string
+  text: TextConfig
+  resolution: { width: number; height: number }
+  watermark?: WatermarkConfig
+}
+
 export interface VideoRecord {
   id: string
   filename: string
@@ -56,6 +64,8 @@ export interface VideoRecord {
   publicUrl: string
   s3Url?: string
   driveUrl?: string
+  phraseId?: string
+  viral?: boolean
   createdAt: string
   config: VideoConfig
 }
@@ -85,5 +95,11 @@ export interface ImageRecord {
   driveUrl?: string
   phraseId?: string
   variant: ImageVariant
+  viral?: boolean
   createdAt: string
+  config: ImageConfig
 }
+
+export type HistoryItem =
+  | (VideoRecord & { kind: 'video' })
+  | (ImageRecord & { kind: 'image' })

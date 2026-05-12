@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { VideoConfig, TextConfig, WatermarkConfig, TextEffect, VisualStyle } from '../types'
+import { VideoConfig, TextConfig, WatermarkConfig, TextEffect, VisualStyle, HistoryItem } from '../types'
 import { PRESETS } from '../presets'
 import { PresetConfig } from '../hooks/usePresets'
 
@@ -49,6 +49,8 @@ interface VideoStore {
   setTextEffect: (effect: TextEffect) => void
   applyPreset: (style: VisualStyle) => void
   applyConfig: (preset: PresetConfig) => void
+  loadStyleFromHistory: (item: HistoryItem) => void
+  loadFullFromHistory: (item: HistoryItem) => void
   reset: () => void
 }
 
@@ -91,5 +93,47 @@ export const useVideoStore = create<VideoStore>((set) => ({
         transitionDuration: preset.transitionDuration,
       },
     })),
+  loadStyleFromHistory: (item) =>
+    set((s) => {
+      const c = item.config
+      const isVideo = item.kind === 'video'
+      return {
+        config: {
+          ...s.config,
+          text: { ...s.config.text, ...c.text, content: s.config.text.content },
+          watermark: c.watermark ?? s.config.watermark,
+          ...(isVideo && {
+            textEffect: (item as any).config.textEffect ?? 'none',
+            grain: (item as any).config.grain ?? false,
+            visualStyle: (item as any).config.visualStyle ?? 'bebetter',
+            duration: (item as any).config.duration,
+            transition: (item as any).config.transition,
+            transitionDuration: (item as any).config.transitionDuration,
+          }),
+        },
+      }
+    }),
+  loadFullFromHistory: (item) =>
+    set((s) => {
+      const c = item.config
+      const isVideo = item.kind === 'video'
+      return {
+        config: {
+          ...s.config,
+          ...c,
+          imagePreviewUrl: (c as any).imagePreviewUrl ?? s.config.imagePreviewUrl,
+          ...(isVideo && {
+            textEffect: (item as any).config.textEffect ?? 'none',
+            grain: (item as any).config.grain ?? false,
+            visualStyle: (item as any).config.visualStyle ?? 'bebetter',
+            duration: (item as any).config.duration,
+            transition: (item as any).config.transition,
+            transitionDuration: (item as any).config.transitionDuration,
+          }),
+        },
+        selectedPhraseId: item.phraseId ?? null,
+        mode: isVideo ? 'video' : 'image',
+      }
+    }),
   reset: () => set({ config: DEFAULT_CONFIG, selectedPhraseId: null }),
 }))
