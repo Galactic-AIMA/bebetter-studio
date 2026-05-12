@@ -56,7 +56,8 @@ router.post('/analyze-all', async (_req, res) => {
       metadata[phrase.id] = { keywords, analyzedAt: new Date().toISOString() }
       savePhrasesMetadata(metadata)
       processed++
-      await new Promise((r) => setTimeout(r, 4000))
+      // 6s entre peticiones para respetar el límite de 10 RPM de gemini-2.5-flash
+      await new Promise((r) => setTimeout(r, 6000))
     } catch (err: any) {
       errors.push(`${phrase.id}: ${err.message}`)
     }

@@ -34,7 +34,7 @@ function parseTags(raw: string): string[] {
 }
 
 export async function analyzeImage(imagePath: string): Promise<string[]> {
-  const model = getClient().getGenerativeModel({ model: 'gemini-2.0-flash' })
+  const model = getClient().getGenerativeModel({ model: 'gemini-2.5-flash' })
 
   const ext = path.extname(imagePath).toLowerCase().replace('.', '')
   const mimeMap: Record<string, string> = {
@@ -58,7 +58,7 @@ export async function analyzeImage(imagePath: string): Promise<string[]> {
 }
 
 export async function extractMoodKeywords(phrase: string): Promise<string[]> {
-  const model = getClient().getGenerativeModel({ model: 'gemini-2.0-flash' })
+  const model = getClient().getGenerativeModel({ model: 'gemini-2.5-flash' })
 
   const prompt = `Dada esta frase motivacional: "${phrase}"
 Devuelve entre 3 y 5 palabras clave en español que describan el mood visual o emocional que debería tener la imagen de fondo para acompañarla. Enfócate en atmósfera y sensación, no en el tema literal. En minúsculas, separadas por comas, sin explicación, sin puntos al final.`

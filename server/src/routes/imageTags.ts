@@ -45,8 +45,8 @@ router.post('/analyze-all', async (_req, res) => {
       metadata[filename] = { tags, analyzedAt: new Date().toISOString() }
       saveMetadata(metadata)
       processed++
-      // 4s entre peticiones para respetar el límite de 15 RPM del tier gratuito
-      await new Promise((r) => setTimeout(r, 4000))
+      // 6s entre peticiones para respetar el límite de 10 RPM de gemini-2.5-flash
+      await new Promise((r) => setTimeout(r, 6000))
     } catch (err: any) {
       errors.push(`${filename}: ${err.message}`)
     }
