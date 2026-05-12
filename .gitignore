@@ -21,6 +21,8 @@ data/images-usage.json
 data/phrases.json
 data/images-metadata.json
 data/phrases-metadata.json
+data/images-metadata2.json
+data/phrases-metadata2.json
 
 # Lockfile
 package-lock.json
