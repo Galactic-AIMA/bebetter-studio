@@ -107,8 +107,14 @@ export default function ImageBank() {
   }
 
   const pickRandom = async () => {
-    const img = await imagesApi.random()
-    selectImage(img)
+    if (hideUsed) {
+      const pool = images.filter((img) => (img.usageCount ?? 0) === 0)
+      if (!pool.length) return
+      selectImage(pool[Math.floor(Math.random() * pool.length)])
+    } else {
+      const img = await imagesApi.random()
+      selectImage(img)
+    }
   }
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {

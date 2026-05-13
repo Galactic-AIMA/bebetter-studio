@@ -109,8 +109,14 @@ export default function PhraseBank() {
   }
 
   const pickRandom = async () => {
-    const phrase = await phrasesApi.random()
-    selectPhrase(phrase)
+    if (hideUsed) {
+      const pool = phrases.filter((p) => (p.usageCount ?? 0) === 0)
+      if (!pool.length) return
+      selectPhrase(pool[Math.floor(Math.random() * pool.length)])
+    } else {
+      const phrase = await phrasesApi.random()
+      selectPhrase(phrase)
+    }
   }
 
   const addPhrase = async () => {
