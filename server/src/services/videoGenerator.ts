@@ -63,6 +63,14 @@ function resolveFontPath(fontName: string): string {
   return resolved.replace(/\\/g, '/').replace(/^([A-Z]):/, '$1\\:')
 }
 
+function resolveItalicFontPath(fontName: string): string | null {
+  const familyKey = fontName.split('-')[0]
+  const italicKey = `${familyKey}-Italic`
+  const customFont = path.join(config.paths.fonts, `${italicKey}.ttf`)
+  if (fs.existsSync(customFont)) return customFont.replace(/\\/g, '/').replace(/^([A-Z]):/, '$1\\:')
+  return null
+}
+
 // Escapa el texto de una sola linea para el filtro drawtext
 function escapeLine(text: string): string {
   return text
@@ -150,6 +158,22 @@ export async function generateVideo(
       extraOpts
     )
   })
+
+  if (cfg.source) {
+    const sourceLabel = `– ${cfg.source} –`
+    const sourceFontSize = Math.round(text.fontSize * 0.55)
+    const sourceY = startY + lines.length * lineH + sourceFontSize * 2
+    const italicPath = resolveItalicFontPath(text.font) ?? fontPath
+    const shadowSource = text.shadow ? ':shadowx=1:shadowy=1:shadowcolor=black@0.5' : ''
+    drawTextFilters.push(
+      `drawtext=text='${escapeLine(sourceLabel)}':` +
+      `fontfile='${italicPath}':` +
+      `fontsize=${sourceFontSize}:` +
+      `fontcolor=${text.color}@0.8:` +
+      `x=(w-tw)/2:y=${sourceY}` +
+      shadowSource
+    )
+  }
 
   const fadeIn = transition !== 'none'
     ? `,fade=t=in:st=0:d=${transitionDuration}:color=black`

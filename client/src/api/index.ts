@@ -22,8 +22,8 @@ export const phrasesApi = {
   random: () => api.get<Phrase>('/phrases/random').then((r) => r.data),
   create: (data: Omit<Phrase, 'id'>) =>
     api.post<Phrase>('/phrases', data).then((r) => r.data),
-  bulkCreate: (texts: string[]) =>
-    api.post<Phrase[]>('/phrases/bulk', { texts }).then((r) => r.data),
+  bulkCreate: (phrases: { text: string; author?: string }[]) =>
+    api.post<Phrase[]>('/phrases/bulk', { phrases }).then((r) => r.data),
   update: (id: string, data: Partial<Phrase>) =>
     api.put<Phrase>(`/phrases/${id}`, data).then((r) => r.data),
   remove: (id: string) => api.delete(`/phrases/${id}`),
@@ -71,6 +71,7 @@ export interface ImageGenerateConfig {
   }
   resolution: { width: number; height: number }
   watermark?: WatermarkConfig
+  source?: string
 }
 
 export const imagesOutputApi = {

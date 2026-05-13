@@ -43,6 +43,7 @@ export const GenerateVideoSchema = z.object({
     outputName: z.string().optional(),
     wrappedLines: z.array(z.string()).optional(),
     watermark: WatermarkConfigSchema.optional(),
+    source: z.string().optional(),
   }),
   phraseId: z.string().optional(),
 })
@@ -54,6 +55,7 @@ export const GenerateImageSchema = z.object({
     text: TextConfigSchema,
     resolution: ResolutionSchema,
     watermark: WatermarkConfigSchema.optional(),
+    source: z.string().optional(),
   }),
   phraseId: z.string().optional(),
   variant: z.enum(['combined', 'hook', 'punchline']).optional(),

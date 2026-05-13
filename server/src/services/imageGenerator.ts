@@ -28,6 +28,7 @@ export interface ImageGenerateOptions {
   outputName: string
   variant?: ImageVariant
   watermark?: WatermarkConfig
+  source?: string
 }
 
 const WINDOWS_FONTS = 'C:/Windows/Fonts'
@@ -70,6 +71,14 @@ function resolveFontPath(fontName: string): string {
     ? customFont
     : (FONT_FALLBACKS[fontName] || `${WINDOWS_FONTS}/arial.ttf`)
   return resolved.replace(/\\/g, '/').replace(/^([A-Z]):/, '$1\\:')
+}
+
+function resolveItalicFontPath(fontName: string): string | null {
+  const familyKey = fontName.split('-')[0]
+  const italicKey = `${familyKey}-Italic`
+  const customFont = path.join(config.paths.fonts, `${italicKey}.ttf`)
+  if (fs.existsSync(customFont)) return customFont.replace(/\\/g, '/').replace(/^([A-Z]):/, '$1\\:')
+  return null
 }
 
 function escapeLine(text: string): string {
@@ -117,7 +126,8 @@ function buildDrawTextFilters(
 function buildVideoFilter(
   textCfg: TextConfig,
   resolution: { width: number; height: number },
-  variant: ImageVariant
+  variant: ImageVariant,
+  source?: string
 ): string {
   const { width, height } = resolution
   const maxW = Math.round((textCfg.maxWidth / 100) * width)
@@ -149,6 +159,22 @@ function buildVideoFilter(
     const centerY = Math.round((textCfg.position.y / 100) * height)
     const startY = Math.max(10, centerY - Math.round((lines.length * lineH) / 2))
     drawTextFilters = buildDrawTextFilters(lines, textCfg, startY, width)
+
+    if (source) {
+      const sourceLabel = `– ${source} –`
+      const sourceFontSize = Math.round(textCfg.fontSize * 0.55)
+      const sourceY = startY + lines.length * lineH + sourceFontSize * 2
+      const italicPath = resolveItalicFontPath(textCfg.font) ?? resolveFontPath(textCfg.font)
+      const shadowSource = textCfg.shadow ? ':shadowx=1:shadowy=1:shadowcolor=black@0.5' : ''
+      drawTextFilters.push(
+        `drawtext=text='${escapeLine(sourceLabel)}':` +
+        `fontfile='${italicPath}':` +
+        `fontsize=${sourceFontSize}:` +
+        `fontcolor=${textCfg.color}@0.8:` +
+        `x=(w-tw)/2:y=${sourceY}` +
+        shadowSource
+      )
+    }
   }
 
   return (
@@ -167,7 +193,7 @@ export async function generateImage(opts: ImageGenerateOptions): Promise<ImageGe
   const filename = `${opts.outputName}${suffix}.jpg`
   const outputPath = path.join(outputDir, filename)
 
-  const vfilter = buildVideoFilter(opts.text, opts.resolution, variant)
+  const vfilter = buildVideoFilter(opts.text, opts.resolution, variant, opts.source)
 
   const wm = opts.watermark
   const wmEnabled = wm?.enabled ?? false

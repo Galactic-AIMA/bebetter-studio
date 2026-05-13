@@ -47,7 +47,7 @@ export default function Editor() {
         setLastVideo(video)
         setLastImage(null)
       } else {
-        const imgConfig = { imageId: config.imageId, imagePath: config.imagePath, text: config.text, resolution: config.resolution, watermark: config.watermark }
+        const imgConfig = { imageId: config.imageId, imagePath: config.imagePath, text: config.text, resolution: config.resolution, watermark: config.watermark, source: config.source || undefined }
         const variant = hasDelimiter ? imageVariant : 'combined'
         const image = await imagesOutputApi.generate(imgConfig, selectedPhraseId ?? undefined, variant)
         setLastImage(image)

@@ -1,6 +1,6 @@
 import { useRef, useEffect } from 'react'
 import { VideoConfig, WatermarkConfig } from '../../types'
-import { buildFontMap } from '../../config/fonts'
+import { buildFontMap, parseFontKey } from '../../config/fonts'
 
 interface Props {
   config: VideoConfig
@@ -169,6 +169,25 @@ function drawText(
   ctx.shadowColor = 'transparent'
   if ('letterSpacing' in ctx) {
     (ctx as CanvasRenderingContext2D & { letterSpacing: string }).letterSpacing = '0px'
+  }
+
+  // Línea de fuente/autor
+  if (config.source) {
+    const sourceLabel = `– ${config.source} –`
+    const sourceFontSize = Math.round(fontSize * 0.55)
+    const { family } = parseFontKey(text.font)
+    const italicKey = `${family}-Italic`
+    const sourceCss = FONT_MAP[italicKey]
+      ? `italic ${FONT_MAP[italicKey].weight} ${sourceFontSize}px ${FONT_MAP[italicKey].family}, sans-serif`
+      : `${sourceFontSize}px ${FONT_MAP[text.font]?.family ?? 'sans-serif'}, sans-serif`
+    ctx.font = sourceCss
+    ctx.fillStyle = text.color
+    ctx.globalAlpha = 0.8
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    const sourceY = startY + lines.length * lineH + sourceFontSize * 2
+    ctx.fillText(sourceLabel, W / 2, sourceY)
+    ctx.globalAlpha = 1
   }
 }
 

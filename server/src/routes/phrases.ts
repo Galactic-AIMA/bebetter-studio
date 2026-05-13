@@ -93,15 +93,14 @@ router.post('/', (req, res) => {
 
 // POST /api/phrases/bulk — importar múltiples frases a la vez
 router.post('/bulk', (req, res) => {
-  const { texts } = req.body as { texts: string[] }
-  if (!Array.isArray(texts) || !texts.length)
-    return res.status(400).json({ error: 'texts array is required' })
+  const { phrases: input } = req.body as { phrases: { text: string; author?: string }[] }
+  if (!Array.isArray(input) || !input.length)
+    return res.status(400).json({ error: 'phrases array is required' })
 
   const phrases = loadPhrases()
-  const newPhrases: Phrase[] = texts
-    .map((t) => t.trim())
-    .filter((t) => t.length > 0)
-    .map((text) => ({ id: uuidv4(), text }))
+  const newPhrases: Phrase[] = input
+    .filter(({ text }) => text?.trim().length > 0)
+    .map(({ text, author }) => ({ id: uuidv4(), text: text.trim(), ...(author ? { author } : {}) }))
 
   phrases.push(...newPhrases)
   savePhrases(phrases)

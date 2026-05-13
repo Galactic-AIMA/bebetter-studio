@@ -38,6 +38,7 @@ export interface VideoConfig {
   outputName?: string
   wrappedLines?: string[]  // pre-calculadas en el cliente con measureText real
   watermark?: WatermarkConfig
+  source?: string  // texto de atribución/autor que se muestra bajo la frase
 }
 
 export interface VideoRecord {
@@ -90,6 +91,7 @@ export interface ImageConfig {
   text: TextConfig
   resolution: { width: number; height: number }
   watermark?: WatermarkConfig
+  source?: string
 }
 
 export type ImageVariant = 'combined' | 'hook' | 'punchline'

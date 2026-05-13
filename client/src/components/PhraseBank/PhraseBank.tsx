@@ -4,47 +4,66 @@ import { phrasesApi } from '../../api'
 import { Phrase } from '../../types'
 import { useVideoStore } from '../../store/videoStore'
 
-// Detecta automÃ¡ticamente el separador y extrae frases individuales del texto pegado.
-// Soporta: pÃ¡rrafos separados por lÃ­nea en blanco, listas numeradas (1. 2. 3.),
-// listas con guiÃ³n/asterisco, o una frase por lÃ­nea.
-function parsePastedText(raw: string): string[] {
-  const text = raw.trim()
+function extractAuthor(line: string): { text: string; author?: string } {
+  // 1. “(cualquier cosa - Fuente: Meditaciones)” o “(Fuente: Meditaciones)”
+  const fuenteMatch = line.match(/^(.*?)\s*\(.*?[Ff]uente:\s*([^)]+)\)\s*$/)
+  if (fuenteMatch) return { text: fuenteMatch[1].trim(), author: fuenteMatch[2].trim() }
 
-  // Lista numerada: "1. frase" o "1) frase"
-  const numbered = text.split(/\n+/).filter((l) => /^\d+[\.\)]\s+/.test(l.trim()))
+  // 2. “Frase — Victor Hugo” o “Frase – Victor Hugo” (≤6 palabras, sin punto final)
+  const dashMatch = line.match(/^(.*?)\s*[—–]\s*(.{2,60})\s*$/)
+  if (dashMatch) {
+    const candidate = dashMatch[2].trim()
+    if (!candidate.includes('.') && candidate.split(' ').length <= 6)
+      return { text: dashMatch[1].trim(), author: candidate }
+  }
+
+  // 3. “Frase (Victor Hugo)” — paréntesis simples sin “Fuente:”
+  const parenMatch = line.match(/^(.*?)\s*\(([^)]{2,60})\)\s*$/)
+  if (parenMatch && !parenMatch[2].toLowerCase().includes('fuente'))
+    return { text: parenMatch[1].trim(), author: parenMatch[2].trim() }
+
+  return { text: line.trim() }
+}
+
+function parsePastedText(raw: string): { text: string; author?: string }[] {
+  const input = raw.trim()
+
+  // Lista numerada: “1. frase” o “1) frase”
+  const numbered = input.split(/\n+/).filter((l) => /^\d+[\.\)]\s+/.test(l.trim()))
   if (numbered.length > 1) {
-    return numbered.map((l) => l.replace(/^\d+[\.\)]\s+/, '').trim()).filter(Boolean)
+    return numbered.map((l) => extractAuthor(l.replace(/^\d+[\.\)]\s+/, '').trim())).filter((e) => e.text)
   }
 
-  // PÃ¡rrafos separados por lÃ­nea en blanco
-  const byParagraph = text.split(/\n\s*\n/).map((p) => p.replace(/\n/g, ' ').trim()).filter(Boolean)
-  if (byParagraph.length > 1) return byParagraph
+  // Párrafos separados por línea en blanco
+  const byParagraph = input.split(/\n\s*\n/).map((p) => p.replace(/\n/g, ' ').trim()).filter(Boolean)
+  if (byParagraph.length > 1) return byParagraph.map(extractAuthor)
 
-  // Lista con guiÃ³n o asterisco: "- frase" o "* frase"
-  const byBullet = text.split(/\n+/).filter((l) => /^[-*â€¢]\s+/.test(l.trim()))
+  // Lista con guión o asterisco: “- frase” o “* frase”
+  const byBullet = input.split(/\n+/).filter((l) => /^[-*•]\s+/.test(l.trim()))
   if (byBullet.length > 1) {
-    return byBullet.map((l) => l.replace(/^[-*â€¢]\s+/, '').trim()).filter(Boolean)
+    return byBullet.map((l) => extractAuthor(l.replace(/^[-*•]\s+/, '').trim())).filter((e) => e.text)
   }
 
-  // Una frase por lÃ­nea
-  const byLine = text.split(/\n+/).map((l) => l.trim()).filter(Boolean)
-  if (byLine.length > 1) return byLine
+  // Una frase por línea
+  const byLine = input.split(/\n+/).map((l) => l.trim()).filter(Boolean)
+  if (byLine.length > 1) return byLine.map(extractAuthor)
 
-  // Texto simple â€” una sola frase
-  return text ? [text] : []
+  // Texto simple — una sola frase
+  return input ? [extractAuthor(input)] : []
 }
 
 export default function PhraseBank() {
   const [phrases, setPhrases] = useState<Phrase[]>([])
   const [newText, setNewText] = useState('')
+  const [newAuthor, setNewAuthor] = useState('')
   const [editId, setEditId] = useState<string | null>(null)
   const [showImport, setShowImport] = useState(false)
   const [importText, setImportText] = useState('')
-  const [preview, setPreview] = useState<string[]>([])
+  const [preview, setPreview] = useState<{ text: string; author?: string }[]>([])
   const [importing, setImporting] = useState(false)
   const [hideUsed, setHideUsed] = useState(false)
   const [analyzeResult, setAnalyzeResult] = useState<string | null>(null)
-  const { setText, setSelectedPhraseId, selectedImageTags, analyzingPhrases: analyzing, setAnalyzingPhrases: setAnalyzing } = useVideoStore()
+  const { setText, setConfig, setSelectedPhraseId, selectedImageTags, analyzingPhrases: analyzing, setAnalyzingPhrases: setAnalyzing } = useVideoStore()
 
   const load = async () => {
     const data = await phrasesApi.list()
@@ -86,6 +105,7 @@ export default function PhraseBank() {
   const selectPhrase = (phrase: Phrase) => {
     setText({ content: phrase.text })
     setSelectedPhraseId(phrase.id)
+    setConfig({ source: phrase.author ?? '' })
   }
 
   const pickRandom = async () => {
@@ -96,12 +116,13 @@ export default function PhraseBank() {
   const addPhrase = async () => {
     if (!newText.trim()) return
     if (editId) {
-      await phrasesApi.update(editId, { text: newText })
+      await phrasesApi.update(editId, { text: newText, author: newAuthor || undefined })
       setEditId(null)
     } else {
-      await phrasesApi.create({ text: newText })
+      await phrasesApi.create({ text: newText, author: newAuthor || undefined })
     }
     setNewText('')
+    setNewAuthor('')
     load()
   }
 
@@ -113,6 +134,7 @@ export default function PhraseBank() {
   const startEdit = (phrase: Phrase) => {
     setEditId(phrase.id)
     setNewText(phrase.text)
+    setNewAuthor(phrase.author ?? '')
   }
 
   const handleBulkImport = async () => {
@@ -127,6 +149,8 @@ export default function PhraseBank() {
       setImporting(false)
     }
   }
+
+  const cancelEdit = () => { setEditId(null); setNewText(''); setNewAuthor('') }
 
   return (
     <div className="flex flex-col gap-3 p-4">
@@ -175,7 +199,10 @@ export default function PhraseBank() {
                 {preview.map((p, i) => (
                   <div key={i} className="flex items-start gap-2 text-xs text-bone-500 bg-carbon-700 rounded px-2 py-1.5">
                     <span className="text-bone-700 shrink-0 w-4">{i + 1}.</span>
-                    <span className="leading-relaxed">{p}</span>
+                    <span className="leading-relaxed flex-1">
+                      {p.text}
+                      {p.author && <span className="block text-[10px] text-gold-500 mt-0.5">– {p.author} –</span>}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -208,18 +235,27 @@ export default function PhraseBank() {
           </p>
         )}
         <div className="flex gap-2">
-          <textarea
-            className={`flex-1 bg-carbon-700 border rounded-lg p-2 text-sm text-bone-500 resize-none focus:outline-none focus:ring-1 transition-colors ${
-              editId
-                ? 'border-yellow-400 focus:ring-yellow-400'
-                : 'border-carbon-600 focus:ring-neon-red'
-            }`}
-            rows={2}
-            value={newText}
-            onChange={(e) => setNewText(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && e.ctrlKey) addPhrase() }}
-            placeholder={editId ? 'Edita el texto...' : 'Nueva frase... (Ctrl+Enter para guardar)'}
-          />
+          <div className="flex-1 flex flex-col gap-1.5">
+            <textarea
+              className={`w-full bg-carbon-700 border rounded-lg p-2 text-sm text-bone-500 resize-none focus:outline-none focus:ring-1 transition-colors ${
+                editId
+                  ? 'border-yellow-400 focus:ring-yellow-400'
+                  : 'border-carbon-600 focus:ring-neon-red'
+              }`}
+              rows={2}
+              value={newText}
+              onChange={(e) => setNewText(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && e.ctrlKey) addPhrase() }}
+              placeholder={editId ? 'Edita el texto...' : 'Nueva frase... (Ctrl+Enter para guardar)'}
+            />
+            <input
+              type="text"
+              className="w-full bg-carbon-700 border border-carbon-600 rounded-lg px-2 py-1.5 text-xs text-bone-500 placeholder-bone-700 focus:outline-none focus:ring-1 focus:ring-neon-red"
+              value={newAuthor}
+              onChange={(e) => setNewAuthor(e.target.value)}
+              placeholder="Fuente o autor (opcional)"
+            />
+          </div>
           <div className="flex flex-col gap-1">
             <button
               onClick={addPhrase}
@@ -233,7 +269,7 @@ export default function PhraseBank() {
             </button>
             {editId && (
               <button
-                onClick={() => { setEditId(null); setNewText('') }}
+                onClick={cancelEdit}
                 className="flex items-center justify-center gap-1 text-xs bg-carbon-600 hover:bg-carbon-600 text-bone-500 rounded-lg px-3 py-1.5 transition-colors"
               >
                 <X size={12} /> Cancelar

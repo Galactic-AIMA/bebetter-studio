@@ -81,6 +81,7 @@ router.post('/generate', async (req, res) => {
       outputName,
       variant,
       watermark: imgConfig.watermark,
+      source: imgConfig.source,
     }))
 
     const record: ImageRecord = {
