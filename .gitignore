@@ -13,6 +13,7 @@ server/credentials/
 # Pinterest-synced images (local, regenerable)
 data/images/
 data/pinterest-sync.json
+data/gallery-dl-archive.txt
 
 # Runtime data (generated content records & usage counters)
 data/videos.json

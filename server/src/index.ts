@@ -12,7 +12,7 @@ import pinterestRouter from './routes/pinterest'
 import imagesOutputRouter from './routes/imagesOutput'
 import historyRouter from './routes/history'
 import imageTagsRouter from './routes/imageTags'
-import { syncBoardImages } from './services/pinterestService'
+import { syncWithGalleryDl } from './services/galleryDlService'
 import { runCleanup } from './services/cleanupService'
 
 const app = express()
@@ -48,8 +48,8 @@ app.listen(config.port, () => {
   cron.schedule('0 */6 * * *', () => { runCleanup() })
   console.log('Cleanup: activo (cada 6 horas, archivos >24h)')
 
-  if (config.pinterest.appId && config.pinterest.boardId) {
-    cron.schedule('0 * * * *', () => { syncBoardImages() })
-    console.log('Pinterest sync: activo (cada hora)')
+  if (config.galleryDl.boardUrl) {
+    cron.schedule('0 * * * *', () => { syncWithGalleryDl() })
+    console.log('Pinterest sync (gallery-dl): activo (cada hora)')
   }
 })

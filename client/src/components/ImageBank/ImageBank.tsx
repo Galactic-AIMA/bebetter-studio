@@ -19,13 +19,11 @@ export default function ImageBank() {
   const [loading, setLoading] = useState(true)
   const [hideUsed, setHideUsed] = useState(false)
   const [pinterest, setPinterest] = useState<PinterestStatus | null>(null)
-  const [syncing, setSyncing] = useState(false)
-  const [analyzing, setAnalyzing] = useState(false)
   const [analyzeResult, setAnalyzeResult] = useState<string | null>(null)
   const [recommendations, setRecommendations] = useState<ImageRecommendation[]>([])
   const [recommendPhrase, setRecommendPhrase] = useState<string>('')
   const fileRef = useRef<HTMLInputElement>(null)
-  const { config, setConfig, setSelectedImageTags } = useVideoStore()
+  const { config, setConfig, setSelectedImageTags, analyzingImages: analyzing, setAnalyzingImages: setAnalyzing, syncingPinterest: syncing, setSyncingPinterest: setSyncing } = useVideoStore()
 
   const load = async () => {
     setLoading(true)

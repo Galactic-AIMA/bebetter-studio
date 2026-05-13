@@ -43,9 +43,8 @@ export default function PhraseBank() {
   const [preview, setPreview] = useState<string[]>([])
   const [importing, setImporting] = useState(false)
   const [hideUsed, setHideUsed] = useState(false)
-  const [analyzing, setAnalyzing] = useState(false)
   const [analyzeResult, setAnalyzeResult] = useState<string | null>(null)
-  const { setText, setSelectedPhraseId, selectedImageTags } = useVideoStore()
+  const { setText, setSelectedPhraseId, selectedImageTags, analyzingPhrases: analyzing, setAnalyzingPhrases: setAnalyzing } = useVideoStore()
 
   const load = async () => {
     const data = await phrasesApi.list()

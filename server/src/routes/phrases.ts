@@ -70,8 +70,11 @@ router.post('/analyze-all', async (_req, res) => {
 router.get('/random', (_req, res) => {
   const phrases = loadPhrases()
   if (!phrases.length) return res.status(404).json({ error: 'No phrases found' })
-  const phrase = phrases[Math.floor(Math.random() * phrases.length)]
   const metadata = loadPhrasesMetadata()
+  // Preferir frases ya analizadas para que el matching de imágenes funcione
+  const analyzed = phrases.filter((p) => (metadata[p.id]?.keywords?.length ?? 0) > 0)
+  const pool = analyzed.length > 0 ? analyzed : phrases
+  const phrase = pool[Math.floor(Math.random() * pool.length)]
   res.json({ ...phrase, moodKeywords: metadata[phrase.id]?.keywords })
 })
 

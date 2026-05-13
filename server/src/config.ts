@@ -43,4 +43,10 @@ export const config = {
       process.env.PINTEREST_CREDENTIALS_PATH || path.join(__dirname, '../../credentials/pinterest-token.json')
     ),
   },
+
+  galleryDl: {
+    bin: process.env.GALLERY_DL_PATH || 'gallery-dl',
+    boardUrl: process.env.PINTEREST_BOARD_URL || '',
+    limit: parseInt(process.env.GALLERY_DL_LIMIT || '0') || 0,
+  },
 }

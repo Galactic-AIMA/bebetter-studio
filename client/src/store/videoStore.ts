@@ -40,12 +40,18 @@ interface VideoStore {
   selectedPhraseId: string | null
   selectedImageTags: string[]
   isGenerating: boolean
+  analyzingImages: boolean
+  analyzingPhrases: boolean
+  syncingPinterest: boolean
   mode: ContentMode
   setConfig: (partial: Partial<VideoConfig>) => void
   setText: (partial: Partial<TextConfig>) => void
   setSelectedPhraseId: (id: string | null) => void
   setSelectedImageTags: (tags: string[]) => void
   setGenerating: (v: boolean) => void
+  setAnalyzingImages: (v: boolean) => void
+  setAnalyzingPhrases: (v: boolean) => void
+  setSyncingPinterest: (v: boolean) => void
   setMode: (mode: ContentMode) => void
   setWatermark: (partial: Partial<WatermarkConfig>) => void
   setTextEffect: (effect: TextEffect) => void
@@ -61,6 +67,9 @@ export const useVideoStore = create<VideoStore>((set) => ({
   selectedPhraseId: null,
   selectedImageTags: [],
   isGenerating: false,
+  analyzingImages: false,
+  analyzingPhrases: false,
+  syncingPinterest: false,
   mode: 'video',
   setConfig: (partial) =>
     set((s) => ({ config: { ...s.config, ...partial } })),
@@ -69,6 +78,9 @@ export const useVideoStore = create<VideoStore>((set) => ({
   setSelectedPhraseId: (id) => set({ selectedPhraseId: id }),
   setSelectedImageTags: (tags) => set({ selectedImageTags: tags }),
   setGenerating: (v) => set({ isGenerating: v }),
+  setAnalyzingImages: (v) => set({ analyzingImages: v }),
+  setAnalyzingPhrases: (v) => set({ analyzingPhrases: v }),
+  setSyncingPinterest: (v) => set({ syncingPinterest: v }),
   setMode: (mode) => set({ mode }),
   setWatermark: (partial) =>
     set((s) => ({ config: { ...s.config, watermark: { ...s.config.watermark!, ...partial } } })),

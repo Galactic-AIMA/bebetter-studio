@@ -61,8 +61,12 @@ router.get('/random', (_req, res) => {
     )
     if (!files.length) return res.status(404).json({ error: 'No images found' })
 
-    const filename = files[Math.floor(Math.random() * files.length)]
     const metadata = loadMetadata()
+    // Preferir imágenes ya analizadas para que el matching de frases funcione
+    const analyzed = files.filter((f) => (metadata[f]?.tags?.length ?? 0) > 0)
+    const pool = analyzed.length > 0 ? analyzed : files
+    const filename = pool[Math.floor(Math.random() * pool.length)]
+
     res.json({
       id: filename,
       filename,
