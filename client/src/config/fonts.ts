@@ -14,17 +14,6 @@ export interface FontFamilyDef {
 
 export const FONT_FAMILIES: FontFamilyDef[] = [
   {
-    key: 'Montserrat',
-    displayName: 'Montserrat',
-    googleFamily: 'Montserrat',
-    variants: {
-      Regular: { weight: '400' },
-      Thin:    { weight: '100' },
-      Italic:  { weight: '400', italic: true },
-      Bold:    { weight: '700' },
-    },
-  },
-  {
     key: 'PlayfairDisplay',
     displayName: 'Playfair Display',
     googleFamily: 'Playfair+Display',

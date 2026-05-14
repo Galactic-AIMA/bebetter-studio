@@ -5,7 +5,7 @@ import { PresetConfig } from '../hooks/usePresets'
 
 const DEFAULT_TEXT: TextConfig = {
   content: 'Tu frase aquí...',
-  font: 'Montserrat-Bold',
+  font: 'Inter-Bold',
   fontSize: 42,
   color: '#ffffff',
   position: { x: 50, y: 25 },
