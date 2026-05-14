@@ -85,7 +85,7 @@ router.post('/', (req, res) => {
 
   const phrases = loadPhrases()
   const newPhrase: Phrase = { id: uuidv4(), text, category, author }
-  phrases.push(newPhrase)
+  phrases.unshift(newPhrase)
   savePhrases(phrases)
 
   res.status(201).json(newPhrase)
@@ -102,10 +102,26 @@ router.post('/bulk', (req, res) => {
     .filter(({ text }) => text?.trim().length > 0)
     .map(({ text, author }) => ({ id: uuidv4(), text: text.trim(), ...(author ? { author } : {}) }))
 
-  phrases.push(...newPhrases)
+  phrases.unshift(...newPhrases)
   savePhrases(phrases)
 
   res.status(201).json(newPhrases)
+})
+
+// PUT /api/phrases/reorder — reordena todas las frases según el array de IDs recibido
+router.put('/reorder', (req, res) => {
+  const { ids } = req.body as { ids: string[] }
+  if (!Array.isArray(ids)) return res.status(400).json({ error: 'ids array is required' })
+
+  const phrases = loadPhrases()
+  const map = new Map(phrases.map((p) => [p.id, p]))
+  const reordered = ids.map((id) => map.get(id)).filter(Boolean) as Phrase[]
+  // Añadir al final las que no vengan en ids (por si acaso)
+  const reorderedIds = new Set(ids)
+  phrases.filter((p) => !reorderedIds.has(p.id)).forEach((p) => reordered.push(p))
+
+  savePhrases(reordered)
+  res.json({ ok: true })
 })
 
 // PUT /api/phrases/:id

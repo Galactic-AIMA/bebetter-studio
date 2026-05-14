@@ -29,6 +29,7 @@ export const phrasesApi = {
   remove: (id: string) => api.delete(`/phrases/${id}`),
   analyzeAll: () =>
     api.post<{ processed: number; skipped: number; errors: string[] }>('/phrases/analyze-all').then((r) => r.data),
+  reorder: (ids: string[]) => api.put('/phrases/reorder', { ids }).then((r) => r.data),
 }
 
 export interface PinterestSyncResult {

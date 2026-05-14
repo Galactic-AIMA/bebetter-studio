@@ -1,5 +1,5 @@
-﻿import React, { useEffect, useState } from 'react'
-import { Shuffle, Plus, Trash2, Pencil, ClipboardList, X, Check, Sparkles } from 'lucide-react'
+﻿import React, { useEffect, useRef, useState } from 'react'
+import { Shuffle, Plus, Trash2, Pencil, ClipboardList, X, Check, Sparkles, GripVertical } from 'lucide-react'
 import { phrasesApi } from '../../api'
 import { Phrase } from '../../types'
 import { useVideoStore } from '../../store/videoStore'
@@ -63,6 +63,8 @@ export default function PhraseBank() {
   const [importing, setImporting] = useState(false)
   const [hideUsed, setHideUsed] = useState(false)
   const [analyzeResult, setAnalyzeResult] = useState<string | null>(null)
+  const dragId = useRef<string | null>(null)
+  const dragOverId = useRef<string | null>(null)
   const { setText, setConfig, setSelectedPhraseId, selectedImageTags, analyzingPhrases: analyzing, setAnalyzingPhrases: setAnalyzing } = useVideoStore()
 
   const load = async () => {
@@ -157,6 +159,27 @@ export default function PhraseBank() {
   }
 
   const cancelEdit = () => { setEditId(null); setNewText(''); setNewAuthor('') }
+
+  const handleDragStart = (id: string) => { dragId.current = id }
+  const handleDragOver = (e: React.DragEvent, id: string) => {
+    e.preventDefault()
+    dragOverId.current = id
+  }
+  const handleDrop = async () => {
+    if (!dragId.current || !dragOverId.current || dragId.current === dragOverId.current) return
+    const from = dragId.current
+    const to = dragOverId.current
+    dragId.current = null
+    dragOverId.current = null
+
+    const next = [...phrases]
+    const fromIdx = next.findIndex((p) => p.id === from)
+    const toIdx = next.findIndex((p) => p.id === to)
+    const [moved] = next.splice(fromIdx, 1)
+    next.splice(toIdx, 0, moved)
+    setPhrases(next)
+    await phrasesApi.reorder(next.map((p) => p.id))
+  }
 
   return (
     <div className="flex flex-col gap-3 p-4">
@@ -339,6 +362,10 @@ export default function PhraseBank() {
             return (
               <div
                 key={phrase.id}
+                draggable
+                onDragStart={() => handleDragStart(phrase.id)}
+                onDragOver={(e) => handleDragOver(e, phrase.id)}
+                onDrop={handleDrop}
                 className={`group relative flex items-start gap-2 rounded-lg p-3 cursor-pointer transition-colors ${
                   isCompatible
                     ? 'bg-carbon-700 hover:bg-carbon-600 border border-gold-500/30'
@@ -346,6 +373,12 @@ export default function PhraseBank() {
                 }`}
                 onClick={() => selectPhrase(phrase)}
               >
+                <div
+                  className="shrink-0 mt-0.5 text-bone-700 opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing transition-opacity"
+                  onMouseDown={(e) => e.stopPropagation()}
+                >
+                  <GripVertical size={13} />
+                </div>
                 <div className="flex-1 pr-1">
                   <p className="text-sm text-bone-500 leading-relaxed">{phrase.text}</p>
                   {phrase.author && (
