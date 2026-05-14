@@ -39,7 +39,8 @@ export interface PinterestSyncResult {
 }
 
 export interface PinterestStatus {
-  isConfigured: boolean
+  galleryDlConfigured: boolean
+  pinterestApiConfigured: boolean
   lastSync: {
     timestamp: string
     newImages: number
@@ -52,6 +53,7 @@ export interface PinterestStatus {
 export const pinterestApi = {
   status: () => api.get<PinterestStatus>('/pinterest/status').then((r) => r.data),
   sync: () => api.post<PinterestSyncResult>('/pinterest/sync').then((r) => r.data),
+  syncApi: () => api.post<PinterestSyncResult>('/pinterest/sync/api').then((r) => r.data),
   boards: () => api.get('/pinterest/boards').then((r) => r.data),
 }
 

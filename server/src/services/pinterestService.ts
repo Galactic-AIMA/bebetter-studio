@@ -179,6 +179,13 @@ export async function syncBoardImages(): Promise<SyncResult> {
       const filename = `pinterest_${pin.id}.${ext}`
       const destPath = path.join(config.paths.images, filename)
 
+      // Si el archivo ya existe (descargado previamente por gallery-dl u otro medio),
+      // registrar el pin como descargado sin volver a bajarlo
+      if (fs.existsSync(destPath)) {
+        syncData.downloadedPinIds.push(pin.id)
+        continue
+      }
+
       await downloadImage(imageUrl, destPath)
       syncData.downloadedPinIds.push(pin.id)
       downloaded++

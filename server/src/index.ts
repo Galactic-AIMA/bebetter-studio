@@ -13,6 +13,7 @@ import imagesOutputRouter from './routes/imagesOutput'
 import historyRouter from './routes/history'
 import imageTagsRouter from './routes/imageTags'
 import { syncWithGalleryDl } from './services/galleryDlService'
+import { syncBoardImages } from './services/pinterestService'
 import { runCleanup } from './services/cleanupService'
 
 const app = express()
@@ -51,5 +52,14 @@ app.listen(config.port, () => {
   if (config.galleryDl.boardUrl) {
     cron.schedule('0 * * * *', () => { syncWithGalleryDl() })
     console.log('Pinterest sync (gallery-dl): activo (cada hora)')
+  }
+
+  if (config.pinterest.appId && config.pinterest.boardId) {
+    console.log('Pinterest API: sincronizando al arranque...')
+    syncBoardImages().then((r) => {
+      console.log(`Pinterest API sync: ${r.newImages} nuevas imágenes de ${r.totalChecked} pines`)
+    }).catch((err) => {
+      console.error('Pinterest API sync (arranque) error:', err.message)
+    })
   }
 })

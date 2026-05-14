@@ -3,7 +3,7 @@ import fs from 'fs'
 import path from 'path'
 import { config } from '../config'
 import { syncWithGalleryDl } from '../services/galleryDlService'
-import { listUserBoards } from '../services/pinterestService'
+import { syncBoardImages, listUserBoards } from '../services/pinterestService'
 
 const router = Router()
 
@@ -34,7 +34,8 @@ function saveLastSync(entry: SyncEntry) {
 
 router.get('/status', (_req, res) => {
   res.json({
-    isConfigured: !!config.galleryDl.boardUrl,
+    galleryDlConfigured: !!config.galleryDl.boardUrl,
+    pinterestApiConfigured: !!(config.pinterest.appId && config.pinterest.boardId),
     lastSync: loadLastSync(),
   })
 })
@@ -48,9 +49,21 @@ router.get('/boards', async (_req, res) => {
   }
 })
 
+// Sync via gallery-dl (método actual)
 router.post('/sync', async (_req, res) => {
   try {
     const result = await syncWithGalleryDl()
+    saveLastSync({ ...result, timestamp: new Date().toISOString() })
+    res.json(result)
+  } catch (err: any) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// Sync via Pinterest API oficial
+router.post('/sync/api', async (_req, res) => {
+  try {
+    const result = await syncBoardImages()
     saveLastSync({ ...result, timestamp: new Date().toISOString() })
     res.json(result)
   } catch (err: any) {

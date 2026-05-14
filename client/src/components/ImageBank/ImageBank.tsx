@@ -19,6 +19,7 @@ export default function ImageBank() {
   const [loading, setLoading] = useState(true)
   const [hideUsed, setHideUsed] = useState(false)
   const [pinterest, setPinterest] = useState<PinterestStatus | null>(null)
+  const [syncingApi, setSyncingApi] = useState(false)
   const [analyzeResult, setAnalyzeResult] = useState<string | null>(null)
   const [recommendations, setRecommendations] = useState<ImageRecommendation[]>([])
   const [recommendPhrase, setRecommendPhrase] = useState<string>('')
@@ -78,6 +79,16 @@ export default function ImageBank() {
       await Promise.all([load(), loadPinterestStatus()])
     } finally {
       setSyncing(false)
+    }
+  }
+
+  const handlePinterestApiSync = async () => {
+    setSyncingApi(true)
+    try {
+      await pinterestApi.syncApi()
+      await Promise.all([load(), loadPinterestStatus()])
+    } finally {
+      setSyncingApi(false)
     }
   }
 
@@ -143,22 +154,41 @@ export default function ImageBank() {
 
   return (
     <div className="flex flex-col gap-3 p-4">
-      {pinterest?.isConfigured && (
-        <div className="flex items-center justify-between text-xs bg-carbon-700/50 rounded-lg px-3 py-2 border border-carbon-600/50">
-          <span className="flex items-center gap-1.5 text-bone-700">
-            <span className="text-neon-red">◈</span>
-            {pinterest.lastSync
-              ? `${formatTimeAgo(pinterest.lastSync.timestamp)} · ${pinterest.lastSync.newImages} nuevas`
-              : 'Sin sincronizar aún'}
-          </span>
-          <button
-            onClick={handlePinterestSync}
-            disabled={syncing}
-            className="flex items-center gap-1 text-bone-700 hover:text-bone-500 transition-colors disabled:opacity-50"
-          >
-            <RefreshCw size={11} className={syncing ? 'animate-spin' : ''} />
-            {syncing ? 'Sincronizando...' : 'Sincronizar'}
-          </button>
+      {(pinterest?.galleryDlConfigured || pinterest?.pinterestApiConfigured) && (
+        <div className="flex flex-col gap-1.5 text-xs bg-carbon-700/50 rounded-lg px-3 py-2 border border-carbon-600/50">
+          <div className="flex items-center justify-between">
+            <span className="flex items-center gap-1.5 text-bone-700">
+              <span className="text-neon-red">◈</span>
+              {pinterest.lastSync
+                ? `${formatTimeAgo(pinterest.lastSync.timestamp)} · ${pinterest.lastSync.newImages} nuevas`
+                : 'Sin sincronizar aún'}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            {pinterest.galleryDlConfigured && (
+              <button
+                onClick={handlePinterestSync}
+                disabled={syncing || syncingApi}
+                className="flex items-center gap-1 text-bone-700 hover:text-bone-500 transition-colors disabled:opacity-50"
+              >
+                <RefreshCw size={11} className={syncing ? 'animate-spin' : ''} />
+                {syncing ? 'Sincronizando...' : 'gallery-dl'}
+              </button>
+            )}
+            {pinterest.galleryDlConfigured && pinterest.pinterestApiConfigured && (
+              <span className="text-carbon-600">·</span>
+            )}
+            {pinterest.pinterestApiConfigured && (
+              <button
+                onClick={handlePinterestApiSync}
+                disabled={syncing || syncingApi}
+                className="flex items-center gap-1 text-gold-500 hover:text-gold-400 transition-colors disabled:opacity-50"
+              >
+                <RefreshCw size={11} className={syncingApi ? 'animate-spin' : ''} />
+                {syncingApi ? 'Sincronizando...' : 'Pinterest API'}
+              </button>
+            )}
+          </div>
         </div>
       )}
 
