@@ -346,7 +346,12 @@ export default function PhraseBank() {
                 }`}
                 onClick={() => selectPhrase(phrase)}
               >
-                <p className="flex-1 text-sm text-bone-500 leading-relaxed pr-1">{phrase.text}</p>
+                <div className="flex-1 pr-1">
+                  <p className="text-sm text-bone-500 leading-relaxed">{phrase.text}</p>
+                  {phrase.author && (
+                    <p className="text-[10px] text-gold-500/80 mt-0.5">– {phrase.author} –</p>
+                  )}
+                </div>
                 <div className="flex items-center gap-1 shrink-0">
                   {isCompatible && (
                     <span className="text-[10px] text-gold-500 font-bold">✦</span>

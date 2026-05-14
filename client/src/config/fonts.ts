@@ -118,6 +118,14 @@ export function buildFontMap(): Record<string, { weight: string; family: string;
   return map
 }
 
+export function fontToCSS(fontName: string, sizePx: number): string {
+  const map = buildFontMap()
+  const entry = map[fontName]
+  if (!entry) return `${sizePx}px sans-serif`
+  const italic = entry.italic ? 'italic ' : ''
+  return `${italic}${entry.weight} ${sizePx}px ${entry.family}, sans-serif`
+}
+
 export function parseFontKey(font: string): { family: string; style: FontStyleKey } {
   const lastDash = font.lastIndexOf('-')
   return {

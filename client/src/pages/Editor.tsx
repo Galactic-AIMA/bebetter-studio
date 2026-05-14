@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useVideoStore } from '../store/videoStore'
 import { videosApi, imagesOutputApi } from '../api'
+import { fontToCSS } from '../config/fonts'
 import { VideoRecord, ImageRecord, ImageVariant } from '../types'
 import Header from '../components/Layout/Header'
 import LeftPanel from '../components/Layout/LeftPanel'
@@ -23,7 +24,7 @@ export default function Editor() {
     const canvas = document.createElement('canvas')
     const ctx = canvas.getContext('2d')!
     const { text, resolution } = config
-    ctx.font = `${text.fontSize}px ${text.font.replace(/-/g, ' ')}, Arial, sans-serif`
+    ctx.font = fontToCSS(text.font, text.fontSize)
     const maxPx = (text.maxWidth / 100) * resolution.width
     const words = text.content.split(' ')
     const lines: string[] = []

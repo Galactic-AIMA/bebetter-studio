@@ -1,19 +1,12 @@
 import { useRef, useEffect } from 'react'
 import { VideoConfig, WatermarkConfig } from '../../types'
-import { buildFontMap, parseFontKey } from '../../config/fonts'
+import { buildFontMap, fontToCSS, parseFontKey } from '../../config/fonts'
 
 interface Props {
   config: VideoConfig
 }
 
 const FONT_MAP = buildFontMap()
-
-function fontToCSS(fontName: string, sizePx: number): string {
-  const entry = FONT_MAP[fontName]
-  if (!entry) return `${sizePx}px sans-serif`
-  const italic = entry.italic ? 'italic ' : ''
-  return `${italic}${entry.weight} ${sizePx}px ${entry.family}, sans-serif`
-}
 
 export default function VideoPreview({ config }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
