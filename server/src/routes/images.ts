@@ -3,14 +3,7 @@ import fs from 'fs'
 import path from 'path'
 import { config } from '../config'
 import { ImageItem } from '../types'
-import { loadMetadata } from './imageTags'
-
-const IMAGES_USAGE_PATH = path.join(__dirname, '../../../data/images-usage.json')
-
-function loadUsage(): Record<string, number> {
-  if (!fs.existsSync(IMAGES_USAGE_PATH)) return {}
-  return JSON.parse(fs.readFileSync(IMAGES_USAGE_PATH, 'utf-8'))
-}
+import db from '../db'
 
 const router = Router()
 
@@ -34,17 +27,23 @@ router.get('/', (_req, res) => {
       SUPPORTED.includes(path.extname(f).toLowerCase())
     )
 
-    const usage = loadUsage()
-    const metadata = loadMetadata()
-    const images: ImageItem[] = files.map((filename) => ({
-      id: filename,
-      filename,
-      path: path.join(dir, filename),
-      url: `/api/images/file/${encodeURIComponent(filename)}`,
-      usageCount: usage[filename] ?? 0,
-      tags: metadata[filename]?.tags,
-      analyzedAt: metadata[filename]?.analyzedAt,
-    }))
+    const dbRows = new Map(
+      (db.prepare(`SELECT filename, tags, analyzed_at, usage_count FROM images`).all() as any[])
+        .map((r) => [r.filename, r])
+    )
+
+    const images: ImageItem[] = files.map((filename) => {
+      const row = dbRows.get(filename)
+      return {
+        id: filename,
+        filename,
+        path: path.join(dir, filename),
+        url: `/api/images/file/${encodeURIComponent(filename)}`,
+        usageCount: row?.usage_count ?? 0,
+        tags: row?.tags ? JSON.parse(row.tags) : undefined,
+        analyzedAt: row?.analyzed_at ?? undefined,
+      }
+    })
 
     res.json(images)
   } catch (err: any) {
@@ -56,24 +55,31 @@ router.get('/', (_req, res) => {
 router.get('/random', (_req, res) => {
   try {
     const dir = config.paths.images
+    if (!fs.existsSync(dir)) return res.status(404).json({ error: 'No images found' })
+
     const files = fs.readdirSync(dir).filter((f) =>
       SUPPORTED.includes(path.extname(f).toLowerCase())
     )
     if (!files.length) return res.status(404).json({ error: 'No images found' })
 
-    const metadata = loadMetadata()
     // Preferir imágenes ya analizadas para que el matching de frases funcione
-    const analyzed = files.filter((f) => (metadata[f]?.tags?.length ?? 0) > 0)
+    const analyzedSet = new Set(
+      (db.prepare(`SELECT filename FROM images WHERE tags IS NOT NULL AND tags != '[]'`).all() as any[])
+        .map((r) => r.filename)
+    )
+    const analyzed = files.filter((f) => analyzedSet.has(f))
     const pool = analyzed.length > 0 ? analyzed : files
     const filename = pool[Math.floor(Math.random() * pool.length)]
+
+    const row = db.prepare(`SELECT tags, analyzed_at FROM images WHERE filename = ?`).get(filename) as any
 
     res.json({
       id: filename,
       filename,
       path: path.join(dir, filename),
       url: `/api/images/file/${encodeURIComponent(filename)}`,
-      tags: metadata[filename]?.tags,
-      analyzedAt: metadata[filename]?.analyzedAt,
+      tags: row?.tags ? JSON.parse(row.tags) : undefined,
+      analyzedAt: row?.analyzed_at ?? undefined,
     })
   } catch (err: any) {
     res.status(500).json({ error: err.message })

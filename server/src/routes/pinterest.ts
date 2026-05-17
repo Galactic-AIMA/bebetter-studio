@@ -1,42 +1,30 @@
 import { Router } from 'express'
-import fs from 'fs'
-import path from 'path'
 import { config } from '../config'
 import { syncWithGalleryDl } from '../services/galleryDlService'
 import { syncBoardImages, listUserBoards } from '../services/pinterestService'
+import db from '../db'
 
 const router = Router()
 
-const SYNC_DATA_PATH = path.join(__dirname, '../../../data/pinterest-sync.json')
-
-interface SyncEntry {
-  timestamp: string
-  newImages: number
-  totalChecked: number
-  status: 'success' | 'error'
-  error?: string
-}
-
-function loadLastSync(): SyncEntry | null {
-  if (!fs.existsSync(SYNC_DATA_PATH)) return null
-  try {
-    const data = JSON.parse(fs.readFileSync(SYNC_DATA_PATH, 'utf-8'))
-    return data.lastSync ?? null
-  } catch { return null }
-}
-
-function saveLastSync(entry: SyncEntry) {
-  const existing = fs.existsSync(SYNC_DATA_PATH)
-    ? (() => { try { return JSON.parse(fs.readFileSync(SYNC_DATA_PATH, 'utf-8')) } catch { return {} } })()
-    : {}
-  fs.writeFileSync(SYNC_DATA_PATH, JSON.stringify({ ...existing, lastSync: entry }, null, 2))
-}
-
 router.get('/status', (_req, res) => {
+  const lastSyncRow = db.prepare(
+    `SELECT * FROM pinterest_sync_log ORDER BY id DESC LIMIT 1`
+  ).get() as any
+
+  const lastSync = lastSyncRow
+    ? {
+        timestamp:     lastSyncRow.timestamp,
+        newImages:     lastSyncRow.new_images,
+        totalChecked:  lastSyncRow.total_checked,
+        status:        lastSyncRow.status,
+        error:         lastSyncRow.error ?? undefined,
+      }
+    : null
+
   res.json({
-    galleryDlConfigured: !!config.galleryDl.boardUrl,
+    galleryDlConfigured:    !!config.galleryDl.boardUrl,
     pinterestApiConfigured: !!(config.pinterest.appId && config.pinterest.boardId),
-    lastSync: loadLastSync(),
+    lastSync,
   })
 })
 
@@ -49,11 +37,24 @@ router.get('/boards', async (_req, res) => {
   }
 })
 
+function saveSyncLog(entry: { newImages: number; totalChecked: number; status: string; error?: string }) {
+  db.prepare(`
+    INSERT INTO pinterest_sync_log (timestamp, new_images, total_checked, status, error)
+    VALUES (@timestamp, @new_images, @total_checked, @status, @error)
+  `).run({
+    timestamp:     new Date().toISOString(),
+    new_images:    entry.newImages,
+    total_checked: entry.totalChecked,
+    status:        entry.status,
+    error:         entry.error ?? null,
+  })
+}
+
 // Sync via gallery-dl (método actual)
 router.post('/sync', async (_req, res) => {
   try {
     const result = await syncWithGalleryDl()
-    saveLastSync({ ...result, timestamp: new Date().toISOString() })
+    saveSyncLog(result)
     res.json(result)
   } catch (err: any) {
     res.status(500).json({ error: err.message })
@@ -64,7 +65,7 @@ router.post('/sync', async (_req, res) => {
 router.post('/sync/api', async (_req, res) => {
   try {
     const result = await syncBoardImages()
-    saveLastSync({ ...result, timestamp: new Date().toISOString() })
+    saveSyncLog(result)
     res.json(result)
   } catch (err: any) {
     res.status(500).json({ error: err.message })

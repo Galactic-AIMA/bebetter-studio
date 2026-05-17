@@ -7,46 +7,18 @@ import { enqueue } from '../services/queueService'
 import { uploadVideoToS3 } from '../services/s3Service'
 import { uploadToDrive } from '../services/driveService'
 import { sendToWebhook } from '../services/webhookService'
-import { GenerateVideoRequest, VideoRecord, Phrase } from '../types'
+import { GenerateVideoRequest } from '../types'
 import { config } from '../config'
 import { GenerateVideoSchema } from '../schemas'
+import { rowToVideoRecord } from '../utils/recordMappers'
+import db from '../db'
 
 const router = Router()
 
-const DB_PATH = path.join(__dirname, '../../../data/videos.json')
-const PHRASES_PATH = path.join(__dirname, '../../../data/phrases.json')
-const IMAGES_USAGE_PATH = path.join(__dirname, '../../../data/images-usage.json')
-
-function loadVideos(): VideoRecord[] {
-  if (!fs.existsSync(DB_PATH)) return []
-  return JSON.parse(fs.readFileSync(DB_PATH, 'utf-8'))
-}
-
-function saveVideos(videos: VideoRecord[]) {
-  fs.writeFileSync(DB_PATH, JSON.stringify(videos, null, 2))
-}
-
-function incrementPhraseUsage(phraseId: string) {
-  if (!fs.existsSync(PHRASES_PATH)) return
-  const phrases: Phrase[] = JSON.parse(fs.readFileSync(PHRASES_PATH, 'utf-8'))
-  const phrase = phrases.find((p) => p.id === phraseId)
-  if (phrase) {
-    phrase.usageCount = (phrase.usageCount ?? 0) + 1
-    fs.writeFileSync(PHRASES_PATH, JSON.stringify(phrases, null, 2))
-  }
-}
-
-function incrementImageUsage(imageId: string) {
-  const usage: Record<string, number> = fs.existsSync(IMAGES_USAGE_PATH)
-    ? JSON.parse(fs.readFileSync(IMAGES_USAGE_PATH, 'utf-8'))
-    : {}
-  usage[imageId] = (usage[imageId] ?? 0) + 1
-  fs.writeFileSync(IMAGES_USAGE_PATH, JSON.stringify(usage, null, 2))
-}
-
 // GET /api/videos — listar todos los videos generados
 router.get('/', (_req, res) => {
-  res.json(loadVideos())
+  const rows = db.prepare(`SELECT * FROM videos ORDER BY created_at DESC`).all() as any[]
+  res.json(rows.map(rowToVideoRecord))
 })
 
 // POST /api/videos/generate — generar un video nuevo
@@ -70,22 +42,33 @@ router.post('/generate', async (req, res) => {
 
     const { filename, localPath, publicUrl } = await enqueue(() => generateVideo(vidConfig as any, outputName))
 
-    const record: VideoRecord = {
+    const createdAt = new Date().toISOString()
+    db.prepare(`
+      INSERT INTO videos
+        (id, filename, title, description, tags, local_path, public_url,
+         phrase_id, viral, font, effect, resolution, config_extra, created_at)
+      VALUES
+        (@id, @filename, @title, @description, @tags, @local_path, @public_url,
+         @phrase_id, 0, @font, @effect, @resolution, @config_extra, @created_at)
+    `).run({
       id,
       filename,
-      title: base,
-      description: '',
-      tags: [],
-      localPath,
-      publicUrl,
-      phraseId: phraseId ?? undefined,
-      createdAt: new Date().toISOString(),
-      config: vidConfig,
-    }
+      title:        base,
+      description:  '',
+      tags:         JSON.stringify([]),
+      local_path:   localPath,
+      public_url:   publicUrl,
+      phrase_id:    phraseId ?? null,
+      font:         vidConfig.text.font,
+      effect:       vidConfig.textEffect ?? null,
+      resolution:   `${vidConfig.resolution.width}x${vidConfig.resolution.height}`,
+      config_extra: JSON.stringify(vidConfig),
+      created_at:   createdAt,
+    })
 
-    const videos = loadVideos()
-    videos.unshift(record)
-    saveVideos(videos)
+    const record = rowToVideoRecord(
+      db.prepare(`SELECT * FROM videos WHERE id = ?`).get(id) as any
+    )
 
     res.json({ success: true, video: record })
   } catch (err: any) {
@@ -96,14 +79,12 @@ router.post('/generate', async (req, res) => {
 // POST /api/videos/:id/upload-s3 — subir video a S3
 router.post('/:id/upload-s3', async (req, res) => {
   try {
-    const videos = loadVideos()
-    const video = videos.find((v) => v.id === req.params.id)
-    if (!video) return res.status(404).json({ error: 'Video not found' })
+    const row = db.prepare(`SELECT * FROM videos WHERE id = ?`).get(req.params.id) as any
+    if (!row) return res.status(404).json({ error: 'Video not found' })
 
-    const s3Url = await uploadVideoToS3(video.localPath, video.filename)
-    video.s3Url = s3Url
+    const s3Url = await uploadVideoToS3(row.local_path, row.filename)
+    db.prepare(`UPDATE videos SET s3_url = ? WHERE id = ?`).run(s3Url, req.params.id)
 
-    saveVideos(videos)
     res.json({ success: true, s3Url })
   } catch (err: any) {
     res.status(500).json({ error: err.message })
@@ -113,18 +94,23 @@ router.post('/:id/upload-s3', async (req, res) => {
 // POST /api/videos/:id/upload-drive — subir video a Google Drive
 router.post('/:id/upload-drive', async (req, res) => {
   try {
-    const videos = loadVideos()
-    const video = videos.find((v) => v.id === req.params.id)
-    if (!video) return res.status(404).json({ error: 'Video not found' })
+    const row = db.prepare(`SELECT * FROM videos WHERE id = ?`).get(req.params.id) as any
+    if (!row) return res.status(404).json({ error: 'Video not found' })
 
-    const driveUrl = await uploadToDrive(video.localPath, video.filename)
-    video.driveUrl = driveUrl
-
-    saveVideos(videos)
+    const driveUrl = await uploadToDrive(row.local_path, row.filename)
+    db.prepare(`UPDATE videos SET drive_url = ? WHERE id = ?`).run(driveUrl, req.params.id)
 
     // Incrementar contadores solo al subir a Drive
-    if (video.phraseId) incrementPhraseUsage(video.phraseId)
-    if (video.config.imageId) incrementImageUsage(video.config.imageId)
+    if (row.phrase_id) {
+      db.prepare(`UPDATE phrases SET usage_count = usage_count + 1 WHERE id = ?`).run(row.phrase_id)
+    }
+    const cfg = row.config_extra ? JSON.parse(row.config_extra) : {}
+    if (cfg.imageId) {
+      db.prepare(`
+        INSERT INTO images (filename, usage_count) VALUES (@f, 1)
+        ON CONFLICT(filename) DO UPDATE SET usage_count = usage_count + 1
+      `).run({ f: cfg.imageId })
+    }
 
     res.json({ success: true, driveUrl })
   } catch (err: any) {
@@ -136,27 +122,27 @@ router.post('/:id/upload-drive', async (req, res) => {
 router.post('/:id/publish', async (req, res) => {
   try {
     const { env = 'test' } = req.body
-    const videos = loadVideos()
-    const video = videos.find((v) => v.id === req.params.id)
-    if (!video) return res.status(404).json({ error: 'Video not found' })
+    const row = db.prepare(`SELECT * FROM videos WHERE id = ?`).get(req.params.id) as any
+    if (!row) return res.status(404).json({ error: 'Video not found' })
 
-    if (!video.s3Url) {
-      const s3Url = await uploadVideoToS3(video.localPath, video.filename)
-      video.s3Url = s3Url
-      saveVideos(videos)
+    let s3Url = row.s3_url
+    if (!s3Url) {
+      s3Url = await uploadVideoToS3(row.local_path, row.filename)
+      db.prepare(`UPDATE videos SET s3_url = ? WHERE id = ?`).run(s3Url, req.params.id)
     }
 
+    const cfg = row.config_extra ? JSON.parse(row.config_extra) : {}
     await sendToWebhook(
       {
-        videoUrl: video.s3Url,
-        phrase: video.config.text.content,
-        filename: video.filename,
-        createdAt: video.createdAt,
+        videoUrl: s3Url,
+        phrase: cfg.text?.content ?? '',
+        filename: row.filename,
+        createdAt: row.created_at,
       },
       env
     )
 
-    res.json({ success: true, sentTo: env, videoUrl: video.s3Url })
+    res.json({ success: true, sentTo: env, videoUrl: s3Url })
   } catch (err: any) {
     res.status(500).json({ error: err.message })
   }
@@ -164,13 +150,11 @@ router.post('/:id/publish', async (req, res) => {
 
 // DELETE /api/videos/:id — eliminar video
 router.delete('/:id', (req, res) => {
-  const videos = loadVideos()
-  const idx = videos.findIndex((v) => v.id === req.params.id)
-  if (idx === -1) return res.status(404).json({ error: 'Video not found' })
+  const row = db.prepare(`SELECT local_path FROM videos WHERE id = ?`).get(req.params.id) as any
+  if (!row) return res.status(404).json({ error: 'Video not found' })
 
-  const [video] = videos.splice(idx, 1)
-  if (fs.existsSync(video.localPath)) fs.unlinkSync(video.localPath)
-  saveVideos(videos)
+  if (fs.existsSync(row.local_path)) fs.unlinkSync(row.local_path)
+  db.prepare(`DELETE FROM videos WHERE id = ?`).run(req.params.id)
 
   res.json({ success: true })
 })

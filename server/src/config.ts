@@ -12,7 +12,7 @@ export const config = {
     images: process.env.IMAGES_PATH || path.join(__dirname, '../../data/images'),
     output: process.env.OUTPUT_PATH || path.join(__dirname, '../../output'),
     fonts: process.env.FONTS_PATH || path.join(__dirname, '../../data/fonts'),
-    phrases: path.join(__dirname, '../../data/phrases.json'),
+    db: process.env.DB_PATH || path.join(__dirname, '../../data/bebetter.db'),
   },
 
   aws: {

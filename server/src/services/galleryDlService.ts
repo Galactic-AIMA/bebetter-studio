@@ -3,9 +3,9 @@ import fs from 'fs'
 import path from 'path'
 import { config } from '../config'
 import { analyzeImage } from './geminiService'
+import db from '../db'
 
 const ARCHIVE_PATH = path.join(__dirname, '../../../data/gallery-dl-archive.txt')
-const METADATA_PATH = path.join(__dirname, '../../../data/images-metadata.json')
 const SUPPORTED = ['.jpg', '.jpeg', '.jfif', '.png', '.webp', '.gif', '.bmp', '.tiff', '.tif', '.avif']
 
 export interface GalleryDlResult {
@@ -53,20 +53,24 @@ function analyzeNewImages() {
   const dir = config.paths.images
   if (!fs.existsSync(dir)) return
 
-  const metadata: Record<string, { tags: string[]; analyzedAt: string }> = fs.existsSync(METADATA_PATH)
-    ? (() => { try { return JSON.parse(fs.readFileSync(METADATA_PATH, 'utf-8')) } catch { return {} } })()
-    : {}
+  const analyzedSet = new Set(
+    (db.prepare(`SELECT filename FROM images WHERE tags IS NOT NULL AND tags != '[]'`).all() as any[])
+      .map((r: any) => r.filename)
+  )
 
   const unanalyzed = fs.readdirSync(dir).filter(
-    (f) => SUPPORTED.includes(path.extname(f).toLowerCase()) && !metadata[f]?.tags?.length
+    (f) => SUPPORTED.includes(path.extname(f).toLowerCase()) && !analyzedSet.has(f)
   )
 
   ;(async () => {
     for (const filename of unanalyzed) {
       try {
         const tags = await analyzeImage(path.join(dir, filename))
-        metadata[filename] = { tags, analyzedAt: new Date().toISOString() }
-        fs.writeFileSync(METADATA_PATH, JSON.stringify(metadata, null, 2))
+        db.prepare(`
+          INSERT INTO images (filename, tags, analyzed_at)
+          VALUES (@filename, @tags, @analyzed_at)
+          ON CONFLICT(filename) DO UPDATE SET tags = @tags, analyzed_at = @analyzed_at
+        `).run({ filename, tags: JSON.stringify(tags), analyzed_at: new Date().toISOString() })
         await new Promise((r) => setTimeout(r, 6000))
       } catch { /* silencioso */ }
     }

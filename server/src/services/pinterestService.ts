@@ -3,6 +3,7 @@ import path from 'path'
 import axios from 'axios'
 import { config } from '../config'
 import { analyzeImage } from './geminiService'
+import db from '../db'
 
 interface PinterestToken {
   access_token: string
@@ -26,27 +27,12 @@ interface Pin {
   }
 }
 
-interface SyncEntry {
-  timestamp: string
-  newImages: number
-  totalChecked: number
-  status: 'success' | 'error'
-  error?: string
-}
-
-interface SyncData {
-  downloadedPinIds: string[]
-  lastSync: SyncEntry | null
-}
-
 export interface SyncResult {
   newImages: number
   totalChecked: number
   status: 'success' | 'error'
   error?: string
 }
-
-const SYNC_DATA_PATH = path.join(__dirname, '../../../data/pinterest-sync.json')
 
 function loadToken(): PinterestToken {
   const tokenPath = config.pinterest.credentialsPath
@@ -61,17 +47,6 @@ function saveToken(token: PinterestToken): void {
   const dir = path.dirname(tokenPath)
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
   fs.writeFileSync(tokenPath, JSON.stringify(token, null, 2))
-}
-
-function loadSyncData(): SyncData {
-  if (!fs.existsSync(SYNC_DATA_PATH)) {
-    return { downloadedPinIds: [], lastSync: null }
-  }
-  return JSON.parse(fs.readFileSync(SYNC_DATA_PATH, 'utf-8'))
-}
-
-function saveSyncData(data: SyncData): void {
-  fs.writeFileSync(SYNC_DATA_PATH, JSON.stringify(data, null, 2))
 }
 
 async function refreshAccessToken(): Promise<PinterestToken> {
@@ -163,12 +138,14 @@ export async function syncBoardImages(): Promise<SyncResult> {
     return { newImages: 0, totalChecked: 0, status: 'error', error: 'Pinterest no configurado' }
   }
 
-  const syncData = loadSyncData()
+  const downloadedPinIds = new Set(
+    (db.prepare(`SELECT pin_id FROM pinterest_pins`).all() as any[]).map((r) => r.pin_id)
+  )
 
   try {
     const accessToken = await getValidToken()
     const allPins = await fetchAllBoardPins(config.pinterest.boardId, accessToken)
-    const newPins = allPins.filter((p) => !syncData.downloadedPinIds.includes(p.id))
+    const newPins = allPins.filter((p) => !downloadedPinIds.has(p.id))
 
     let downloaded = 0
     for (const pin of newPins) {
@@ -179,44 +156,43 @@ export async function syncBoardImages(): Promise<SyncResult> {
       const filename = `pinterest_${pin.id}.${ext}`
       const destPath = path.join(config.paths.images, filename)
 
-      // Si el archivo ya existe (descargado previamente por gallery-dl u otro medio),
-      // registrar el pin como descargado sin volver a bajarlo
+      // Si el archivo ya existe, registrar sin volver a bajarlo
       if (fs.existsSync(destPath)) {
-        syncData.downloadedPinIds.push(pin.id)
+        db.prepare(`INSERT OR IGNORE INTO pinterest_pins (pin_id) VALUES (?)`).run(pin.id)
         continue
       }
 
       await downloadImage(imageUrl, destPath)
-      syncData.downloadedPinIds.push(pin.id)
+      db.prepare(`INSERT OR IGNORE INTO pinterest_pins (pin_id) VALUES (?)`).run(pin.id)
       downloaded++
+
       // Analizar en background
       analyzeImage(destPath).then((tags) => {
-        const metaPath = path.join(__dirname, '../../../data/images-metadata.json')
-        const meta = fs.existsSync(metaPath) ? JSON.parse(fs.readFileSync(metaPath, 'utf-8')) : {}
-        meta[filename] = { tags, analyzedAt: new Date().toISOString() }
-        fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2))
+        db.prepare(`
+          INSERT INTO images (filename, tags, analyzed_at)
+          VALUES (@filename, @tags, @analyzed_at)
+          ON CONFLICT(filename) DO UPDATE SET tags = @tags, analyzed_at = @analyzed_at
+        `).run({ filename, tags: JSON.stringify(tags), analyzed_at: new Date().toISOString() })
       }).catch(() => {})
     }
 
-    const result: SyncResult = { newImages: downloaded, totalChecked: allPins.length, status: 'success' }
-    syncData.lastSync = { timestamp: new Date().toISOString(), ...result }
-    saveSyncData(syncData)
-
     console.log(`[Pinterest] Sync: ${downloaded} nuevas de ${allPins.length} pines`)
-    return result
+    return { newImages: downloaded, totalChecked: allPins.length, status: 'success' }
   } catch (err: any) {
-    const result: SyncResult = { newImages: 0, totalChecked: 0, status: 'error', error: err.message }
-    syncData.lastSync = { timestamp: new Date().toISOString(), ...result }
-    saveSyncData(syncData)
     console.error('[Pinterest] Error en sync:', err.message)
-    return result
+    return { newImages: 0, totalChecked: 0, status: 'error', error: err.message }
   }
 }
 
 export function getSyncStatus() {
   const isConfigured = !!(config.pinterest.appId && config.pinterest.boardId)
-  const syncData = loadSyncData()
-  return { isConfigured, lastSync: syncData.lastSync }
+  const lastSyncRow = db.prepare(
+    `SELECT * FROM pinterest_sync_log ORDER BY id DESC LIMIT 1`
+  ).get() as any
+  const lastSync = lastSyncRow
+    ? { timestamp: lastSyncRow.timestamp, newImages: lastSyncRow.new_images, totalChecked: lastSyncRow.total_checked, status: lastSyncRow.status, error: lastSyncRow.error }
+    : null
+  return { isConfigured, lastSync }
 }
 
 export async function listUserBoards() {

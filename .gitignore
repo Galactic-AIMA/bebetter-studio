@@ -25,6 +25,11 @@ data/phrases-metadata.json
 data/images-metadata2.json
 data/phrases-metadata2.json
 
+# SQLite database (runtime, no versionar)
+data/bebetter.db
+data/bebetter.db-shm
+data/bebetter.db-wal
+
 # Lockfile
 package-lock.json
 

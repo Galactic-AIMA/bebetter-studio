@@ -4,7 +4,7 @@ import path from 'path'
 import fs from 'fs'
 import { config } from '../config'
 import { analyzeImage } from '../services/geminiService'
-import { loadMetadata } from './imageTags'
+import db from '../db'
 
 const router = Router()
 
@@ -31,12 +31,6 @@ const upload = multer({
   limits: { fileSize: 20 * 1024 * 1024 },  // 20 MB max
 })
 
-const METADATA_PATH = path.join(__dirname, '../../../data/images-metadata.json')
-
-function saveMetadata(data: Record<string, any>) {
-  fs.writeFileSync(METADATA_PATH, JSON.stringify(data, null, 2))
-}
-
 // POST /api/upload/image — subir imagen al banco local
 router.post('/image', upload.single('image'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file received' })
@@ -49,9 +43,11 @@ router.post('/image', upload.single('image'), (req, res) => {
   const filePath = req.file.path
   const filename = req.file.filename
   analyzeImage(filePath).then((tags) => {
-    const metadata = loadMetadata()
-    metadata[filename] = { tags, analyzedAt: new Date().toISOString() }
-    saveMetadata(metadata)
+    db.prepare(`
+      INSERT INTO images (filename, tags, analyzed_at)
+      VALUES (@filename, @tags, @analyzed_at)
+      ON CONFLICT(filename) DO UPDATE SET tags = @tags, analyzed_at = @analyzed_at
+    `).run({ filename, tags: JSON.stringify(tags), analyzed_at: new Date().toISOString() })
   }).catch(() => { /* silencioso — el usuario puede re-analizar manualmente */ })
 })
 

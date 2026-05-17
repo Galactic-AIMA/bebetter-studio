@@ -3,25 +3,11 @@ import path from 'path'
 import fs from 'fs'
 import { config } from '../config'
 import { analyzeImage, extractMoodKeywords } from '../services/geminiService'
+import db from '../db'
 
 const router = Router()
 
-const METADATA_PATH = path.join(__dirname, '../../../data/images-metadata.json')
 const SUPPORTED = ['.jpg', '.jpeg', '.jfif', '.png', '.webp', '.gif', '.bmp', '.tiff', '.tif', '.avif']
-
-interface ImageMeta {
-  tags: string[]
-  analyzedAt: string
-}
-
-function loadMetadata(): Record<string, ImageMeta> {
-  if (!fs.existsSync(METADATA_PATH)) return {}
-  try { return JSON.parse(fs.readFileSync(METADATA_PATH, 'utf-8')) } catch { return {} }
-}
-
-function saveMetadata(data: Record<string, ImageMeta>) {
-  fs.writeFileSync(METADATA_PATH, JSON.stringify(data, null, 2))
-}
 
 function getImageFiles(): string[] {
   const dir = config.paths.images
@@ -32,18 +18,28 @@ function getImageFiles(): string[] {
 // POST /api/images/analyze-all — analiza todas las imágenes sin tags
 router.post('/analyze-all', async (_req, res) => {
   const files = getImageFiles()
-  const metadata = loadMetadata()
+
+  const analyzedSet = new Set(
+    (db.prepare(`SELECT filename FROM images WHERE tags IS NOT NULL AND tags != '[]'`).all() as any[])
+      .map((r) => r.filename)
+  )
+
+  const upsert = db.prepare(`
+    INSERT INTO images (filename, tags, analyzed_at)
+    VALUES (@filename, @tags, @analyzed_at)
+    ON CONFLICT(filename) DO UPDATE SET tags = @tags, analyzed_at = @analyzed_at
+  `)
+
   let processed = 0
   let skipped = 0
   const errors: string[] = []
 
   for (const filename of files) {
-    if (metadata[filename]?.tags?.length > 0) { skipped++; continue }
+    if (analyzedSet.has(filename)) { skipped++; continue }
     try {
       const imagePath = path.join(config.paths.images, filename)
       const tags = await analyzeImage(imagePath)
-      metadata[filename] = { tags, analyzedAt: new Date().toISOString() }
-      saveMetadata(metadata)
+      upsert.run({ filename, tags: JSON.stringify(tags), analyzed_at: new Date().toISOString() })
       processed++
       // 6s entre peticiones para respetar el límite de 10 RPM de gemini-2.5-flash
       await new Promise((r) => setTimeout(r, 6000))
@@ -63,9 +59,11 @@ router.post('/analyze/:filename', async (req, res) => {
 
   try {
     const tags = await analyzeImage(imagePath)
-    const metadata = loadMetadata()
-    metadata[filename] = { tags, analyzedAt: new Date().toISOString() }
-    saveMetadata(metadata)
+    db.prepare(`
+      INSERT INTO images (filename, tags, analyzed_at)
+      VALUES (@filename, @tags, @analyzed_at)
+      ON CONFLICT(filename) DO UPDATE SET tags = @tags, analyzed_at = @analyzed_at
+    `).run({ filename, tags: JSON.stringify(tags), analyzed_at: new Date().toISOString() })
     res.json({ filename, tags })
   } catch (err: any) {
     res.status(500).json({ error: err.message })
@@ -79,13 +77,14 @@ router.post('/recommend', async (req, res) => {
 
   try {
     const keywords = await extractMoodKeywords(phrase)
-    const metadata = loadMetadata()
+    const rows = db.prepare(`SELECT filename, tags FROM images WHERE tags IS NOT NULL AND tags != '[]'`).all() as any[]
 
-    const scores = Object.entries(metadata)
-      .map(([imageId, meta]) => {
-        const matches = keywords.filter((k) => meta.tags.includes(k)).length
+    const scores = rows
+      .map((row) => {
+        const imageTags: string[] = JSON.parse(row.tags)
+        const matches = keywords.filter((k) => imageTags.includes(k)).length
         const score = keywords.length > 0 ? matches / keywords.length : 0
-        return { imageId, score, matches }
+        return { imageId: row.filename, score, matches }
       })
       .filter(({ score }) => score > 0)
       .sort((a, b) => b.score - a.score)
@@ -96,5 +95,4 @@ router.post('/recommend', async (req, res) => {
   }
 })
 
-export { loadMetadata }
 export default router
