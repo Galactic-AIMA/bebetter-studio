@@ -81,4 +81,14 @@ db.exec(`
   );
 `)
 
+// Columnas de análisis estructurado y embeddings (idempotente)
+for (const sql of [
+  `ALTER TABLE images ADD COLUMN analysis_json TEXT`,
+  `ALTER TABLE images ADD COLUMN embedding BLOB`,
+  `ALTER TABLE phrases ADD COLUMN descripcion_mood TEXT`,
+  `ALTER TABLE phrases ADD COLUMN embedding BLOB`,
+]) {
+  try { db.exec(sql) } catch (_) { /* columna ya existe */ }
+}
+
 export default db

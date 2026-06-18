@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react'
 import { Shuffle, Upload, RefreshCw, Sparkles } from 'lucide-react'
-import { imagesApi, pinterestApi, PinterestStatus } from '../../api'
+import { imagesApi, phrasesApi, pinterestApi, PinterestStatus } from '../../api'
 import { ImageItem, ImageRecommendation } from '../../types'
 import { useVideoStore } from '../../store/videoStore'
 
@@ -24,7 +24,7 @@ export default function ImageBank() {
   const [recommendations, setRecommendations] = useState<ImageRecommendation[]>([])
   const [recommendPhrase, setRecommendPhrase] = useState<string>('')
   const fileRef = useRef<HTMLInputElement>(null)
-  const { config, setConfig, setSelectedImageTags, analyzingImages: analyzing, setAnalyzingImages: setAnalyzing, syncingPinterest: syncing, setSyncingPinterest: setSyncing } = useVideoStore()
+  const { config, setConfig, setSelectedImage, setCompatiblePhraseIds, selectedPhraseId, analyzingImages: analyzing, setAnalyzingImages: setAnalyzing, syncingPinterest: syncing, setSyncingPinterest: setSyncing } = useVideoStore()
 
   const load = async () => {
     setLoading(true)
@@ -52,14 +52,15 @@ export default function ImageBank() {
 
   // Recomendaciones cuando cambia la frase seleccionada
   const phrase = config.text.content
-  const fetchRecommendations = useCallback(async (text: string) => {
+  const fetchRecommendations = useCallback(async (text: string, phraseId: string | null) => {
     if (!text || text === 'Tu frase aquí...' || text.length < 10) {
       setRecommendations([])
       setRecommendPhrase('')
       return
     }
     try {
-      const { recommendations: recs } = await imagesApi.recommend(text)
+      const id = phraseId ?? text
+      const { recommendations: recs } = await imagesApi.recommend(id, phraseId ? undefined : text)
       setRecommendations(recs)
       setRecommendPhrase(text)
     } catch {
@@ -68,9 +69,9 @@ export default function ImageBank() {
   }, [])
 
   useEffect(() => {
-    const timer = setTimeout(() => fetchRecommendations(phrase), 600)
+    const timer = setTimeout(() => fetchRecommendations(phrase, selectedPhraseId ?? null), 600)
     return () => clearTimeout(timer)
-  }, [phrase, fetchRecommendations])
+  }, [phrase, selectedPhraseId, fetchRecommendations])
 
   const handlePinterestSync = async () => {
     setSyncing(true)
@@ -98,7 +99,7 @@ export default function ImageBank() {
     try {
       const { processed, skipped, errors } = await imagesApi.analyzeAll()
       await load()
-      if (recommendPhrase) await fetchRecommendations(recommendPhrase)
+      if (recommendPhrase) await fetchRecommendations(recommendPhrase, selectedPhraseId ?? null)
       if (errors.length > 0) {
         setAnalyzeResult(`Error: ${errors[0]}`)
       } else {
@@ -112,9 +113,15 @@ export default function ImageBank() {
     }
   }
 
-  const selectImage = (img: ImageItem) => {
+  const selectImage = async (img: ImageItem) => {
     setConfig({ imageId: img.id, imagePath: img.path, imagePreviewUrl: img.url })
-    setSelectedImageTags(img.tags ?? [])
+    setSelectedImage(img.id, img.tags ?? [])
+    try {
+      const { recommendations } = await phrasesApi.recommendForImage(img.id)
+      setCompatiblePhraseIds(recommendations.map((r) => r.phraseId))
+    } catch {
+      setCompatiblePhraseIds([])
+    }
   }
 
   const pickRandom = async () => {

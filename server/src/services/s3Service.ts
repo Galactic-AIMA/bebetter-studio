@@ -9,7 +9,8 @@ import path from 'path'
 import { config } from '../config'
 
 const s3 = new S3Client({
-  region: config.aws.region,
+  region: 'auto',
+  endpoint: config.aws.endpoint,
   credentials: {
     accessKeyId: config.aws.accessKeyId,
     secretAccessKey: config.aws.secretAccessKey,
@@ -32,7 +33,7 @@ export async function uploadVideoToS3(
     })
   )
 
-  return `https://${config.aws.bucket}.s3.${config.aws.region}.amazonaws.com/${key}`
+  return `${config.aws.publicUrl}/${key}`
 }
 
 export async function getPresignedUrl(

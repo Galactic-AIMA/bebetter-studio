@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { v4 as uuidv4 } from 'uuid'
-import { extractMoodKeywords } from '../services/geminiService'
+import { extractMoodKeywords, extractMoodDescription, embedText } from '../services/geminiService'
 import db from '../db'
 
 const router = Router()
@@ -149,6 +149,66 @@ router.delete('/:id', (req, res) => {
   const result = db.prepare(`DELETE FROM phrases WHERE id = ?`).run(req.params.id)
   if (result.changes === 0) return res.status(404).json({ error: 'Phrase not found' })
   res.json({ success: true })
+})
+
+// POST /api/phrases/recommend — top frases compatibles con una imagen (por embedding)
+router.post('/recommend', async (req, res) => {
+  const { imageFilename, topN } = req.body
+  if (!imageFilename) return res.status(400).json({ error: 'imageFilename required' })
+  const limit = Math.min(topN ?? 20, 200)
+
+  const imgRow = db.prepare(`SELECT embedding FROM images WHERE filename = ?`).get(imageFilename) as any
+  if (!imgRow?.embedding) return res.json({ recommendations: [] })
+
+  const imgEmbedding = new Float32Array((imgRow.embedding as Buffer).buffer)
+
+  const phrases = db.prepare(`SELECT id, embedding FROM phrases WHERE embedding IS NOT NULL`).all() as any[]
+
+  function cosine(a: Float32Array, b: Float32Array): number {
+    let dot = 0, na = 0, nb = 0
+    for (let i = 0; i < a.length; i++) { dot += a[i]*b[i]; na += a[i]*a[i]; nb += b[i]*b[i] }
+    const d = Math.sqrt(na) * Math.sqrt(nb)
+    return d === 0 ? 0 : dot / d
+  }
+
+  const scores = phrases
+    .map((p) => ({ phraseId: p.id, score: cosine(imgEmbedding, new Float32Array((p.embedding as Buffer).buffer)) }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+
+  res.json({ recommendations: scores })
+})
+
+// POST /api/phrases/embed-all — genera descripcionMood + embedding para frases sin vectorizar
+router.post('/embed-all', async (_req, res) => {
+  const phrases = db.prepare(`
+    SELECT id, text FROM phrases WHERE embedding IS NULL OR descripcion_mood IS NULL
+  `).all() as any[]
+
+  const update = db.prepare(`
+    UPDATE phrases SET descripcion_mood = @descripcion_mood, embedding = @embedding WHERE id = @id
+  `)
+
+  let processed = 0
+  const errors: string[] = []
+
+  for (const phrase of phrases) {
+    try {
+      const descripcionMood = await extractMoodDescription(phrase.text)
+      const embedding = await embedText(descripcionMood)
+      update.run({
+        id: phrase.id,
+        descripcion_mood: descripcionMood,
+        embedding: Buffer.from(embedding.buffer),
+      })
+      processed++
+      await new Promise((r) => setTimeout(r, 100))
+    } catch (err: any) {
+      errors.push(`${phrase.id}: ${err.message}`)
+    }
+  }
+
+  res.json({ processed, total: phrases.length, errors })
 })
 
 export default router

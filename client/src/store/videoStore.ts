@@ -40,6 +40,8 @@ interface VideoStore {
   config: VideoConfig
   selectedPhraseId: string | null
   selectedImageTags: string[]
+  selectedImageFilename: string | null
+  compatiblePhraseIds: string[]
   isGenerating: boolean
   analyzingImages: boolean
   analyzingPhrases: boolean
@@ -49,6 +51,8 @@ interface VideoStore {
   setText: (partial: Partial<TextConfig>) => void
   setSelectedPhraseId: (id: string | null) => void
   setSelectedImageTags: (tags: string[]) => void
+  setSelectedImage: (filename: string | null, tags: string[]) => void
+  setCompatiblePhraseIds: (ids: string[]) => void
   setGenerating: (v: boolean) => void
   setAnalyzingImages: (v: boolean) => void
   setAnalyzingPhrases: (v: boolean) => void
@@ -67,6 +71,8 @@ export const useVideoStore = create<VideoStore>((set) => ({
   config: DEFAULT_CONFIG,
   selectedPhraseId: null,
   selectedImageTags: [],
+  selectedImageFilename: null,
+  compatiblePhraseIds: [],
   isGenerating: false,
   analyzingImages: false,
   analyzingPhrases: false,
@@ -78,6 +84,8 @@ export const useVideoStore = create<VideoStore>((set) => ({
     set((s) => ({ config: { ...s.config, text: { ...s.config.text, ...partial } } })),
   setSelectedPhraseId: (id) => set({ selectedPhraseId: id }),
   setSelectedImageTags: (tags) => set({ selectedImageTags: tags }),
+  setSelectedImage: (filename, tags) => set({ selectedImageFilename: filename, selectedImageTags: tags }),
+  setCompatiblePhraseIds: (ids) => set({ compatiblePhraseIds: ids }),
   setGenerating: (v) => set({ isGenerating: v }),
   setAnalyzingImages: (v) => set({ analyzingImages: v }),
   setAnalyzingPhrases: (v) => set({ analyzingPhrases: v }),

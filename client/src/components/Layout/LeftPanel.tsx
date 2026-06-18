@@ -39,15 +39,10 @@ export default function LeftPanel() {
 
       {/* Content */}
       <div className="flex-1 overflow-hidden flex flex-col">
-        {tab === 'history' ? (
-          <HistoryPanel />
-        ) : (
-          <div className="flex-1 overflow-y-auto">
-            {tab === 'images'  && <ImageBank />}
-            {tab === 'phrases' && <PhraseBank />}
-            {tab === 'batch'   && <BatchGenerator />}
-          </div>
-        )}
+        <div className={`flex-1 overflow-y-auto ${tab === 'images' ? '' : 'hidden'}`}><ImageBank /></div>
+        <div className={`flex-1 overflow-y-auto ${tab === 'phrases' ? '' : 'hidden'}`}><PhraseBank /></div>
+        <div className={`flex-1 overflow-y-auto ${tab === 'batch' ? '' : 'hidden'}`}><BatchGenerator /></div>
+        <div className={`flex-1 overflow-hidden flex flex-col ${tab === 'history' ? '' : 'hidden'}`}><HistoryPanel /></div>
       </div>
     </aside>
   )

@@ -65,12 +65,14 @@ export default function PhraseBank() {
   const [analyzeResult, setAnalyzeResult] = useState<string | null>(null)
   const dragId = useRef<string | null>(null)
   const dragOverId = useRef<string | null>(null)
-  const { setText, setConfig, setSelectedPhraseId, selectedImageTags, analyzingPhrases: analyzing, setAnalyzingPhrases: setAnalyzing } = useVideoStore()
+  const { setText, setConfig, setSelectedPhraseId, selectedImageTags, compatiblePhraseIds, analyzingPhrases: analyzing, setAnalyzingPhrases: setAnalyzing } = useVideoStore()
 
   const load = async () => {
     const data = await phrasesApi.list()
     setPhrases(data)
   }
+
+  const [embedding, setEmbedding] = useState(false)
 
   const handleAnalyzeAll = async () => {
     setAnalyzing(true)
@@ -91,7 +93,30 @@ export default function PhraseBank() {
     }
   }
 
+  const handleEmbedAll = async () => {
+    setEmbedding(true)
+    setAnalyzeResult(null)
+    try {
+      const { processed, total, errors } = await phrasesApi.embedAll()
+      if (errors.length > 0) {
+        setAnalyzeResult(`Error: ${errors[0]}`)
+      } else {
+        setAnalyzeResult(`Embeddings: ${processed}/${total} frases vectorizadas`)
+        setTimeout(() => setAnalyzeResult(null), 5000)
+      }
+    } catch {
+      setAnalyzeResult('Error al generar embeddings')
+    } finally {
+      setEmbedding(false)
+    }
+  }
+
   function scorePhrase(phrase: Phrase): number {
+    if (compatiblePhraseIds.length > 0) {
+      const idx = compatiblePhraseIds.indexOf(phrase.id)
+      return idx === -1 ? 0 : (compatiblePhraseIds.length - idx) / compatiblePhraseIds.length
+    }
+    // Fallback al sistema anterior si no hay embeddings
     if (!selectedImageTags.length || !phrase.moodKeywords?.length) return 0
     const matches = selectedImageTags.filter((t) => phrase.moodKeywords!.includes(t)).length
     return matches / phrase.moodKeywords.length
@@ -325,6 +350,18 @@ export default function PhraseBank() {
         )}
       </button>
 
+      {/* Botón embeddings semánticos */}
+      <button
+        onClick={handleEmbedAll}
+        disabled={embedding}
+        className="flex items-center justify-between gap-2 text-xs bg-carbon-700/50 hover:bg-carbon-700 border border-carbon-600/50 rounded-lg px-3 py-2 text-bone-700 hover:text-bone-500 transition-colors disabled:opacity-50"
+      >
+        <span className="flex items-center gap-1.5">
+          <Sparkles size={11} className={embedding ? 'animate-pulse text-gold-500' : ''} />
+          {embedding ? 'Vectorizando frases...' : 'Generar embeddings semánticos'}
+        </span>
+      </button>
+
       {analyzeResult && (
         <p className={`text-[11px] px-1 ${analyzeResult.startsWith('Error') ? 'text-neon-red' : 'text-gold-500'}`}>
           {analyzeResult}
@@ -341,7 +378,7 @@ export default function PhraseBank() {
         </button>
       )}
 
-      {selectedImageTags.length > 0 && phrases.some((p) => scorePhrase(p) > 0) && (
+      {compatiblePhraseIds.length > 0 && (
         <p className="text-[10px] text-gold-500/70 px-1">✦ Ordenadas por compatibilidad con la imagen</p>
       )}
 

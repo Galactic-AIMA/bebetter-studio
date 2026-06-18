@@ -13,8 +13,8 @@ export const imagesApi = {
   },
   analyzeAll: () =>
     api.post<{ processed: number; skipped: number; errors: string[] }>('/images/analyze-all').then((r) => r.data),
-  recommend: (phrase: string) =>
-    api.post<{ keywords: string[]; recommendations: ImageRecommendation[] }>('/images/recommend', { phrase }).then((r) => r.data),
+  recommend: (phraseId: string, phrase?: string, topN?: number) =>
+    api.post<{ descripcionMood: string; recommendations: ImageRecommendation[] }>('/images/recommend', { phraseId, phrase, topN }).then((r) => r.data),
 }
 
 export const phrasesApi = {
@@ -29,6 +29,10 @@ export const phrasesApi = {
   remove: (id: string) => api.delete(`/phrases/${id}`),
   analyzeAll: () =>
     api.post<{ processed: number; skipped: number; errors: string[] }>('/phrases/analyze-all').then((r) => r.data),
+  embedAll: () =>
+    api.post<{ processed: number; total: number; errors: string[] }>('/phrases/embed-all').then((r) => r.data),
+  recommendForImage: (imageFilename: string, topN?: number) =>
+    api.post<{ recommendations: { phraseId: string; score: number }[] }>('/phrases/recommend', { imageFilename, topN }).then((r) => r.data),
   reorder: (ids: string[]) => api.put('/phrases/reorder', { ids }).then((r) => r.data),
 }
 
