@@ -11,7 +11,10 @@ export async function sendToWebhook(
   if (!url) throw new Error(`Webhook URL for '${env}' is not configured`)
 
   await axios.post(url, payload, {
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(config.webhooks.secret ? { 'x-galactic-auth': config.webhooks.secret } : {}),
+    },
     timeout: 15000,
   })
 }

@@ -26,6 +26,7 @@ export const config = {
   webhooks: {
     test: process.env.WEBHOOK_TEST_URL || '',
     prod: process.env.WEBHOOK_PROD_URL || '',
+    secret: process.env.WEBHOOK_SECRET || '',
   },
 
   watermark: {
