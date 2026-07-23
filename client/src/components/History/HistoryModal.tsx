@@ -47,6 +47,8 @@ export default function HistoryModal({ item, onClose }: Props) {
 
   const imageId = config.imageId
   const thumbnailUrl = imageId ? `/api/images/file/${encodeURIComponent(imageId)}` : null
+  // Preview del video sin salir del UI: local (recién generado) o S3 si ya se publicó.
+  const videoSrc = vidRecord ? (vidRecord.s3Url || `/output/videos/${encodeURIComponent(vidRecord.filename)}`) : null
 
   function handleLoadFull() {
     loadFullFromHistory(item)
@@ -72,12 +74,16 @@ export default function HistoryModal({ item, onClose }: Props) {
           <X size={14} />
         </button>
 
-        {/* Thumbnail */}
-        {thumbnailUrl && (
+        {/* Preview: video reproducible (si es video) o thumbnail de la imagen */}
+        {isVideo && videoSrc ? (
+          <div className="bg-black flex items-center justify-center shrink-0 max-h-[45vh]">
+            <video src={videoSrc} controls playsInline className="max-h-[45vh] w-auto" />
+          </div>
+        ) : thumbnailUrl ? (
           <div className="h-36 bg-carbon-900 overflow-hidden shrink-0">
             <img src={thumbnailUrl} alt="" className="w-full h-full object-cover" />
           </div>
-        )}
+        ) : null}
 
         <div className="overflow-y-auto flex-1 p-4 flex flex-col gap-3">
           {/* Header */}
