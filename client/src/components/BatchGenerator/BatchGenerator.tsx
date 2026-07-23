@@ -14,7 +14,9 @@ interface BatchResult {
   ok: boolean
   error?: string
   driveUrl?: string
+  driveError?: string
   published?: boolean
+  publishError?: string
 }
 
 function computeLines(text: string, fontSize: number, font: string, maxPx: number): string[] {
@@ -203,7 +205,9 @@ export default function BatchGenerator() {
             const driveApi = mode === 'video' ? videosApi : imagesOutputApi
             const { driveUrl } = await driveApi.uploadToDrive(generatedId)
             result.driveUrl = driveUrl
-          } catch {}
+          } catch (e: any) {
+            result.driveError = e.response?.data?.error || e.message
+          }
         }
 
         if (publishToN8n && mode === 'video') {
@@ -211,7 +215,9 @@ export default function BatchGenerator() {
             setProgress((p) => p ? { ...p, phase: 'Publicando n8n' } : p)
             await videosApi.publish(generatedId, publishEnv)
             result.published = true
-          } catch {}
+          } catch (e: any) {
+            result.publishError = e.response?.data?.error || e.message
+          }
         }
 
         newResults.push(result)
@@ -414,18 +420,26 @@ export default function BatchGenerator() {
           </p>
           <div className="flex flex-col gap-1 max-h-48 overflow-y-auto">
             {results.map((r, i) => (
-              <div key={i} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs ${r.ok ? 'bg-carbon-700' : 'bg-red-900/20'}`}>
-                <span className={`shrink-0 ${r.ok ? 'text-gold-500' : 'text-neon-red'}`}>{r.ok ? '✓' : '✗'}</span>
-                {r.ok ? (
-                  <div className="flex items-center gap-2 min-w-0">
-                    <a href={r.publicUrl} target="_blank" rel="noreferrer" className="text-gold-500 hover:underline truncate">
-                      {r.filename}
-                    </a>
-                    {r.driveUrl && <Upload size={11} className="shrink-0 text-bone-700" title="Subido a Drive" />}
-                    {r.published && <Send size={11} className="shrink-0 text-bone-700" title="Publicado vía n8n" />}
+              <div key={i} className={`flex flex-col gap-1 px-2 py-1.5 rounded-lg text-xs ${r.ok ? 'bg-carbon-700' : 'bg-red-900/20'}`}>
+                <div className="flex items-center gap-2">
+                  <span className={`shrink-0 ${r.ok ? 'text-gold-500' : 'text-neon-red'}`}>{r.ok ? '✓' : '✗'}</span>
+                  {r.ok ? (
+                    <div className="flex items-center gap-2 min-w-0">
+                      <a href={r.publicUrl} target="_blank" rel="noreferrer" className="text-gold-500 hover:underline truncate">
+                        {r.filename}
+                      </a>
+                      {r.driveUrl && <Upload size={11} className="shrink-0 text-bone-700" title="Subido a Drive" />}
+                      {r.published && <Send size={11} className="shrink-0 text-bone-700" title="Publicado vía n8n" />}
+                    </div>
+                  ) : (
+                    <span className="text-neon-red truncate">{r.error || 'Error desconocido'}</span>
+                  )}
+                </div>
+                {(r.driveError || r.publishError) && (
+                  <div className="pl-5 flex flex-col gap-0.5">
+                    {r.driveError && <span className="text-neon-red/90 text-[10px]">⚠ Drive: {r.driveError}</span>}
+                    {r.publishError && <span className="text-neon-red/90 text-[10px]">⚠ n8n: {r.publishError}</span>}
                   </div>
-                ) : (
-                  <span className="text-neon-red truncate">{r.error || 'Error desconocido'}</span>
                 )}
               </div>
             ))}
