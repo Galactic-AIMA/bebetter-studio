@@ -10,6 +10,10 @@ output/
 credentials/
 server/credentials/
 
+# n8n API key & instance info (secretos — nunca versionar)
+.n8n-key
+info-n8n.md
+
 # Pinterest-synced images (local, regenerable)
 data/images/
 data/pinterest-sync.json
@@ -24,6 +28,10 @@ data/images-metadata.json
 data/phrases-metadata.json
 data/images-metadata2.json
 data/phrases-metadata2.json
+
+# Audio de fondo (pistas locales descargables — no versionar; el README sí)
+data/audio/*
+!data/audio/README.md
 
 # SQLite database (runtime, no versionar)
 data/bebetter.db

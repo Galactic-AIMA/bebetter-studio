@@ -71,6 +71,27 @@ function resolveItalicFontPath(fontName: string): string | null {
   return null
 }
 
+// Resuelve la pista de audio de fondo dentro de data/audio. Devuelve null si
+// no hay pista configurada o el archivo no existe (el video se genera sin audio).
+function resolveAudioPath(audioTrack?: string): string | null {
+  if (!audioTrack) return null
+  const p = path.join(config.paths.audio, audioTrack)
+  return fs.existsSync(p) ? p : null
+}
+
+const AUDIO_FADE = 1 // segundos de fade in/out del audio de fondo
+
+// Cadena de filtros de audio: fade in/out + normalización de volumen (loudnorm).
+// No hay ducking porque los videos no tienen voz — la música es el único audio.
+function audioFilterChain(duration: number): string {
+  const fadeOutStart = Math.max(0, duration - AUDIO_FADE)
+  return [
+    `afade=t=in:st=0:d=${AUDIO_FADE}`,
+    `afade=t=out:st=${fadeOutStart}:d=${AUDIO_FADE}`,
+    'loudnorm=I=-16:TP=-1.5:LRA=11',
+  ].join(',')
+}
+
 // Escapa el texto de una sola linea para el filtro drawtext
 function escapeLine(text: string): string {
   return text
@@ -116,6 +137,7 @@ export async function generateVideo(
 
   const { width, height } = cfg.resolution
   const { text, transition, transitionDuration, duration } = cfg
+  const audioPath = resolveAudioPath(cfg.audioTrack)
 
   const maxW = Math.round((text.maxWidth / 100) * width)
   const centerY = Math.round((text.position.y / 100) * height)
@@ -200,7 +222,7 @@ export async function generateVideo(
     '-movflags +faststart',
     `-t ${duration}`,
     '-r 30',
-    '-an',
+    ...(audioPath ? ['-c:a aac', '-b:a 192k'] : ['-an']),
   ]
 
   const wm = cfg.watermark
@@ -212,6 +234,10 @@ export async function generateVideo(
   return new Promise((resolve, reject) => {
     const cmd = ffmpeg(cfg.imagePath).inputOptions(['-loop 1', `-t ${duration}`])
 
+    // Cuando el watermark de imagen usa complexFilter, el mapeo automático de
+    // streams se desactiva, así que el audio se debe plegar dentro del grafo.
+    let audioInComplex = false
+
     if (wmEnabled && wmType === 'text') {
       const wmText = escapeLine(wm!.text ?? '@bebetter.path')
       const opacity = (wm!.opacity ?? 0.35).toFixed(2)
@@ -222,18 +248,30 @@ export async function generateVideo(
       const wmPath = config.watermark.path
       if (wmPath && fs.existsSync(wmPath)) {
         const wmSize = Math.round(width * 0.15)
-        cmd
-          .input(wmPath)
-          .complexFilter([
-            `[0:v]${vfilter}[v]`,
-            `[1:v]scale=${wmSize}:-1[wm]`,
-            `[v][wm]overlay=x=${wmXExpr(wmPos)}:y=${wmYExpr(wmY)}-h/2[out]`,
-          ], 'out')
+        cmd.input(wmPath) // input 1 (watermark). El audio, si hay, será input 2.
+        const complex = [
+          `[0:v]${vfilter}[v]`,
+          `[1:v]scale=${wmSize}:-1[wm]`,
+          `[v][wm]overlay=x=${wmXExpr(wmPos)}:y=${wmYExpr(wmY)}-h/2[out]`,
+        ]
+        if (audioPath) {
+          complex.push(`[2:a]${audioFilterChain(duration)}[aout]`)
+          audioInComplex = true
+          cmd.complexFilter(complex, ['out', 'aout'])
+        } else {
+          cmd.complexFilter(complex, 'out')
+        }
       } else {
         cmd.videoFilters(vfilter)
       }
     } else {
       cmd.videoFilters(vfilter)
+    }
+
+    // Audio de fondo: loop infinito (se recorta por -t) como último input.
+    if (audioPath) {
+      cmd.input(audioPath).inputOptions(['-stream_loop -1'])
+      if (!audioInComplex) cmd.audioFilters(audioFilterChain(duration))
     }
 
     cmd

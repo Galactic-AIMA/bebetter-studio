@@ -39,6 +39,7 @@ export interface VideoConfig {
   wrappedLines?: string[]  // pre-calculadas en el cliente con measureText real
   watermark?: WatermarkConfig
   source?: string  // texto de atribución/autor que se muestra bajo la frase
+  audioTrack?: string  // nombre del archivo de audio de fondo en data/audio (vacío = sin audio)
 }
 
 export interface VideoRecord {

@@ -12,6 +12,7 @@ import pinterestRouter from './routes/pinterest'
 import imagesOutputRouter from './routes/imagesOutput'
 import historyRouter from './routes/history'
 import imageTagsRouter from './routes/imageTags'
+import audioRouter from './routes/audio'
 import { syncWithGalleryDl } from './services/galleryDlService'
 import { syncBoardImages } from './services/pinterestService'
 import { runCleanup } from './services/cleanupService'
@@ -32,6 +33,7 @@ app.use('/api/pinterest', pinterestRouter)
 app.use('/api/images-output', imagesOutputRouter)
 app.use('/api/history', historyRouter)
 app.use('/api/images', imageTagsRouter)
+app.use('/api/audio', audioRouter)
 
 app.get('/api/watermark', (req, res) => {
   const wmPath = config.watermark.path

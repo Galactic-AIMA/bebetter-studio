@@ -44,6 +44,7 @@ export const GenerateVideoSchema = z.object({
     wrappedLines: z.array(z.string()).optional(),
     watermark: WatermarkConfigSchema.optional(),
     source: z.string().optional(),
+    audioTrack: z.string().optional(),
   }),
   phraseId: z.string().optional(),
 })

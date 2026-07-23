@@ -92,6 +92,15 @@ export const imagesOutputApi = {
   remove: (id: string) => api.delete(`/images-output/${id}`),
 }
 
+export interface AudioTrack {
+  filename: string
+  name: string
+}
+
+export const audioApi = {
+  list: () => api.get<AudioTrack[]>('/audio').then((r) => r.data),
+}
+
 export const historyApi = {
   list: () => api.get<HistoryItem[]>('/history').then((r) => r.data),
   setViral: (kind: 'video' | 'image', id: string, viral: boolean) =>

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
-import { CheckSquare, Square, Layers, Upload, Send } from 'lucide-react'
-import { phrasesApi, imagesApi, videosApi, imagesOutputApi } from '../../api'
+import { CheckSquare, Square, Layers, Upload, Send, Music } from 'lucide-react'
+import { phrasesApi, imagesApi, videosApi, imagesOutputApi, audioApi, AudioTrack } from '../../api'
 import { Phrase, ImageItem } from '../../types'
 import { useVideoStore } from '../../store/videoStore'
 
@@ -48,6 +48,9 @@ export default function BatchGenerator() {
   const [publishToN8n, setPublishToN8n] = useState(false)
   const [publishEnv, setPublishEnv] = useState<'test' | 'prod'>('test')
 
+  const [audioTracks, setAudioTracks] = useState<AudioTrack[]>([])
+  const [audioTrack, setAudioTrack] = useState('')  // filename seleccionado ('' = sin audio)
+
   const [progress, setProgress] = useState<{ current: number; total: number; phase?: string } | null>(null)
   const [results, setResults] = useState<BatchResult[]>([])
 
@@ -57,6 +60,7 @@ export default function BatchGenerator() {
       setImages(imgs.sort((a, b) => (a.usageCount ?? 0) - (b.usageCount ?? 0)))
       setLoadingData(false)
     })
+    audioApi.list().then(setAudioTracks).catch(() => setAudioTracks([]))
   }, [])
 
   const togglePhrase = (id: string) =>
@@ -164,6 +168,7 @@ export default function BatchGenerator() {
           imagePreviewUrl: image.url,
           text: { ...config.text, content: phrase.text },
           source: phrase.author ?? '',
+          audioTrack: audioTrack || undefined,
         }
 
         let generatedId = ''
@@ -344,6 +349,33 @@ export default function BatchGenerator() {
             </div>
           </section>
         </>
+      )}
+
+      {/* Audio de fondo (solo video) */}
+      {mode === 'video' && (
+        <section className="flex flex-col gap-1.5">
+          <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-bone-700">
+            <Music size={13} /> Audio de fondo
+          </label>
+          <select
+            value={audioTrack}
+            onChange={(e) => setAudioTrack(e.target.value)}
+            className="bg-carbon-700 text-bone-500 text-xs rounded-lg px-2 py-1.5 border border-carbon-600"
+          >
+            <option value="">Sin audio</option>
+            {audioTracks.map((t) => (
+              <option key={t.filename} value={t.filename}>{t.name}</option>
+            ))}
+          </select>
+          {audioTracks.length === 0 && (
+            <p className="text-[10px] text-bone-700">
+              No hay pistas en <span className="text-gold-500">data/audio/</span>. Agrega archivos .mp3 royalty-free.
+            </p>
+          )}
+          {audioTrack && (
+            <p className="text-[10px] text-bone-700">La misma pista se aplica a todo el lote.</p>
+          )}
+        </section>
       )}
 
       {/* Opciones post-generación */}
