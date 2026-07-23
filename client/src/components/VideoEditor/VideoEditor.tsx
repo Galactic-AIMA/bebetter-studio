@@ -1,10 +1,11 @@
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { useVideoStore } from '../../store/videoStore'
 import { TransitionType, TextAlign, TextEffect, VisualStyle } from '../../types'
 import { PRESETS } from '../../presets'
 import { usePresets, PresetConfig } from '../../hooks/usePresets'
 import { FONT_FAMILIES, FontStyleKey, parseFontKey } from '../../config/fonts'
+import { audioApi, AudioTrack } from '../../api'
 
 const VISUAL_STYLES = Object.entries(PRESETS) as [VisualStyle, (typeof PRESETS)[VisualStyle]][]
 
@@ -54,12 +55,17 @@ function SectionPanel({
 }
 
 export default function VideoEditor() {
-  const { config, setText, setConfig, setWatermark, setTextEffect, applyPreset, applyConfig } = useVideoStore()
-  const { text, duration, transition, transitionDuration, watermark, textEffect, visualStyle, grain } = config
+  const { config, mode, setText, setConfig, setWatermark, setTextEffect, applyPreset, applyConfig } = useVideoStore()
+  const { text, duration, transition, transitionDuration, watermark, textEffect, visualStyle, grain, audioTrack } = config
   const { presets, savePreset, removePreset } = usePresets()
   const [savingName, setSavingName] = useState<string | null>(null)
   const [open, setOpen] = useState<Set<string>>(new Set(['frase', 'tipografia', 'video']))
+  const [audioTracks, setAudioTracks] = useState<AudioTrack[]>([])
   const lastStrokeWidthRef = useRef(2)
+
+  useEffect(() => {
+    audioApi.list().then(setAudioTracks).catch(() => setAudioTracks([]))
+  }, [])
 
   const toggle = (id: string) =>
     setOpen(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s })
@@ -419,6 +425,29 @@ export default function VideoEditor() {
           )}
         </div>
       </SectionPanel>
+
+      {/* Audio de fondo (solo video) */}
+      {mode === 'video' && (
+        <SectionPanel label="Audio de fondo" isOpen={open.has('audio')} onToggle={() => toggle('audio')}>
+          <div className="flex flex-col gap-1.5">
+            <select
+              className="w-full bg-carbon-700 border border-carbon-600 rounded-lg p-2 text-xs text-bone-500"
+              value={audioTrack ?? ''}
+              onChange={(e) => setConfig({ audioTrack: e.target.value })}
+            >
+              <option value="">Sin audio</option>
+              {audioTracks.map((t) => (
+                <option key={t.filename} value={t.filename}>{t.name}</option>
+              ))}
+            </select>
+            {audioTracks.length === 0 && (
+              <p className="text-[10px] text-bone-700">
+                No hay pistas en <span className="text-gold-500">data/audio/</span>. Agrega archivos .mp3 royalty-free.
+              </p>
+            )}
+          </div>
+        </SectionPanel>
+      )}
 
       {/* Marca de agua */}
       <SectionPanel label="Marca de agua" isOpen={open.has('watermark')} onToggle={() => toggle('watermark')}>
