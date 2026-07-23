@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Play } from 'lucide-react'
 import { useVideoStore } from '../store/videoStore'
 import { videosApi, imagesOutputApi } from '../api'
 import { fontToCSS } from '../config/fonts'
@@ -7,6 +8,7 @@ import Header from '../components/Layout/Header'
 import LeftPanel from '../components/Layout/LeftPanel'
 import RightPanel from '../components/Layout/RightPanel'
 import VideoPreview from '../components/Preview/VideoPreview'
+import VideoResultModal from '../components/Preview/VideoResultModal'
 
 type ToastState = { state: 'loading' | 'success' | 'error'; loadingText?: string; successText?: string; message?: string }
 
@@ -17,6 +19,7 @@ export default function Editor() {
   const [imageVariant, setImageVariant] = useState<ImageVariant>('combined')
   const [error, setError] = useState<string | null>(null)
   const [toast, setToast] = useState<ToastState | null>(null)
+  const [showVideoPreview, setShowVideoPreview] = useState(false)
 
   const hasDelimiter = config.text.content.includes('//')
 
@@ -41,6 +44,7 @@ export default function Editor() {
   const generate = async () => {
     if (!config.imageId) { setError('Selecciona una imagen primero'); return }
     setError(null)
+    setShowVideoPreview(false)
     setGenerating(true)
     try {
       if (mode === 'video') {
@@ -136,17 +140,28 @@ export default function Editor() {
           {/* Error */}
           {error && <p className="text-neon-red text-xs">{error}</p>}
 
-          {/* Result link */}
-          {(lastVideo || lastImage) && (
+          {/* Resultado: video reproducible en el UI, imagen con link */}
+          {lastVideo && (
+            <div className="flex items-center gap-2 text-xs text-bone-700">
+              <button
+                onClick={() => setShowVideoPreview(true)}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-carbon-700 hover:bg-carbon-600 text-bone-500 transition-colors"
+              >
+                <Play size={12} /> Ver video
+              </button>
+              <span className="truncate max-w-[45%]">{lastVideo.filename}</span>
+            </div>
+          )}
+          {lastImage && (
             <p className="text-xs text-bone-700">
-              {lastVideo ? 'Video' : 'Imagen'} →{' '}
+              Imagen →{' '}
               <a
-                href={(lastVideo ?? lastImage)!.publicUrl}
+                href={lastImage.publicUrl}
                 target="_blank"
                 rel="noreferrer"
                 className="text-gold-500 hover:underline"
               >
-                {(lastVideo ?? lastImage)!.filename}
+                {lastImage.filename}
               </a>
             </p>
           )}
@@ -179,6 +194,15 @@ export default function Editor() {
             <button onClick={() => setToast(null)} className="ml-1 opacity-60 hover:opacity-100">✕</button>
           )}
         </div>
+      )}
+
+      {/* Preview del video generado, sin salir del UI */}
+      {showVideoPreview && lastVideo && (
+        <VideoResultModal
+          src={lastVideo.publicUrl}
+          filename={lastVideo.filename}
+          onClose={() => setShowVideoPreview(false)}
+        />
       )}
     </div>
   )

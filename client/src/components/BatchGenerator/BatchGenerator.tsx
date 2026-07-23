@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { CheckSquare, Square, Layers, Upload, Send } from 'lucide-react'
+import { CheckSquare, Square, Layers, Upload, Send, Play } from 'lucide-react'
 import { phrasesApi, imagesApi, videosApi, imagesOutputApi } from '../../api'
 import { Phrase, ImageItem } from '../../types'
 import { useVideoStore } from '../../store/videoStore'
+import VideoResultModal from '../Preview/VideoResultModal'
 
 type BatchMode = 'phrases' | 'images'
 
@@ -74,6 +75,7 @@ export default function BatchGenerator() {
 
   const [progress, setProgress] = useState<{ current: number; total: number; phase?: string } | null>(null)
   const [results, setResults] = useState<BatchResult[]>([])
+  const [preview, setPreview] = useState<{ src: string; name: string } | null>(null)
 
   useEffect(() => {
     Promise.all([phrasesApi.list(), imagesApi.list()]).then(([ps, imgs]) => {
@@ -512,9 +514,18 @@ export default function BatchGenerator() {
                   <span className={`shrink-0 ${r.ok ? 'text-gold-500' : 'text-neon-red'}`}>{r.ok ? '✓' : '✗'}</span>
                   {r.ok ? (
                     <div className="flex items-center gap-2 min-w-0">
-                      <a href={r.publicUrl} target="_blank" rel="noreferrer" className="text-gold-500 hover:underline truncate">
-                        {r.filename}
-                      </a>
+                      {r.mode === 'video' ? (
+                        <button
+                          onClick={() => setPreview({ src: r.publicUrl, name: r.filename })}
+                          className="flex items-center gap-1 text-gold-500 hover:underline truncate"
+                        >
+                          <Play size={11} className="shrink-0" /> {r.filename}
+                        </button>
+                      ) : (
+                        <a href={r.publicUrl} target="_blank" rel="noreferrer" className="text-gold-500 hover:underline truncate">
+                          {r.filename}
+                        </a>
+                      )}
                       {r.driveUrl && <span title="Subido a Drive" className="shrink-0 inline-flex"><Upload size={11} className="text-bone-700" /></span>}
                       {r.published && <span title="Publicado vía n8n" className="shrink-0 inline-flex"><Send size={11} className="text-bone-700" /></span>}
                     </div>
@@ -532,6 +543,10 @@ export default function BatchGenerator() {
             ))}
           </div>
         </section>
+      )}
+
+      {preview && (
+        <VideoResultModal src={preview.src} filename={preview.name} onClose={() => setPreview(null)} />
       )}
     </div>
   )
