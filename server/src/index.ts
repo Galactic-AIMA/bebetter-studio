@@ -13,9 +13,11 @@ import imagesOutputRouter from './routes/imagesOutput'
 import historyRouter from './routes/history'
 import imageTagsRouter from './routes/imageTags'
 import audioRouter from './routes/audio'
+import logsRouter from './routes/logs'
 import { syncWithGalleryDl } from './services/galleryDlService'
 import { syncBoardImages } from './services/pinterestService'
 import { runCleanup } from './services/cleanupService'
+import { logInfo } from './services/logService'
 
 const app = express()
 
@@ -34,6 +36,7 @@ app.use('/api/images-output', imagesOutputRouter)
 app.use('/api/history', historyRouter)
 app.use('/api/images', imageTagsRouter)
 app.use('/api/audio', audioRouter)
+app.use('/api/logs', logsRouter)
 
 app.get('/api/watermark', (req, res) => {
   const wmPath = config.watermark.path
@@ -44,6 +47,7 @@ app.get('/api/watermark', (req, res) => {
 app.get('/health', (_req, res) => res.json({ status: 'ok' }))
 
 app.listen(config.port, () => {
+  logInfo('system', `Servidor iniciado en http://localhost:${config.port}`)
   console.log(`Server running on http://localhost:${config.port}`)
   console.log(`Output folder: ${config.paths.output}`)
   console.log(`Images folder: ${config.paths.images}`)

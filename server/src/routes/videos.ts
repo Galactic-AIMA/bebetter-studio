@@ -11,6 +11,7 @@ import { GenerateVideoRequest } from '../types'
 import { config } from '../config'
 import { GenerateVideoSchema } from '../schemas'
 import { rowToVideoRecord } from '../utils/recordMappers'
+import { logInfo, logError } from '../services/logService'
 import db from '../db'
 
 const router = Router()
@@ -70,8 +71,10 @@ router.post('/generate', async (req, res) => {
       db.prepare(`SELECT * FROM videos WHERE id = ?`).get(id) as any
     )
 
+    logInfo('generate', `Video generado: ${filename}`)
     res.json({ success: true, video: record })
   } catch (err: any) {
+    logError('generate', 'Error generando video', err.message)
     res.status(500).json({ error: err.message })
   }
 })
@@ -85,8 +88,10 @@ router.post('/:id/upload-s3', async (req, res) => {
     const s3Url = await uploadVideoToS3(row.local_path, row.filename)
     db.prepare(`UPDATE videos SET s3_url = ? WHERE id = ?`).run(s3Url, req.params.id)
 
+    logInfo('s3', `Video subido a R2: ${row.filename}`)
     res.json({ success: true, s3Url })
   } catch (err: any) {
+    logError('s3', 'Error subiendo a R2', err.message)
     res.status(500).json({ error: err.message })
   }
 })
@@ -112,8 +117,10 @@ router.post('/:id/upload-drive', async (req, res) => {
       `).run({ f: cfg.imageId })
     }
 
+    logInfo('drive', `Video subido a Drive: ${row.filename}`)
     res.json({ success: true, driveUrl })
   } catch (err: any) {
+    logError('drive', 'Error subiendo video a Drive', err.message)
     res.status(500).json({ error: err.message })
   }
 })
@@ -142,8 +149,10 @@ router.post('/:id/publish', async (req, res) => {
       env
     )
 
+    logInfo('publish', `Publicado a n8n (${env}): ${row.filename}`)
     res.json({ success: true, sentTo: env, videoUrl: s3Url })
   } catch (err: any) {
+    logError('publish', `Error publicando a n8n (${req.body?.env ?? 'test'})`, err.message)
     res.status(500).json({ error: err.message })
   }
 })

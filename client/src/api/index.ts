@@ -119,3 +119,20 @@ export const videosApi = {
     api.post(`/videos/${id}/publish`, { env }).then((r) => r.data),
   remove: (id: string) => api.delete(`/videos/${id}`),
 }
+
+export type LogLevel = 'info' | 'error'
+export type LogCategory = 'generate' | 'drive' | 'publish' | 's3' | 'system'
+export interface LogEntry {
+  id: number
+  ts: string
+  level: LogLevel
+  category: LogCategory
+  message: string
+  detail?: string
+}
+
+export const logsApi = {
+  list: (params?: { limit?: number; level?: LogLevel; category?: LogCategory }) =>
+    api.get<LogEntry[]>('/logs', { params }).then((r) => r.data),
+  clear: () => api.delete('/logs').then((r) => r.data),
+}

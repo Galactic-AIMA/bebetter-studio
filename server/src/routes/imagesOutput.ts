@@ -9,6 +9,7 @@ import { ImageConfig, ImageVariant } from '../types'
 import { config } from '../config'
 import { GenerateImageSchema } from '../schemas'
 import { rowToImageRecord } from '../utils/recordMappers'
+import { logInfo, logError } from '../services/logService'
 import db from '../db'
 
 const router = Router()
@@ -77,8 +78,10 @@ router.post('/generate', async (req, res) => {
       db.prepare(`SELECT * FROM images_output WHERE id = ?`).get(id) as any
     )
 
+    logInfo('generate', `Imagen generada: ${result.filename}`)
     res.json({ success: true, image: record })
   } catch (err: any) {
+    logError('generate', 'Error generando imagen', err.message)
     res.status(500).json({ error: err.message })
   }
 })
@@ -103,8 +106,10 @@ router.post('/:id/upload-drive', async (req, res) => {
       `).run({ f: cfg.imageId })
     }
 
+    logInfo('drive', `Imagen subida a Drive: ${row.filename}`)
     res.json({ success: true, driveUrl })
   } catch (err: any) {
+    logError('drive', 'Error subiendo imagen a Drive', err.message)
     res.status(500).json({ error: err.message })
   }
 })

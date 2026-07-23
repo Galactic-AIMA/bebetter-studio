@@ -1,7 +1,8 @@
-import { Film, Image, HardDrive, Send, RotateCcw, ChevronDown } from 'lucide-react'
+import { Film, Image, HardDrive, Send, RotateCcw, ChevronDown, ScrollText } from 'lucide-react'
 import { useRef, useEffect, useState } from 'react'
 import { useVideoStore } from '../../store/videoStore'
 import { ContentMode } from '../../store/videoStore'
+import LogsModal from '../Logs/LogsModal'
 
 interface Props {
   lastVideoId: string | null
@@ -15,6 +16,7 @@ interface Props {
 export default function Header({ lastVideoId, lastImageId, isGenerating, toast, onUploadDrive, onPublish }: Props) {
   const { mode, setMode, reset } = useVideoStore()
   const [showEnvMenu, setShowEnvMenu] = useState(false)
+  const [showLogs, setShowLogs] = useState(false)
   const envMenuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -106,6 +108,14 @@ export default function Header({ lastVideoId, lastImageId, isGenerating, toast, 
         )}
 
         <button
+          onClick={() => setShowLogs(true)}
+          className="p-1.5 text-bone-700 hover:text-bone-500 transition-colors"
+          title="Registro de actividad"
+        >
+          <ScrollText size={14} />
+        </button>
+
+        <button
           onClick={reset}
           disabled={isGenerating}
           className="p-1.5 text-bone-700 hover:text-bone-500 transition-colors"
@@ -114,6 +124,8 @@ export default function Header({ lastVideoId, lastImageId, isGenerating, toast, 
           <RotateCcw size={14} />
         </button>
       </div>
+
+      {showLogs && <LogsModal onClose={() => setShowLogs(false)} />}
     </header>
   )
 }
