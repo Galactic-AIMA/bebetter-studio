@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { CheckSquare, Square, Layers, Upload, Send } from 'lucide-react'
 import { phrasesApi, imagesApi, videosApi, imagesOutputApi } from '../../api'
 import { Phrase, ImageItem } from '../../types'
@@ -7,6 +7,8 @@ import { useVideoStore } from '../../store/videoStore'
 type BatchMode = 'phrases' | 'images'
 
 interface BatchResult {
+  id: string
+  mode: 'video' | 'image'
   phraseText: string
   matchedWith: string
   filename: string
@@ -17,6 +19,26 @@ interface BatchResult {
   driveError?: string
   published?: boolean
   publishError?: string
+}
+
+// Post-acciones reutilizables (durante generación y sobre resultados ya generados).
+async function drivePatch(id: string, m: 'video' | 'image'): Promise<Partial<BatchResult>> {
+  try {
+    const driveApi = m === 'video' ? videosApi : imagesOutputApi
+    const { driveUrl } = await driveApi.uploadToDrive(id)
+    return { driveUrl, driveError: undefined }
+  } catch (e: any) {
+    return { driveError: e.response?.data?.error || e.message }
+  }
+}
+
+async function publishPatch(id: string, env: 'test' | 'prod'): Promise<Partial<BatchResult>> {
+  try {
+    await videosApi.publish(id, env)
+    return { published: true, publishError: undefined }
+  } catch (e: any) {
+    return { publishError: e.response?.data?.error || e.message }
+  }
 }
 
 function computeLines(text: string, fontSize: number, font: string, maxPx: number): string[] {
@@ -48,7 +70,7 @@ export default function BatchGenerator() {
 
   const [uploadToDrive, setUploadToDrive] = useState(false)
   const [publishToN8n, setPublishToN8n] = useState(false)
-  const [publishEnv, setPublishEnv] = useState<'test' | 'prod'>('test')
+  const [publishEnv, setPublishEnv] = useState<'test' | 'prod'>('prod')
 
   const [progress, setProgress] = useState<{ current: number; total: number; phase?: string } | null>(null)
   const [results, setResults] = useState<BatchResult[]>([])
@@ -170,6 +192,8 @@ export default function BatchGenerator() {
 
         let generatedId = ''
         const result: BatchResult = {
+          id: '',
+          mode,
           phraseText: phrase.text,
           matchedWith: batchMode === 'phrases' ? image.filename : phrase.text,
           filename: '',
@@ -182,6 +206,7 @@ export default function BatchGenerator() {
           const wrappedLines = computeLines(phrase.text, itemConfig.text.fontSize, itemConfig.text.font, maxPx)
           const video = await videosApi.generate({ ...itemConfig, wrappedLines }, phrase.id)
           generatedId = video.id
+          result.id = video.id
           result.filename = video.filename
           result.publicUrl = video.publicUrl
         } else {
@@ -195,34 +220,26 @@ export default function BatchGenerator() {
           }
           const img = await imagesOutputApi.generate(imgConfig, phrase.id, 'combined')
           generatedId = img.id
+          result.id = img.id
           result.filename = img.filename
           result.publicUrl = img.publicUrl
         }
 
         if (uploadToDrive) {
-          try {
-            setProgress((p) => p ? { ...p, phase: 'Subiendo a Drive' } : p)
-            const driveApi = mode === 'video' ? videosApi : imagesOutputApi
-            const { driveUrl } = await driveApi.uploadToDrive(generatedId)
-            result.driveUrl = driveUrl
-          } catch (e: any) {
-            result.driveError = e.response?.data?.error || e.message
-          }
+          setProgress((p) => p ? { ...p, phase: 'Subiendo a Drive' } : p)
+          Object.assign(result, await drivePatch(generatedId, mode))
         }
 
         if (publishToN8n && mode === 'video') {
-          try {
-            setProgress((p) => p ? { ...p, phase: 'Publicando n8n' } : p)
-            await videosApi.publish(generatedId, publishEnv)
-            result.published = true
-          } catch (e: any) {
-            result.publishError = e.response?.data?.error || e.message
-          }
+          setProgress((p) => p ? { ...p, phase: 'Publicando n8n' } : p)
+          Object.assign(result, await publishPatch(generatedId, publishEnv))
         }
 
         newResults.push(result)
       } catch (e: any) {
         newResults.push({
+          id: '',
+          mode,
           phraseText: phrase.text,
           matchedWith: batchMode === 'phrases' ? image.filename : phrase.text,
           filename: '',
@@ -237,8 +254,42 @@ export default function BatchGenerator() {
     setProgress(null)
   }
 
+  // Aplica una post-acción a los resultados ya generados (sin regenerar), solo a los pendientes.
+  const runPostAction = async (
+    phase: string,
+    isPending: (r: BatchResult) => boolean,
+    patch: (r: BatchResult) => Promise<Partial<BatchResult>>
+  ) => {
+    const targets = results
+      .map((r, i) => ({ r, i }))
+      .filter(({ r }) => r.ok && r.id && isPending(r))
+    if (targets.length === 0) return
+
+    let done = 0
+    setProgress({ current: 0, total: targets.length, phase })
+    for (const { r, i } of targets) {
+      const update = await patch(r)
+      setResults((prev) => prev.map((x, xi) => (xi === i ? { ...x, ...update } : x)))
+      done++
+      setProgress({ current: done, total: targets.length, phase })
+    }
+    setProgress(null)
+  }
+
+  const uploadPendingToDrive = () =>
+    runPostAction('Subiendo a Drive', (r) => !r.driveUrl, (r) => drivePatch(r.id, r.mode))
+
+  const publishPending = () =>
+    runPostAction(
+      'Publicando n8n',
+      (r) => r.mode === 'video' && !r.published,
+      (r) => publishPatch(r.id, publishEnv)
+    )
+
   const okCount = results.filter((r) => r.ok).length
   const errCount = results.filter((r) => !r.ok).length
+  const pendingDrive = results.filter((r) => r.ok && r.id && !r.driveUrl).length
+  const pendingPublish = results.filter((r) => r.ok && r.id && r.mode === 'video' && !r.published).length
 
   if (loadingData) {
     return <p className="p-4 text-xs text-bone-700">Cargando...</p>
@@ -418,6 +469,42 @@ export default function BatchGenerator() {
             {okCount} generado{okCount !== 1 ? 's' : ''}
             {errCount > 0 && <span className="text-neon-red"> · {errCount} error{errCount !== 1 ? 'es' : ''}</span>}
           </p>
+
+          {/* Post-acciones sobre los videos/imágenes ya generados (sin regenerar) */}
+          {okCount > 0 && (
+            <div className="flex items-center gap-2 mb-2">
+              <button
+                onClick={uploadPendingToDrive}
+                disabled={isRunning || pendingDrive === 0}
+                className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-xs bg-carbon-700 text-bone-700 hover:bg-carbon-600 hover:text-gold-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                <Upload size={12} />
+                Subir a Drive{pendingDrive > 0 ? ` (${pendingDrive})` : ''}
+              </button>
+              {mode === 'video' && (
+                <>
+                  <button
+                    onClick={publishPending}
+                    disabled={isRunning || pendingPublish === 0}
+                    className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-xs bg-carbon-700 text-bone-700 hover:bg-carbon-600 hover:text-gold-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <Send size={12} />
+                    Publicar{pendingPublish > 0 ? ` (${pendingPublish})` : ''}
+                  </button>
+                  <select
+                    value={publishEnv}
+                    onChange={(e) => setPublishEnv(e.target.value as 'test' | 'prod')}
+                    disabled={isRunning}
+                    className="bg-carbon-700 text-bone-700 text-xs rounded-lg px-1.5 py-1.5 border border-carbon-600 disabled:opacity-40"
+                  >
+                    <option value="test">Test</option>
+                    <option value="prod">Prod</option>
+                  </select>
+                </>
+              )}
+            </div>
+          )}
+
           <div className="flex flex-col gap-1 max-h-48 overflow-y-auto">
             {results.map((r, i) => (
               <div key={i} className={`flex flex-col gap-1 px-2 py-1.5 rounded-lg text-xs ${r.ok ? 'bg-carbon-700' : 'bg-red-900/20'}`}>
@@ -428,8 +515,8 @@ export default function BatchGenerator() {
                       <a href={r.publicUrl} target="_blank" rel="noreferrer" className="text-gold-500 hover:underline truncate">
                         {r.filename}
                       </a>
-                      {r.driveUrl && <Upload size={11} className="shrink-0 text-bone-700" title="Subido a Drive" />}
-                      {r.published && <Send size={11} className="shrink-0 text-bone-700" title="Publicado vía n8n" />}
+                      {r.driveUrl && <span title="Subido a Drive" className="shrink-0 inline-flex"><Upload size={11} className="text-bone-700" /></span>}
+                      {r.published && <span title="Publicado vía n8n" className="shrink-0 inline-flex"><Send size={11} className="text-bone-700" /></span>}
                     </div>
                   ) : (
                     <span className="text-neon-red truncate">{r.error || 'Error desconocido'}</span>
