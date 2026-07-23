@@ -79,6 +79,7 @@ export interface WebhookPayload {
   phrase: string
   filename: string
   createdAt: string
+  thumbnailUrl?: string
 }
 
 export interface GenerateVideoRequest {

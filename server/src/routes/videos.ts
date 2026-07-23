@@ -2,9 +2,9 @@ import { Router } from 'express'
 import { v4 as uuidv4 } from 'uuid'
 import path from 'path'
 import fs from 'fs'
-import { generateVideo } from '../services/videoGenerator'
+import { generateVideo, extractThumbnail } from '../services/videoGenerator'
 import { enqueue } from '../services/queueService'
-import { uploadVideoToS3 } from '../services/s3Service'
+import { uploadVideoToS3, uploadThumbnailToS3 } from '../services/s3Service'
 import { uploadToDrive } from '../services/driveService'
 import { sendToWebhook } from '../services/webhookService'
 import { GenerateVideoRequest } from '../types'
@@ -139,12 +139,29 @@ router.post('/:id/publish', async (req, res) => {
     }
 
     const cfg = row.config_extra ? JSON.parse(row.config_extra) : {}
+
+    // Miniatura: frame del segundo 5 del MP4 (donde ya no hay efectos de entrada),
+    // subido a R2. Se omite si el archivo local ya no existe (cleanup >24h).
+    let thumbnailUrl: string | undefined
+    try {
+      if (row.local_path && fs.existsSync(row.local_path)) {
+        const thumb = await extractThumbnail(row.local_path, path.parse(row.filename).name)
+        thumbnailUrl = await uploadThumbnailToS3(thumb.localPath, thumb.filename)
+        logInfo('publish', `Miniatura generada: ${thumb.filename}`)
+      } else {
+        logInfo('publish', `Sin miniatura: archivo local no disponible (${row.filename})`)
+      }
+    } catch (err: any) {
+      logError('publish', `Error generando miniatura (${row.filename})`, err.message)
+    }
+
     await sendToWebhook(
       {
         videoUrl: s3Url,
         phrase: cfg.text?.content ?? '',
         filename: row.filename,
         createdAt: row.created_at,
+        thumbnailUrl,
       },
       env
     )

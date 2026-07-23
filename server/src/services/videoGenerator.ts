@@ -282,3 +282,40 @@ export async function generateVideo(
       .run()
   })
 }
+
+// Duración del video en segundos (0 si no se puede leer).
+function probeDuration(videoPath: string): Promise<number> {
+  return new Promise((resolve) => {
+    ffmpeg.ffprobe(videoPath, (err, data) => {
+      if (err || !data?.format?.duration) return resolve(0)
+      resolve(Number(data.format.duration) || 0)
+    })
+  })
+}
+
+// Extrae un frame como miniatura (JPG). Toma el segundo 5 —donde ya no hay
+// efectos de entrada— y cae al punto medio si el video es más corto.
+export async function extractThumbnail(
+  videoPath: string,
+  outputName: string
+): Promise<{ filename: string; localPath: string }> {
+  const outputDir = path.join(path.resolve(config.paths.output), 'thumbnails')
+  if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true })
+
+  const filename = `${outputName}.jpg`
+  const outputPath = path.join(outputDir, filename)
+
+  const duration = await probeDuration(videoPath)
+  const t = duration >= 6 ? 5 : Math.max(0.1, duration / 2)
+
+  return new Promise((resolve, reject) => {
+    ffmpeg(videoPath)
+      .seekInput(t)
+      .frames(1)
+      .outputOptions(['-q:v 2'])
+      .output(outputPath)
+      .on('end', () => resolve({ filename, localPath: outputPath }))
+      .on('error', (err) => reject(new Error(`FFmpeg thumbnail error: ${err.message}`)))
+      .run()
+  })
+}

@@ -36,6 +36,25 @@ export async function uploadVideoToS3(
   return `${config.aws.publicUrl}/${key}`
 }
 
+export async function uploadThumbnailToS3(
+  localPath: string,
+  filename: string
+): Promise<string> {
+  const fileStream = fs.createReadStream(localPath)
+  const key = `thumbnails/${filename}`
+
+  await s3.send(
+    new PutObjectCommand({
+      Bucket: config.aws.bucket,
+      Key: key,
+      Body: fileStream,
+      ContentType: 'image/jpeg',
+    })
+  )
+
+  return `${config.aws.publicUrl}/${key}`
+}
+
 export async function getPresignedUrl(
   filename: string,
   expiresIn = 3600
