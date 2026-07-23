@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, Play, Pause } from 'lucide-react'
 import { useVideoStore } from '../../store/videoStore'
 import { TransitionType, TextAlign, TextEffect, VisualStyle } from '../../types'
 import { PRESETS } from '../../presets'
@@ -61,11 +61,27 @@ export default function VideoEditor() {
   const [savingName, setSavingName] = useState<string | null>(null)
   const [open, setOpen] = useState<Set<string>>(new Set(['frase', 'tipografia', 'video']))
   const [audioTracks, setAudioTracks] = useState<AudioTrack[]>([])
+  const [audioPlaying, setAudioPlaying] = useState(false)
+  const audioRef = useRef<HTMLAudioElement>(null)
   const lastStrokeWidthRef = useRef(2)
 
   useEffect(() => {
     audioApi.list().then(setAudioTracks).catch(() => setAudioTracks([]))
   }, [])
+
+  // Al cambiar de pista, detener cualquier preview en curso.
+  useEffect(() => {
+    const el = audioRef.current
+    if (el) { el.pause(); el.currentTime = 0 }
+    setAudioPlaying(false)
+  }, [audioTrack])
+
+  function toggleAudioPreview() {
+    const el = audioRef.current
+    if (!el) return
+    if (audioPlaying) el.pause()
+    else el.play().catch(() => {})
+  }
 
   const toggle = (id: string) =>
     setOpen(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s })
@@ -430,16 +446,34 @@ export default function VideoEditor() {
       {mode === 'video' && (
         <SectionPanel label="Audio de fondo" isOpen={open.has('audio')} onToggle={() => toggle('audio')}>
           <div className="flex flex-col gap-1.5">
-            <select
-              className="w-full bg-carbon-700 border border-carbon-600 rounded-lg p-2 text-xs text-bone-500"
-              value={audioTrack ?? ''}
-              onChange={(e) => setConfig({ audioTrack: e.target.value })}
-            >
-              <option value="">Sin audio</option>
-              {audioTracks.map((t) => (
-                <option key={t.filename} value={t.filename}>{t.name}</option>
-              ))}
-            </select>
+            <div className="flex items-center gap-1.5">
+              <select
+                className="flex-1 bg-carbon-700 border border-carbon-600 rounded-lg p-2 text-xs text-bone-500"
+                value={audioTrack ?? ''}
+                onChange={(e) => setConfig({ audioTrack: e.target.value })}
+              >
+                <option value="">Sin audio</option>
+                {audioTracks.map((t) => (
+                  <option key={t.filename} value={t.filename}>{t.name}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={toggleAudioPreview}
+                disabled={!audioTrack}
+                title={audioTrack ? (audioPlaying ? 'Pausar' : 'Escuchar pista') : 'Selecciona una pista'}
+                className="shrink-0 p-2 rounded-lg bg-carbon-700 border border-carbon-600 text-bone-500 hover:text-gold-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                {audioPlaying ? <Pause size={14} /> : <Play size={14} />}
+              </button>
+            </div>
+            <audio
+              ref={audioRef}
+              src={audioTrack ? `/api/audio/file/${encodeURIComponent(audioTrack)}` : undefined}
+              onPlay={() => setAudioPlaying(true)}
+              onPause={() => setAudioPlaying(false)}
+              onEnded={() => setAudioPlaying(false)}
+            />
             {audioTracks.length === 0 && (
               <p className="text-[10px] text-bone-700">
                 No hay pistas en <span className="text-gold-500">data/audio/</span>. Agrega archivos .mp3 royalty-free.

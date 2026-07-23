@@ -29,4 +29,15 @@ router.get('/', (_req, res) => {
   res.json(tracks)
 })
 
+// GET /api/audio/file/:filename — sirve una pista de audio (para preview en el UI)
+router.get('/file/:filename', (req, res) => {
+  const safe = path.basename(req.params.filename) // evita path traversal (../)
+  if (!AUDIO_EXTENSIONS.has(path.extname(safe).toLowerCase())) {
+    return res.status(400).json({ error: 'Extensión de audio no permitida' })
+  }
+  const filePath = path.join(path.resolve(config.paths.audio), safe)
+  if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Pista no encontrada' })
+  res.sendFile(filePath)
+})
+
 export default router
