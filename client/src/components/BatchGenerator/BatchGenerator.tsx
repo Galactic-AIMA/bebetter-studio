@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { CheckSquare, Square, Layers, Upload, Send, Play } from 'lucide-react'
+import { CheckSquare, Square, Layers, Upload, Send, Play, ClipboardCheck } from 'lucide-react'
 import { phrasesApi, imagesApi, videosApi, imagesOutputApi } from '../../api'
 import { Phrase, ImageItem } from '../../types'
 import { useVideoStore } from '../../store/videoStore'
@@ -20,6 +20,8 @@ interface BatchResult {
   driveError?: string
   published?: boolean
   publishError?: string
+  queued?: boolean
+  queueError?: string
 }
 
 // Post-acciones reutilizables (durante generación y sobre resultados ya generados).
@@ -39,6 +41,15 @@ async function publishPatch(id: string, env: 'test' | 'prod'): Promise<Partial<B
     return { published: true, publishError: undefined }
   } catch (e: any) {
     return { publishError: e.response?.data?.error || e.message }
+  }
+}
+
+async function queuePatch(id: string): Promise<Partial<BatchResult>> {
+  try {
+    await videosApi.queue(id)
+    return { queued: true, queueError: undefined }
+  } catch (e: any) {
+    return { queueError: e.response?.data?.error || e.message }
   }
 }
 
@@ -288,10 +299,18 @@ export default function BatchGenerator() {
       (r) => publishPatch(r.id, publishEnv)
     )
 
+  const sendPendingToApproval = () =>
+    runPostAction(
+      'Enviando a aprobación',
+      (r) => r.mode === 'video' && !r.queued,
+      (r) => queuePatch(r.id)
+    )
+
   const okCount = results.filter((r) => r.ok).length
   const errCount = results.filter((r) => !r.ok).length
   const pendingDrive = results.filter((r) => r.ok && r.id && !r.driveUrl).length
   const pendingPublish = results.filter((r) => r.ok && r.id && r.mode === 'video' && !r.published).length
+  const pendingQueue = results.filter((r) => r.ok && r.id && r.mode === 'video' && !r.queued).length
 
   if (loadingData) {
     return <p className="p-4 text-xs text-bone-700">Cargando...</p>
@@ -474,36 +493,52 @@ export default function BatchGenerator() {
 
           {/* Post-acciones sobre los videos/imágenes ya generados (sin regenerar) */}
           {okCount > 0 && (
-            <div className="flex items-center gap-2 mb-2">
-              <button
-                onClick={uploadPendingToDrive}
-                disabled={isRunning || pendingDrive === 0}
-                className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-xs bg-carbon-700 text-bone-700 hover:bg-carbon-600 hover:text-gold-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              >
-                <Upload size={12} />
-                Subir a Drive{pendingDrive > 0 ? ` (${pendingDrive})` : ''}
-              </button>
+            <div className="flex flex-col gap-2 mb-2">
+              {/* Primario: enviar el lote a aprobación (cola de la Fase 4) */}
               {mode === 'video' && (
-                <>
-                  <button
-                    onClick={publishPending}
-                    disabled={isRunning || pendingPublish === 0}
-                    className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-xs bg-carbon-700 text-bone-700 hover:bg-carbon-600 hover:text-gold-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                  >
-                    <Send size={12} />
-                    Publicar{pendingPublish > 0 ? ` (${pendingPublish})` : ''}
-                  </button>
-                  <select
-                    value={publishEnv}
-                    onChange={(e) => setPublishEnv(e.target.value as 'test' | 'prod')}
-                    disabled={isRunning}
-                    className="bg-carbon-700 text-bone-700 text-xs rounded-lg px-1.5 py-1.5 border border-carbon-600 disabled:opacity-40"
-                  >
-                    <option value="test">Test</option>
-                    <option value="prod">Prod</option>
-                  </select>
-                </>
+                <button
+                  onClick={sendPendingToApproval}
+                  disabled={isRunning || pendingQueue === 0}
+                  className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium bg-gold-500 hover:bg-gold-600 text-bone-500 disabled:bg-carbon-600 disabled:text-bone-700 disabled:cursor-not-allowed transition-colors"
+                >
+                  <ClipboardCheck size={14} />
+                  Enviar a aprobación{pendingQueue > 0 ? ` (${pendingQueue})` : ''}
+                </button>
               )}
+
+              {/* Secundarios: Drive + Publicar (carril express, salta la cola) */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={uploadPendingToDrive}
+                  disabled={isRunning || pendingDrive === 0}
+                  className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-xs bg-carbon-700 text-bone-700 hover:bg-carbon-600 hover:text-gold-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  <Upload size={12} />
+                  Subir a Drive{pendingDrive > 0 ? ` (${pendingDrive})` : ''}
+                </button>
+                {mode === 'video' && (
+                  <>
+                    <button
+                      onClick={publishPending}
+                      disabled={isRunning || pendingPublish === 0}
+                      title="Carril express: publica ya, saltándose la cola"
+                      className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-xs bg-carbon-700 text-bone-700 hover:bg-carbon-600 hover:text-gold-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                      <Send size={12} />
+                      Publicar ya{pendingPublish > 0 ? ` (${pendingPublish})` : ''}
+                    </button>
+                    <select
+                      value={publishEnv}
+                      onChange={(e) => setPublishEnv(e.target.value as 'test' | 'prod')}
+                      disabled={isRunning}
+                      className="bg-carbon-700 text-bone-700 text-xs rounded-lg px-1.5 py-1.5 border border-carbon-600 disabled:opacity-40"
+                    >
+                      <option value="test">Test</option>
+                      <option value="prod">Prod</option>
+                    </select>
+                  </>
+                )}
+              </div>
             </div>
           )}
 
@@ -527,15 +562,17 @@ export default function BatchGenerator() {
                         </a>
                       )}
                       {r.driveUrl && <span title="Subido a Drive" className="shrink-0 inline-flex"><Upload size={11} className="text-bone-700" /></span>}
-                      {r.published && <span title="Publicado vía n8n" className="shrink-0 inline-flex"><Send size={11} className="text-bone-700" /></span>}
+                      {r.queued && <span title="Enviado a aprobación" className="shrink-0 inline-flex"><ClipboardCheck size={11} className="text-gold-500" /></span>}
+                      {r.published && <span title="Publicado vía n8n (express)" className="shrink-0 inline-flex"><Send size={11} className="text-bone-700" /></span>}
                     </div>
                   ) : (
                     <span className="text-neon-red truncate">{r.error || 'Error desconocido'}</span>
                   )}
                 </div>
-                {(r.driveError || r.publishError) && (
+                {(r.driveError || r.publishError || r.queueError) && (
                   <div className="pl-5 flex flex-col gap-0.5">
                     {r.driveError && <span className="text-neon-red/90 text-[10px]">⚠ Drive: {r.driveError}</span>}
+                    {r.queueError && <span className="text-neon-red/90 text-[10px]">⚠ Aprobación: {r.queueError}</span>}
                     {r.publishError && <span className="text-neon-red/90 text-[10px]">⚠ n8n: {r.publishError}</span>}
                   </div>
                 )}

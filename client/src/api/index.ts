@@ -117,6 +117,8 @@ export const videosApi = {
     api.post<{ driveUrl: string }>(`/videos/${id}/upload-drive`).then((r) => r.data),
   publish: (id: string, env: 'test' | 'prod') =>
     api.post(`/videos/${id}/publish`, { env }).then((r) => r.data),
+  queue: (id: string) =>
+    api.post<{ success: boolean; queueId: string }>(`/videos/${id}/queue`).then((r) => r.data),
   remove: (id: string) => api.delete(`/videos/${id}`),
 }
 

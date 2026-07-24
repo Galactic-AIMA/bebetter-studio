@@ -7,6 +7,7 @@ import { enqueue } from '../services/queueService'
 import { uploadVideoToS3, uploadThumbnailToS3 } from '../services/s3Service'
 import { uploadToDrive } from '../services/driveService'
 import { sendToWebhook } from '../services/webhookService'
+import { appendQueueRows, QueueRow } from '../services/sheetsService'
 import { GenerateVideoRequest } from '../types'
 import { config } from '../config'
 import { GenerateVideoSchema } from '../schemas'
@@ -15,6 +16,35 @@ import { logInfo, logError } from '../services/logService'
 import db from '../db'
 
 const router = Router()
+
+/**
+ * Asegura que el video esté en R2 (sube si falta) y genera la miniatura del
+ * segundo 5 (best-effort). Compartido por /publish (carril express) y /queue
+ * (envío a aprobación). Si el MP4 local ya no existe (cleanup >24h) omite la
+ * miniatura sin romper.
+ */
+async function ensureR2AndThumbnail(row: any): Promise<{ s3Url: string; thumbnailUrl?: string }> {
+  let s3Url = row.s3_url
+  if (!s3Url) {
+    s3Url = await uploadVideoToS3(row.local_path, row.filename)
+    db.prepare(`UPDATE videos SET s3_url = ? WHERE id = ?`).run(s3Url, row.id)
+  }
+
+  let thumbnailUrl: string | undefined
+  try {
+    if (row.local_path && fs.existsSync(row.local_path)) {
+      const thumb = await extractThumbnail(row.local_path, path.parse(row.filename).name)
+      thumbnailUrl = await uploadThumbnailToS3(thumb.localPath, thumb.filename)
+      logInfo('publish', `Miniatura generada: ${thumb.filename}`)
+    } else {
+      logInfo('publish', `Sin miniatura: archivo local no disponible (${row.filename})`)
+    }
+  } catch (err: any) {
+    logError('publish', `Error generando miniatura (${row.filename})`, err.message)
+  }
+
+  return { s3Url, thumbnailUrl }
+}
 
 // GET /api/videos — listar todos los videos generados
 router.get('/', (_req, res) => {
@@ -132,28 +162,8 @@ router.post('/:id/publish', async (req, res) => {
     const row = db.prepare(`SELECT * FROM videos WHERE id = ?`).get(req.params.id) as any
     if (!row) return res.status(404).json({ error: 'Video not found' })
 
-    let s3Url = row.s3_url
-    if (!s3Url) {
-      s3Url = await uploadVideoToS3(row.local_path, row.filename)
-      db.prepare(`UPDATE videos SET s3_url = ? WHERE id = ?`).run(s3Url, req.params.id)
-    }
-
+    const { s3Url, thumbnailUrl } = await ensureR2AndThumbnail(row)
     const cfg = row.config_extra ? JSON.parse(row.config_extra) : {}
-
-    // Miniatura: frame del segundo 5 del MP4 (donde ya no hay efectos de entrada),
-    // subido a R2. Se omite si el archivo local ya no existe (cleanup >24h).
-    let thumbnailUrl: string | undefined
-    try {
-      if (row.local_path && fs.existsSync(row.local_path)) {
-        const thumb = await extractThumbnail(row.local_path, path.parse(row.filename).name)
-        thumbnailUrl = await uploadThumbnailToS3(thumb.localPath, thumb.filename)
-        logInfo('publish', `Miniatura generada: ${thumb.filename}`)
-      } else {
-        logInfo('publish', `Sin miniatura: archivo local no disponible (${row.filename})`)
-      }
-    } catch (err: any) {
-      logError('publish', `Error generando miniatura (${row.filename})`, err.message)
-    }
 
     await sendToWebhook(
       {
@@ -170,6 +180,35 @@ router.post('/:id/publish', async (req, res) => {
     res.json({ success: true, sentTo: env, videoUrl: s3Url })
   } catch (err: any) {
     logError('publish', `Error publicando a n8n (${req.body?.env ?? 'test'})`, err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// POST /api/videos/:id/queue — enviar a aprobación (Fase 4): sube a R2 + escribe
+// una fila `pending` en la cola (Google Sheet). n8n genera copies y manda el
+// paquete a Telegram; los copies quedan vacíos aquí.
+router.post('/:id/queue', async (req, res) => {
+  try {
+    const row = db.prepare(`SELECT * FROM videos WHERE id = ?`).get(req.params.id) as any
+    if (!row) return res.status(404).json({ error: 'Video not found' })
+
+    const { s3Url, thumbnailUrl } = await ensureR2AndThumbnail(row)
+    const cfg = row.config_extra ? JSON.parse(row.config_extra) : {}
+
+    const queueRow: QueueRow = {
+      id: uuidv4(),
+      videoUrl: s3Url,
+      thumbnailUrl,
+      phrase: cfg.text?.content ?? '',
+      status: 'pending',
+      createdAt: new Date().toISOString(),
+    }
+    await appendQueueRows([queueRow])
+
+    logInfo('publish', `Enviado a aprobación (cola): ${row.filename}`)
+    res.json({ success: true, queueId: queueRow.id })
+  } catch (err: any) {
+    logError('publish', `Error enviando a aprobación (${req.params.id})`, err.message)
     res.status(500).json({ error: err.message })
   }
 })
