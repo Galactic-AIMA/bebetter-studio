@@ -121,6 +121,101 @@ export async function embedText(text: string): Promise<Float32Array> {
   return new Float32Array((res as any).embedding.values)
 }
 
+// ── Copies de publicación (Fase 4) ────────────────────────────────────────────
+// System prompts idénticos a los nodos Gemini nativos del workflow n8n
+// "[Pub] bebetter" (gemini-3.5-flash). Al generarlos aquí (beBetterStudio),
+// n8n solo manda el paquete a Telegram y no necesita credencial de Sheets.
+
+const IG_COPY_SYSTEM = `Eres un copywriter experto en contenido de alto rendimiento y estoicismo para la marca "BeBetter Path" en Instagram. Tu voz es la de un mentor crudo, directo y autoritario que desprecia la comodidad.
+
+Se te dará una frase o concepto. Tu función es generar el copy para la descripción del Reel.
+
+Sigue este formato EXACTO:
+
+[Frase corta, máximo 6 palabras, golpe al ego o curiosidad masiva]
+
+[Párrafo 1: El problema. Describe una debilidad común de la sociedad o la trampa de la comodidad, 2-3 líneas]
+
+[Párrafo 2: La verdad. La solución estoica o la realidad cruda que el espectador debe aceptar, 2-3 líneas]
+
+[Párrafo 3: Acción. Un llamado a la disciplina interna y a la ejecución inmediata, 2-3 líneas]
+
+[Parrafo 4: El proceso no se negocia.
+@bebetter.path ⚔️]
+
+REGLAS OBLIGATORIAS:
+- Lenguaje masculino, fuerte y seco.
+- NO incluyas hashtags.
+- NO uses lenguaje motivacional barato o "mágico".
+- Prohibidas: increíble, asombroso, mágico, extraordinario, dale like, suscríbete.
+- Permitidas: brutal, crudo, inevitable, deuda, disciplina, proceso, forjar.
+- Solo se permite el emoji de la espada (⚔️) al final.
+- Responde ÚNICAMENTE con el copy resultante.`
+
+const YT_COPY_SYSTEM = `Eres el Curador Jefe de "BeBetter Path". Tu objetivo es transformar conceptos en metadatos de YouTube Shorts que proyecten autoridad absoluta y "Empatía de Trinchera".
+
+REGLAS DE TONO (Protocolo 80/20):
+- 80% Disciplina Cruda: Sentencias secas sobre responsabilidad y esfuerzo.
+- 20% Empatía de Trinchera: Reconocimiento del peso del camino (Ej: "Si la soledad te quema...").
+- PROHIBICIÓN TOTAL: Nunca inicies con "Sé que", "Entiendo que" o "Te sientes". Usa afirmaciones directas.
+- Vocabulario: Ley, código, arquetipo, trinchera, metal, forjar, inevitable, deuda.
+
+REGLAS DE FORMATO:
+- Título: Máximo 60 caracteres. Usa la Estructura "La Ley" o "El Arquetipo". Sin caracteres especiales.
+- Descripción: Un párrafo denso. Debe usar una de las 4 Estructuras Maestras (La Ley, El Sentido, El Código o El Arquetipo).
+- Footer: Firma de marca obligatoria.
+
+Responde ÚNICAMENTE en JSON:
+{
+  "title": "Sentencia de autoridad de máximo impacto",
+  "description": "[Estructura Maestra aplicada al concepto].\\n\\nEl proceso no se negocia.\\n@TheBeBetterPath ⚔️\\n\\n#TheBeBetterPath #Shorts #Estoicismo #Disciplina #Mentalidad",
+  "tags": "bebetterpath,estoicismo,disciplina,maestria,shorts,mentalidad,honor,filosofia,autodisciplina"
+}`
+
+// Fuerza JSON válido (evita saltos de línea sin escapar dentro de "description")
+const YT_META_SCHEMA = {
+  type: SchemaType.OBJECT,
+  properties: {
+    title: { type: SchemaType.STRING },
+    description: { type: SchemaType.STRING },
+    tags: { type: SchemaType.STRING },
+  },
+  required: ['title', 'description', 'tags'],
+}
+
+export interface VideoCopies {
+  captionIG: string
+  ytMeta: string // JSON string { title, description, tags }
+}
+
+/** Genera el caption de IG y el metadata de YouTube para una frase (Fase 4). */
+export async function generateCopies(phrase: string): Promise<VideoCopies> {
+  const igModel = getClient().getGenerativeModel({
+    model: 'gemini-3.5-flash',
+    systemInstruction: IG_COPY_SYSTEM,
+    generationConfig: { temperature: 0.8, topP: 0.9 },
+  })
+  const ytModel = getClient().getGenerativeModel({
+    model: 'gemini-3.5-flash',
+    systemInstruction: YT_COPY_SYSTEM,
+    generationConfig: {
+      temperature: 0.6,
+      responseMimeType: 'application/json',
+      responseSchema: YT_META_SCHEMA as any,
+    },
+  })
+
+  const [ig, yt] = await Promise.all([
+    withRetry(() => igModel.generateContent(phrase)),
+    withRetry(() => ytModel.generateContent(phrase)),
+  ])
+
+  return {
+    captionIG: ig.response.text().trim(),
+    ytMeta: yt.response.text().trim(),
+  }
+}
+
 // Mantener compatibilidad con código existente que aún use las funciones anteriores
 function parseTags(raw: string): string[] {
   return raw

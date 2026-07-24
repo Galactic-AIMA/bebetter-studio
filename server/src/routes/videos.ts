@@ -6,8 +6,9 @@ import { generateVideo, extractThumbnail } from '../services/videoGenerator'
 import { enqueue } from '../services/queueService'
 import { uploadVideoToS3, uploadThumbnailToS3 } from '../services/s3Service'
 import { uploadToDrive } from '../services/driveService'
-import { sendToWebhook } from '../services/webhookService'
+import { sendToWebhook, sendToApprovalWebhook } from '../services/webhookService'
 import { appendQueueRows, QueueRow } from '../services/sheetsService'
+import { generateCopies } from '../services/geminiService'
 import { GenerateVideoRequest } from '../types'
 import { config } from '../config'
 import { GenerateVideoSchema } from '../schemas'
@@ -189,23 +190,43 @@ router.post('/:id/publish', async (req, res) => {
 // paquete a Telegram; los copies quedan vacíos aquí.
 router.post('/:id/queue', async (req, res) => {
   try {
+    // Falla rápido si n8n no está configurado (evita generar copies y una fila huérfana)
+    if (!config.webhooks.approval) {
+      return res.status(500).json({ error: 'WEBHOOK_APPROVAL_URL no está configurado' })
+    }
+
     const row = db.prepare(`SELECT * FROM videos WHERE id = ?`).get(req.params.id) as any
     if (!row) return res.status(404).json({ error: 'Video not found' })
 
     const { s3Url, thumbnailUrl } = await ensureR2AndThumbnail(row)
     const cfg = row.config_extra ? JSON.parse(row.config_extra) : {}
+    const phrase = cfg.text?.content ?? ''
+
+    // Genera copies (IG + YT) aquí; se guardan en la cola. n8n solo manda a Telegram.
+    const copies = await generateCopies(phrase)
 
     const queueRow: QueueRow = {
       id: uuidv4(),
       videoUrl: s3Url,
       thumbnailUrl,
-      phrase: cfg.text?.content ?? '',
+      phrase,
+      captionIG: copies.captionIG,
+      ytMeta: copies.ytMeta,
       status: 'pending',
       createdAt: new Date().toISOString(),
     }
     await appendQueueRows([queueRow])
 
-    logInfo('publish', `Enviado a aprobación (cola): ${row.filename}`)
+    // Pinga a n8n para que envíe el paquete (video + caption + botones) a Telegram.
+    await sendToApprovalWebhook({
+      queueId: queueRow.id,
+      videoUrl: s3Url,
+      thumbnailUrl,
+      phrase,
+      captionIG: copies.captionIG,
+    })
+
+    logInfo('publish', `Enviado a aprobación: ${row.filename}`)
     res.json({ success: true, queueId: queueRow.id })
   } catch (err: any) {
     logError('publish', `Error enviando a aprobación (${req.params.id})`, err.message)

@@ -28,6 +28,7 @@ export const config = {
     test: process.env.WEBHOOK_TEST_URL || '',
     prod: process.env.WEBHOOK_PROD_URL || '',
     secret: process.env.WEBHOOK_SECRET || '',
+    approval: process.env.WEBHOOK_APPROVAL_URL || '',  // n8n "Aprobación bebetter" (Fase 4) — manda el paquete a Telegram
   },
 
   watermark: {
