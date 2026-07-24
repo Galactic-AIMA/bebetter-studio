@@ -222,7 +222,9 @@ export async function generateVideo(
     '-movflags +faststart',
     `-t ${duration}`,
     '-r 30',
-    ...(audioPath ? ['-c:a aac', '-b:a 192k'] : ['-an']),
+    // -ar 48000 / -ac 2: Instagram Reels exige audio ≤ 48 kHz; sin resamplear, el AAC
+    // hereda el sample rate de la pista de fondo (p. ej. 96 kHz) y IG rechaza el contenedor.
+    ...(audioPath ? ['-c:a aac', '-b:a 192k', '-ar 48000', '-ac 2'] : ['-an']),
   ]
 
   const wm = cfg.watermark
