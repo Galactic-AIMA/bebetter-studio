@@ -1,8 +1,9 @@
-import { Film, Image, HardDrive, Send, RotateCcw, ChevronDown, ScrollText } from 'lucide-react'
+import { Film, Image, HardDrive, Send, RotateCcw, ChevronDown, ScrollText, Clock } from 'lucide-react'
 import { useRef, useEffect, useState } from 'react'
 import { useVideoStore } from '../../store/videoStore'
 import { ContentMode } from '../../store/videoStore'
 import LogsModal from '../Logs/LogsModal'
+import CadenceModal from '../Cadence/CadenceModal'
 
 interface Props {
   lastVideoId: string | null
@@ -17,6 +18,7 @@ export default function Header({ lastVideoId, lastImageId, isGenerating, toast, 
   const { mode, setMode, reset } = useVideoStore()
   const [showEnvMenu, setShowEnvMenu] = useState(false)
   const [showLogs, setShowLogs] = useState(false)
+  const [showCadence, setShowCadence] = useState(false)
   const envMenuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -108,6 +110,14 @@ export default function Header({ lastVideoId, lastImageId, isGenerating, toast, 
         )}
 
         <button
+          onClick={() => setShowCadence(true)}
+          className="p-1.5 text-bone-700 hover:text-bone-500 transition-colors"
+          title="Cadencia de publicación"
+        >
+          <Clock size={14} />
+        </button>
+
+        <button
           onClick={() => setShowLogs(true)}
           className="p-1.5 text-bone-700 hover:text-bone-500 transition-colors"
           title="Registro de actividad"
@@ -126,6 +136,7 @@ export default function Header({ lastVideoId, lastImageId, isGenerating, toast, 
       </div>
 
       {showLogs && <LogsModal onClose={() => setShowLogs(false)} />}
+      {showCadence && <CadenceModal onClose={() => setShowCadence(false)} />}
     </header>
   )
 }

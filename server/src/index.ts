@@ -14,6 +14,7 @@ import historyRouter from './routes/history'
 import imageTagsRouter from './routes/imageTags'
 import audioRouter from './routes/audio'
 import logsRouter from './routes/logs'
+import cadenceRouter from './routes/cadence'
 import { syncWithGalleryDl } from './services/galleryDlService'
 import { syncBoardImages } from './services/pinterestService'
 import { runCleanup } from './services/cleanupService'
@@ -37,6 +38,7 @@ app.use('/api/history', historyRouter)
 app.use('/api/images', imageTagsRouter)
 app.use('/api/audio', audioRouter)
 app.use('/api/logs', logsRouter)
+app.use('/api/cadence', cadenceRouter)
 
 app.get('/api/watermark', (req, res) => {
   const wmPath = config.watermark.path

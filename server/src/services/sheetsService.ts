@@ -109,3 +109,60 @@ export async function readCadenceConfig(): Promise<CadenceConfig> {
     timezone: map.get('timezone') || 'America/Bogota',
   }
 }
+
+/**
+ * Upsert de pares key/value en la pestaña "config" (crea la fila si no existe,
+ * actualiza la celda B si ya existe). Se usa para la cadencia y el token de IG.
+ */
+export async function upsertConfig(entries: Record<string, string>): Promise<void> {
+  const keys = Object.keys(entries)
+  if (keys.length === 0) return
+  const sheets = getSheets()
+  const id = requireSheetId()
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: id,
+    range: `${CONFIG_SHEET}!A:B`,
+  })
+  const rows = res.data.values || []
+  const updates: { range: string; values: string[][] }[] = []
+  const appends: string[][] = []
+  for (const key of keys) {
+    const value = entries[key]
+    let rowIdx = -1
+    for (let i = 1; i < rows.length; i++) {
+      if (String(rows[i]?.[0] ?? '').trim() === key) {
+        rowIdx = i
+        break
+      }
+    }
+    if (rowIdx >= 0) {
+      // fila 1-based en la hoja (rowIdx es 0-based sobre A:B, header incluido)
+      updates.push({ range: `${CONFIG_SHEET}!B${rowIdx + 1}`, values: [[value]] })
+    } else {
+      appends.push([key, value])
+      rows.push([key, value]) // defensivo: evita doble append si dos keys nuevas iguales
+    }
+  }
+  if (updates.length) {
+    await sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId: id,
+      requestBody: { valueInputOption: 'RAW', data: updates },
+    })
+  }
+  if (appends.length) {
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: id,
+      range: `${CONFIG_SHEET}!A1`,
+      valueInputOption: 'RAW',
+      insertDataOption: 'INSERT_ROWS',
+      requestBody: { values: appends },
+    })
+  }
+}
+
+/** Persiste la cadencia (horas de publicación) en la pestaña "config". */
+export async function writeCadenceConfig(times: string[], timezone?: string): Promise<void> {
+  const entries: Record<string, string> = { cadence_times: times.join(',') }
+  if (timezone) entries.timezone = timezone
+  await upsertConfig(entries)
+}

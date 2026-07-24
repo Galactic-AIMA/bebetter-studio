@@ -122,6 +122,17 @@ export const videosApi = {
   remove: (id: string) => api.delete(`/videos/${id}`),
 }
 
+export interface CadenceConfig {
+  times: string[]
+  timezone: string
+}
+
+export const cadenceApi = {
+  get: () => api.get<CadenceConfig>('/cadence').then((r) => r.data),
+  save: (times: string[]) =>
+    api.post<{ success: boolean; times: string[] }>('/cadence', { times }).then((r) => r.data),
+}
+
 export type LogLevel = 'info' | 'error'
 export type LogCategory = 'generate' | 'drive' | 'publish' | 's3' | 'system'
 export interface LogEntry {
