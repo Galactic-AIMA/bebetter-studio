@@ -1,6 +1,7 @@
 /**
- * Script de autorización OAuth2 para Google Drive.
+ * Script de autorización OAuth2 para Google (Drive + Sheets).
  * Ejecutar una sola vez: npx ts-node scripts/authorize-drive.ts
+ * El token resultante cubre AMBOS scopes; Drive sigue funcionando igual.
  */
 
 import * as http from 'http'
@@ -12,7 +13,10 @@ dotenv.config({ path: path.join(__dirname, '../.env') })
 
 import { createOAuthClient } from '../src/services/driveService'
 
-const SCOPES = ['https://www.googleapis.com/auth/drive.file']
+const SCOPES = [
+  'https://www.googleapis.com/auth/drive.file',      // subir videos a Drive (existente)
+  'https://www.googleapis.com/auth/spreadsheets',    // leer/escribir la cola en Sheets (Fase 4)
+]
 const PORT = 4321
 
 async function main() {
@@ -63,7 +67,8 @@ async function main() {
 
   fs.writeFileSync(resolved, JSON.stringify(tokens, null, 2))
   console.log('✓ Token guardado en:', resolved)
-  console.log('Ya puedes usar el botón "Subir a Drive" en la app.')
+  console.log('Scopes: Drive (subir videos) + Sheets (cola Fase 4).')
+  console.log('Siguiente: npx ts-node scripts/setup-queue-sheet.ts')
   process.exit(0)
 }
 

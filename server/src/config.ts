@@ -36,6 +36,7 @@ export const config = {
 
   google: {
     apiKey: process.env.GOOGLE_API_KEY || '',
+    sheetId: process.env.GOOGLE_SHEET_ID || '',  // Sheet "Cola bebetter" (Fase 4) — lo crea scripts/setup-queue-sheet.ts
   },
 
   pinterest: {

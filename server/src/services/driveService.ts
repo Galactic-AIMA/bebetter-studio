@@ -17,11 +17,11 @@ export function createOAuthClient(): OAuth2Client {
   return new google.auth.OAuth2(client_id, client_secret, redirectUri)
 }
 
-function getAuthenticatedClient(): OAuth2Client {
+export function getAuthenticatedClient(): OAuth2Client {
   const tokenPath = resolvePath('GOOGLE_OAUTH_TOKEN_PATH')
   if (!fs.existsSync(tokenPath)) {
     throw new Error(
-      'No hay token de Drive. Ejecuta: npx ts-node scripts/authorize-drive.ts'
+      'No hay token de Google. Ejecuta: npx ts-node scripts/authorize-drive.ts'
     )
   }
   const client = createOAuthClient()
