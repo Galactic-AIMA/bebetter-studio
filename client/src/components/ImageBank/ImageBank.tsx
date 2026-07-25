@@ -21,6 +21,7 @@ export default function ImageBank() {
   const [pinterest, setPinterest] = useState<PinterestStatus | null>(null)
   const [syncingApi, setSyncingApi] = useState(false)
   const [analyzeResult, setAnalyzeResult] = useState<string | null>(null)
+  const [analyzeProg, setAnalyzeProg] = useState<{ done: number; total: number } | null>(null)
   const [recommendations, setRecommendations] = useState<ImageRecommendation[]>([])
   const [recommendPhrase, setRecommendPhrase] = useState<string>('')
   const fileRef = useRef<HTMLInputElement>(null)
@@ -96,12 +97,23 @@ export default function ImageBank() {
   const handleAnalyzeAll = async () => {
     setAnalyzing(true)
     setAnalyzeResult(null)
+    setAnalyzeProg(null)
+    // Poll del progreso mientras corre la petición larga (analyze-all no responde
+    // hasta terminar, así que el contador viene de /analyze-progress).
+    const poll = async () => {
+      try {
+        const p = await imagesApi.analyzeProgress()
+        if (p.running || p.total > 0) setAnalyzeProg({ done: p.done, total: p.total })
+      } catch { /* ignore */ }
+    }
+    poll()
+    const timer = window.setInterval(poll, 2000)
     try {
       const { processed, skipped, errors } = await imagesApi.analyzeAll()
       await load()
       if (recommendPhrase) await fetchRecommendations(recommendPhrase, selectedPhraseId ?? null)
       if (errors.length > 0) {
-        setAnalyzeResult(`Error: ${errors[0]}`)
+        setAnalyzeResult(`${processed} analizadas · ${errors.length} con error (${errors[0]})`)
       } else {
         setAnalyzeResult(`${processed} analizadas, ${skipped} ya tenían tags`)
         setTimeout(() => setAnalyzeResult(null), 5000)
@@ -109,7 +121,9 @@ export default function ImageBank() {
     } catch {
       setAnalyzeResult('Error al analizar')
     } finally {
+      window.clearInterval(timer)
       setAnalyzing(false)
+      setAnalyzeProg(null)
     }
   }
 
@@ -223,7 +237,11 @@ export default function ImageBank() {
       >
         <span className="flex items-center gap-1.5">
           <Sparkles size={11} className={analyzing ? 'animate-pulse text-gold-500' : ''} />
-          {analyzing ? 'Analizando... (puede tardar varios minutos)' : 'Analizar banco con IA'}
+          {analyzing
+            ? analyzeProg && analyzeProg.total > 0
+              ? `Analizando… ${analyzeProg.done}/${analyzeProg.total} (faltan ${Math.max(0, analyzeProg.total - analyzeProg.done)})`
+              : 'Analizando… (preparando)'
+            : 'Analizar banco con IA'}
         </span>
         {unanalyzedCount > 0 && !analyzing && (
           <span className="text-[10px] bg-gold-500/10 text-gold-500 px-1.5 py-0.5 rounded">
@@ -231,6 +249,16 @@ export default function ImageBank() {
           </span>
         )}
       </button>
+
+      {/* Barra de progreso del análisis */}
+      {analyzing && analyzeProg && analyzeProg.total > 0 && (
+        <div className="w-full bg-carbon-700 rounded-full h-1.5 -mt-1">
+          <div
+            className="bg-gold-500 h-1.5 rounded-full transition-all"
+            style={{ width: `${Math.min(100, (analyzeProg.done / analyzeProg.total) * 100)}%` }}
+          />
+        </div>
+      )}
 
       {analyzeResult && (
         <p className={`text-[11px] px-1 ${analyzeResult.startsWith('Error') ? 'text-neon-red' : 'text-gold-500'}`}>

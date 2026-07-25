@@ -62,6 +62,16 @@ const upsertImage = () => db.prepare(`
     analyzed_at = @analyzed_at
 `)
 
+// Progreso en vivo del análisis del banco (para el contador del UI). Como
+// analyze-all es una sola petición larga, el cliente consulta este estado por
+// separado mientras corre.
+let analyzeProgress = { running: false, done: 0, total: 0, ok: 0, skipped: 0 }
+
+// GET /api/images/analyze-progress — estado de la corrida en curso (o la última)
+router.get('/analyze-progress', (_req, res) => {
+  res.json({ ...analyzeProgress, remaining: Math.max(0, analyzeProgress.total - analyzeProgress.done) })
+})
+
 // POST /api/images/analyze-all — analiza imágenes y genera su embedding conceptual
 // Body opcional: { limit: number } para probar con pocas; { force: true } para
 // re-analizar TODAS (necesario tras cambiar el prompt/documento de embedding);
@@ -78,32 +88,44 @@ router.post('/analyze-all', async (req, res) => {
       .map((r) => r.filename)
   )
 
+  // Las que realmente se van a procesar (para que la barra llegue a 100%).
+  const toProcess = files.filter((f) => force || !analyzedSet.has(f))
+  const totalToProcess = limit ? Math.min(limit, toProcess.length) : toProcess.length
+  analyzeProgress = { running: true, done: 0, total: totalToProcess, ok: 0, skipped: files.length - toProcess.length }
+
   let processed = 0
-  let skipped = 0
+  let skipped = analyzeProgress.skipped
   const errors: string[] = []
 
-  for (const filename of files) {
-    if (limit && processed >= limit) break
-    if (!force && analyzedSet.has(filename)) { skipped++; continue }
-    try {
-      const imagePath = path.join(config.paths.images, filename)
-      const analysis = await analyzeImageStructured(imagePath)
-      const embedding = await embedText(buildImageDocument(analysis))
-      const tags = [analysis.emocionDominante, analysis.composicion, ...analysis.paletaColores].slice(0, 8)
+  try {
+    for (const filename of files) {
+      if (limit && processed >= limit) break
+      if (!force && analyzedSet.has(filename)) { continue }
+      try {
+        const imagePath = path.join(config.paths.images, filename)
+        const analysis = await analyzeImageStructured(imagePath)
+        const embedding = await embedText(buildImageDocument(analysis))
+        const tags = [analysis.emocionDominante, analysis.composicion, ...analysis.paletaColores].slice(0, 8)
 
-      upsertImage().run({
-        filename,
-        tags: JSON.stringify(tags),
-        analysis_json: JSON.stringify(analysis),
-        embedding: Buffer.from(embedding.buffer),
-        analyzed_at: new Date().toISOString(),
-      })
-      processed++
-      invalidateCache()
-      await new Promise((r) => setTimeout(r, 6000))
-    } catch (err: any) {
-      errors.push(`${filename}: ${err.message}`)
+        upsertImage().run({
+          filename,
+          tags: JSON.stringify(tags),
+          analysis_json: JSON.stringify(analysis),
+          embedding: Buffer.from(embedding.buffer),
+          analyzed_at: new Date().toISOString(),
+        })
+        processed++
+        analyzeProgress.ok = processed
+        invalidateCache()
+        await new Promise((r) => setTimeout(r, 6000))
+      } catch (err: any) {
+        errors.push(`${filename}: ${err.message}`)
+      } finally {
+        analyzeProgress.done++
+      }
     }
+  } finally {
+    analyzeProgress.running = false
   }
 
   res.json({ processed, skipped, errors })

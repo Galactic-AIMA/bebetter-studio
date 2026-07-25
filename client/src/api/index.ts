@@ -13,6 +13,12 @@ export const imagesApi = {
   },
   analyzeAll: () =>
     api.post<{ processed: number; skipped: number; errors: string[] }>('/images/analyze-all').then((r) => r.data),
+  analyzeProgress: () =>
+    api
+      .get<{ running: boolean; done: number; total: number; ok: number; skipped: number; remaining: number }>(
+        '/images/analyze-progress'
+      )
+      .then((r) => r.data),
   recommend: (phraseId: string, phrase?: string, topN?: number) =>
     api.post<{ descripcionMood: string; recommendations: ImageRecommendation[] }>('/images/recommend', { phraseId, phrase, topN }).then((r) => r.data),
 }
