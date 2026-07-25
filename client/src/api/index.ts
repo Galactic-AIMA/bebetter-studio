@@ -95,10 +95,29 @@ export const imagesOutputApi = {
 export interface AudioTrack {
   filename: string
   name: string
+  energia?: number | null
+  moodCategory?: string | null
+  descripcion?: string | null
+  analyzed?: boolean
+}
+
+export interface AudioProposal {
+  filename: string
+  energia: number
+  moodCategory: string
+  descripcion: string
 }
 
 export const audioApi = {
   list: () => api.get<AudioTrack[]>('/audio').then((r) => r.data),
+  analyze: (filenames?: string[]) =>
+    api
+      .post<{ proposals: AudioProposal[]; errors: string[] }>('/audio/analyze', { filenames })
+      .then((r) => r.data),
+  saveTags: (filename: string, energia: number, moodCategory: string, descripcion: string) =>
+    api
+      .put(`/audio/${encodeURIComponent(filename)}/tags`, { energia, moodCategory, descripcion })
+      .then((r) => r.data),
 }
 
 export const historyApi = {

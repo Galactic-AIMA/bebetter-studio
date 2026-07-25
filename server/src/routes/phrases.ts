@@ -212,7 +212,7 @@ router.post('/embed-all', async (req, res) => {
 
   const update = db.prepare(`
     UPDATE phrases SET descripcion_mood = @descripcion_mood, nivel_energia = @nivel_energia,
-      paleta = @paleta, embedding = @embedding WHERE id = @id
+      paleta = @paleta, mood_category = @mood_category, embedding = @embedding WHERE id = @id
   `)
 
   let processed = 0
@@ -227,6 +227,7 @@ router.post('/embed-all', async (req, res) => {
         descripcion_mood: analysis.mood,
         nivel_energia: analysis.nivelEnergia,
         paleta: JSON.stringify(analysis.paletaIdeal),
+        mood_category: analysis.moodCategory,
         embedding: Buffer.from(embedding.buffer),
       })
       processed++

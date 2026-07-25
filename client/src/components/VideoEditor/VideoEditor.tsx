@@ -453,6 +453,7 @@ export default function VideoEditor() {
                 onChange={(e) => setConfig({ audioTrack: e.target.value })}
               >
                 <option value="">Sin audio</option>
+                <option value="auto">Auto (por mood)</option>
                 {audioTracks.map((t) => (
                   <option key={t.filename} value={t.filename}>{t.name}</option>
                 ))}
@@ -460,8 +461,8 @@ export default function VideoEditor() {
               <button
                 type="button"
                 onClick={toggleAudioPreview}
-                disabled={!audioTrack}
-                title={audioTrack ? (audioPlaying ? 'Pausar' : 'Escuchar pista') : 'Selecciona una pista'}
+                disabled={!audioTrack || audioTrack === 'auto'}
+                title={audioTrack === 'auto' ? 'La pista se elige al generar (por mood)' : audioTrack ? (audioPlaying ? 'Pausar' : 'Escuchar pista') : 'Selecciona una pista'}
                 className="shrink-0 p-2 rounded-lg bg-carbon-700 border border-carbon-600 text-bone-500 hover:text-gold-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
                 {audioPlaying ? <Pause size={14} /> : <Play size={14} />}
@@ -469,11 +470,16 @@ export default function VideoEditor() {
             </div>
             <audio
               ref={audioRef}
-              src={audioTrack ? `/api/audio/file/${encodeURIComponent(audioTrack)}` : undefined}
+              src={audioTrack && audioTrack !== 'auto' ? `/api/audio/file/${encodeURIComponent(audioTrack)}` : undefined}
               onPlay={() => setAudioPlaying(true)}
               onPause={() => setAudioPlaying(false)}
               onEnded={() => setAudioPlaying(false)}
             />
+            {audioTrack === 'auto' && (
+              <p className="text-[10px] text-gold-500">
+                Se elige la pista que mejor encaja con el mood de la frase al generar.
+              </p>
+            )}
             {audioTracks.length === 0 && (
               <p className="text-[10px] text-bone-700">
                 No hay pistas en <span className="text-gold-500">data/audio/</span>. Agrega archivos .mp3 royalty-free.

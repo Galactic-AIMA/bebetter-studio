@@ -66,6 +66,15 @@ db.exec(`
     created_at   TEXT DEFAULT (datetime('now'))
   );
 
+  CREATE TABLE IF NOT EXISTS audio_tracks (
+    filename      TEXT PRIMARY KEY,
+    energia       INTEGER,
+    mood_category TEXT,
+    descripcion   TEXT,
+    usage_count   INTEGER DEFAULT 0,
+    analyzed_at   TEXT
+  );
+
   CREATE TABLE IF NOT EXISTS pinterest_pins (
     pin_id        TEXT PRIMARY KEY,
     downloaded_at TEXT DEFAULT (datetime('now'))
@@ -90,6 +99,8 @@ for (const sql of [
   // Re-rank estructurado del matching conceptual (2026-07-24)
   `ALTER TABLE phrases ADD COLUMN nivel_energia INTEGER`,
   `ALTER TABLE phrases ADD COLUMN paleta TEXT`,
+  // Categoría de mood para el emparejamiento de audio (2026-07-25)
+  `ALTER TABLE phrases ADD COLUMN mood_category TEXT`,
 ]) {
   try { db.exec(sql) } catch (_) { /* columna ya existe */ }
 }

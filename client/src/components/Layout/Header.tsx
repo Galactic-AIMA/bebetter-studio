@@ -1,9 +1,10 @@
-import { Film, Image, HardDrive, Send, RotateCcw, ChevronDown, ScrollText, Clock, ListPlus } from 'lucide-react'
+import { Film, Image, HardDrive, Send, RotateCcw, ChevronDown, ScrollText, Clock, ListPlus, Music } from 'lucide-react'
 import { useRef, useEffect, useState } from 'react'
 import { useVideoStore } from '../../store/videoStore'
 import { ContentMode } from '../../store/videoStore'
 import LogsModal from '../Logs/LogsModal'
 import CadenceModal from '../Cadence/CadenceModal'
+import AudioTagsPanel from '../Audio/AudioTagsPanel'
 
 interface Props {
   lastVideoId: string | null
@@ -20,6 +21,7 @@ export default function Header({ lastVideoId, lastImageId, isGenerating, toast, 
   const [showEnvMenu, setShowEnvMenu] = useState(false)
   const [showLogs, setShowLogs] = useState(false)
   const [showCadence, setShowCadence] = useState(false)
+  const [showAudio, setShowAudio] = useState(false)
   const envMenuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -118,6 +120,14 @@ export default function Header({ lastVideoId, lastImageId, isGenerating, toast, 
         )}
 
         <button
+          onClick={() => setShowAudio(true)}
+          className="p-1.5 text-bone-700 hover:text-bone-500 transition-colors"
+          title="Audio — energía y mood"
+        >
+          <Music size={14} />
+        </button>
+
+        <button
           onClick={() => setShowCadence(true)}
           className="p-1.5 text-bone-700 hover:text-bone-500 transition-colors"
           title="Cadencia de publicación"
@@ -145,6 +155,7 @@ export default function Header({ lastVideoId, lastImageId, isGenerating, toast, 
 
       {showLogs && <LogsModal onClose={() => setShowLogs(false)} />}
       {showCadence && <CadenceModal onClose={() => setShowCadence(false)} />}
+      {showAudio && <AudioTagsPanel onClose={() => setShowAudio(false)} />}
     </header>
   )
 }

@@ -117,6 +117,7 @@ export interface PhraseAnalysis {
   nivelEnergia: number // 0 (quieta, íntima) a 10 (intensa, épica) — para el re-rank
   paletaIdeal: string[] // paleta que le calzaría: oscuro, frío, alto contraste
   mood: string // 1-2 frases de atmósfera visual ideal
+  moodCategory: string // slug de MOOD_CATEGORIES — para el emparejamiento de audio
 }
 
 const PHRASE_ANALYSIS_SCHEMA = {
@@ -145,8 +146,12 @@ const PHRASE_ANALYSIS_SCHEMA = {
       type: SchemaType.STRING,
       description: '1-2 frases en español sobre la atmósfera visual ideal para acompañar la frase (registro perceptual).',
     },
+    moodCategory: {
+      type: SchemaType.STRING,
+      description: 'Mood dominante de la frase. UNO de: reflexivo, melancolico, esperanzador, motivador, epico, tenso.',
+    },
   },
-  required: ['temas', 'metaforasVisuales', 'nivelEnergia', 'paletaIdeal', 'mood'],
+  required: ['temas', 'metaforasVisuales', 'nivelEnergia', 'paletaIdeal', 'mood', 'moodCategory'],
 }
 
 /** Analiza una frase en su capa conceptual+simbólica (para matching con imágenes). */
@@ -164,7 +169,9 @@ export async function analyzePhraseStructured(phrase: string): Promise<PhraseAna
 Analízala para encontrarle la imagen de fondo ideal. Extrae sus temas/conceptos, las metáforas visuales que la representarían (símbolos concretos que un banco de imágenes podría tener), la energía que pide, la paleta ideal y su mood. Piensa qué se VE en una imagen que ilustre esta frase, no solo qué se siente.`
 
   const result = await withRetry(() => model.generateContent(prompt))
-  return JSON.parse(result.response.text()) as PhraseAnalysis
+  const out = JSON.parse(result.response.text()) as PhraseAnalysis
+  if (!MOOD_CATEGORIES.includes(out.moodCategory as any)) out.moodCategory = 'motivador'
+  return out
 }
 
 // ── Documentos a embeber (SOLO lo concreto — "manda el símbolo") ───────────────
@@ -195,6 +202,73 @@ Devuelve únicamente 1-2 frases en español describiendo el mood visual y emocio
 
   const result = await withRetry(() => model.generateContent(prompt))
   return result.response.text().trim()
+}
+
+// ── Análisis de audio (emparejamiento por energía + mood — 2026-07-25) ─────────
+// Taxonomía de mood compartida entre pistas de audio y frases. Slugs sin acento
+// (claves de matching); la etiqueta bonita vive en el frontend.
+export const MOOD_CATEGORIES = [
+  'reflexivo', 'melancolico', 'esperanzador', 'motivador', 'epico', 'tenso',
+] as const
+export type MoodCategory = (typeof MOOD_CATEGORIES)[number]
+
+export interface AudioAnalysis {
+  energia: number // 0–10 (misma escala que phrase.nivel_energia)
+  moodCategory: MoodCategory
+  descripcion: string // 1-2 frases
+}
+
+const AUDIO_ANALYSIS_SCHEMA = {
+  type: SchemaType.OBJECT,
+  properties: {
+    energia: {
+      type: SchemaType.NUMBER,
+      description: 'Energía/intensidad de la música de 0 (muy calmada, íntima, lenta) a 10 (muy intensa, épica, rápida).',
+    },
+    moodCategory: {
+      type: SchemaType.STRING,
+      description:
+        'Mood dominante. UNO de exactamente estos slugs: reflexivo (calmado, introspectivo), melancolico (triste, nostálgico), esperanzador (luminoso, positivo), motivador (impulso, decisión), epico (grandioso, heroico, triunfal), tenso (oscuro, dramático, inquietante).',
+    },
+    descripcion: {
+      type: SchemaType.STRING,
+      description: '1-2 frases en español describiendo la atmósfera de la pista (instrumentación, ritmo, sensación).',
+    },
+  },
+  required: ['energia', 'moodCategory', 'descripcion'],
+}
+
+const AUDIO_MIME: Record<string, string> = {
+  mp3: 'audio/mp3', mpeg: 'audio/mpeg', m4a: 'audio/mp4', aac: 'audio/aac',
+  wav: 'audio/wav', ogg: 'audio/ogg', flac: 'audio/flac',
+}
+
+/**
+ * Analiza una pista de audio (mood/energía) con Gemini. `audioBuffer` debe ser
+ * una MUESTRA corta (~30-45s) para acotar tokens; ver el recorte en la ruta.
+ */
+export async function analyzeAudioStructured(
+  audioBuffer: Buffer,
+  ext: string
+): Promise<AudioAnalysis> {
+  const model = getClient().getGenerativeModel({
+    model: 'gemini-3.5-flash',
+    generationConfig: {
+      responseMimeType: 'application/json',
+      responseSchema: AUDIO_ANALYSIS_SCHEMA as any,
+    },
+  })
+  const mimeType = AUDIO_MIME[ext.toLowerCase().replace('.', '')] ?? 'audio/mpeg'
+  const prompt = `Analiza esta pista musical instrumental (para fondo de un Reel motivacional). Devuelve su energía (0-10), su mood dominante (uno de los slugs indicados) y una descripción breve. Es música sin voz; juzga por ritmo, instrumentación y atmósfera.`
+
+  const result = await withRetry(() =>
+    model.generateContent([prompt, { inlineData: { mimeType, data: audioBuffer.toString('base64') } }])
+  )
+  const parsed = JSON.parse(result.response.text()) as AudioAnalysis
+  // Normaliza: energía a [0,10]; mood a un slug conocido (fallback 'motivador').
+  parsed.energia = Math.max(0, Math.min(10, Math.round(Number(parsed.energia) || 0)))
+  if (!MOOD_CATEGORIES.includes(parsed.moodCategory)) parsed.moodCategory = 'motivador'
+  return parsed
 }
 
 // taskType SEMANTIC_SIMILARITY = correcto para matching simétrico frase↔imagen

@@ -9,6 +9,8 @@ import { uploadToDrive } from '../services/driveService'
 import { sendToWebhook, sendToApprovalWebhook } from '../services/webhookService'
 import { appendQueueRows, QueueRow } from '../services/sheetsService'
 import { generateCopies } from '../services/geminiService'
+import { pickAudioForPhrase } from '../services/audioMatching'
+import { bumpAudioUsage } from '../services/audioMetadata'
 import { GenerateVideoRequest } from '../types'
 import { config } from '../config'
 import { GenerateVideoSchema } from '../schemas'
@@ -60,6 +62,16 @@ router.post('/generate', async (req, res) => {
 
   try {
     const { config: vidConfig, phraseId } = parsed.data
+
+    // Auto-pick de audio por mood si no se eligió pista (o se eligió "auto").
+    if ((!vidConfig.audioTrack || vidConfig.audioTrack === 'auto') && phraseId) {
+      const pick = pickAudioForPhrase(phraseId)
+      vidConfig.audioTrack = pick ? pick.filename : undefined
+      if (pick) logInfo('generate', `Audio auto: ${pick.filename} (score ${pick.score.toFixed(2)}, mood ${pick.moodCategory})`)
+    } else if (vidConfig.audioTrack === 'auto') {
+      vidConfig.audioTrack = undefined // "auto" sin phraseId → sin audio
+    }
+    if (vidConfig.audioTrack) bumpAudioUsage(vidConfig.audioTrack)
 
     const id = uuidv4()
     const phraseText = vidConfig.text.content || ''
