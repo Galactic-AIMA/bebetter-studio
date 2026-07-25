@@ -55,6 +55,23 @@ router.get('/', (_req, res) => {
   res.json(rows.map(rowToVideoRecord))
 })
 
+// Suma el contador de uso (frase + imagen + audio) de un video. Se llama al
+// PUBLICAR o ENCOLAR, NO al generar: así regenerar/descartar un video no infla
+// el conteo y la rotación prioriza lo que realmente decidiste sacar.
+function bumpUsageForVideo(row: any) {
+  if (row.phrase_id) {
+    db.prepare(`UPDATE phrases SET usage_count = usage_count + 1 WHERE id = ?`).run(row.phrase_id)
+  }
+  const cfg = row.config_extra ? JSON.parse(row.config_extra) : {}
+  if (cfg.imageId) {
+    db.prepare(
+      `INSERT INTO images (filename, usage_count) VALUES (@f, 1)
+       ON CONFLICT(filename) DO UPDATE SET usage_count = usage_count + 1`
+    ).run({ f: cfg.imageId })
+  }
+  if (cfg.audioTrack && cfg.audioTrack !== 'auto') bumpAudioUsage(cfg.audioTrack)
+}
+
 // POST /api/videos/generate — generar un video nuevo
 router.post('/generate', async (req, res) => {
   const parsed = GenerateVideoSchema.safeParse(req.body)
@@ -71,7 +88,8 @@ router.post('/generate', async (req, res) => {
     } else if (vidConfig.audioTrack === 'auto') {
       vidConfig.audioTrack = undefined // "auto" sin phraseId → sin audio
     }
-    if (vidConfig.audioTrack) bumpAudioUsage(vidConfig.audioTrack)
+    // El conteo de uso NO ocurre al generar (ver bumpUsageForVideo: solo al
+    // publicar/encolar).
 
     const id = uuidv4()
     const phraseText = vidConfig.text.content || ''
@@ -148,17 +166,8 @@ router.post('/:id/upload-drive', async (req, res) => {
     const driveUrl = await uploadToDrive(row.local_path, row.filename)
     db.prepare(`UPDATE videos SET drive_url = ? WHERE id = ?`).run(driveUrl, req.params.id)
 
-    // Incrementar contadores solo al subir a Drive
-    if (row.phrase_id) {
-      db.prepare(`UPDATE phrases SET usage_count = usage_count + 1 WHERE id = ?`).run(row.phrase_id)
-    }
-    const cfg = row.config_extra ? JSON.parse(row.config_extra) : {}
-    if (cfg.imageId) {
-      db.prepare(`
-        INSERT INTO images (filename, usage_count) VALUES (@f, 1)
-        ON CONFLICT(filename) DO UPDATE SET usage_count = usage_count + 1
-      `).run({ f: cfg.imageId })
-    }
+    // El conteo de uso NO ocurre al subir a Drive (Drive es respaldo, no publicar).
+    // Se cuenta al publicar/encolar (bumpUsageForVideo).
 
     logInfo('drive', `Video subido a Drive: ${row.filename}`)
     res.json({ success: true, driveUrl })
@@ -189,6 +198,7 @@ router.post('/:id/publish', async (req, res) => {
       env
     )
 
+    bumpUsageForVideo(row) // cuenta el uso al publicar (express)
     logInfo('publish', `Publicado a n8n (${env}): ${row.filename}`)
     res.json({ success: true, sentTo: env, videoUrl: s3Url })
   } catch (err: any) {
@@ -238,6 +248,7 @@ router.post('/:id/queue', async (req, res) => {
       captionIG: copies.captionIG,
     })
 
+    bumpUsageForVideo(row) // cuenta el uso al encolar (decisión de sacarlo)
     logInfo('publish', `Enviado a aprobación: ${row.filename}`)
     res.json({ success: true, queueId: queueRow.id })
   } catch (err: any) {
