@@ -1,5 +1,5 @@
-import { X, Music, Sparkles, Check, AlertCircle } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { X, Music, Sparkles, Check, AlertCircle, Play, Pause } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import { audioApi, AudioTrack } from '../../api'
 
 interface Props {
@@ -30,6 +30,19 @@ export default function AudioTagsPanel({ onClose }: Props) {
   const [saving, setSaving] = useState<string | null>(null)
   const [savedOk, setSavedOk] = useState<Record<string, boolean>>({})
   const [error, setError] = useState<string | null>(null)
+  const [playing, setPlaying] = useState<string | null>(null)
+  const audioRef = useRef<HTMLAudioElement>(null)
+
+  const togglePlay = (filename: string) => {
+    const el = audioRef.current
+    if (!el) return
+    if (playing === filename) {
+      el.pause()
+      return
+    }
+    el.src = `/api/audio/file/${encodeURIComponent(filename)}`
+    el.play().then(() => setPlaying(filename)).catch(() => setPlaying(null))
+  }
 
   const load = async () => {
     setLoading(true)
@@ -148,6 +161,13 @@ export default function AudioTagsPanel({ onClose }: Props) {
               return (
                 <div key={t.filename} className="bg-carbon-900/60 rounded-lg px-3 py-2.5 border border-carbon-700 flex flex-col gap-2">
                   <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => togglePlay(t.filename)}
+                      title={playing === t.filename ? 'Pausar' : 'Escuchar pista'}
+                      className="shrink-0 p-1 rounded bg-carbon-700 text-bone-500 hover:text-gold-500 transition-colors"
+                    >
+                      {playing === t.filename ? <Pause size={12} /> : <Play size={12} />}
+                    </button>
                     <span className="text-[12px] text-bone-500 flex-1 min-w-0 truncate">{t.name}</span>
                     {!t.analyzed && (
                       <span className="text-[10px] text-gold-500 bg-gold-500/10 px-1.5 py-0.5 rounded shrink-0">sin etiquetar</span>
@@ -203,6 +223,13 @@ export default function AudioTagsPanel({ onClose }: Props) {
             </div>
           )}
         </div>
+
+        {/* Un solo elemento de audio; togglePlay fija `playing` al reproducir. */}
+        <audio
+          ref={audioRef}
+          onPause={() => setPlaying(null)}
+          onEnded={() => setPlaying(null)}
+        />
       </div>
     </div>
   )
