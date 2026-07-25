@@ -30,6 +30,9 @@ export interface ImageAnalysis {
   paletaColores: string[]
   composicion: string
   descripcionMood: string
+  // Capa semántica/simbólica (matching conceptual — 2026-07-24)
+  elementos: string[] // qué HAY, literal: prisionero, barrotes, montaña, mar
+  temas: string[] // qué EVOCA, metáfora: encierro, falta de libertad, superación
 }
 
 const IMAGE_ANALYSIS_SCHEMA = {
@@ -56,13 +59,23 @@ const IMAGE_ANALYSIS_SCHEMA = {
       type: SchemaType.STRING,
       description: '1-2 frases en lenguaje natural describiendo la atmósfera y sensación visual de la imagen, en registro descriptivo/perceptual',
     },
+    elementos: {
+      type: SchemaType.ARRAY,
+      items: { type: SchemaType.STRING },
+      description: 'Sujetos/objetos/símbolos CONCRETOS visibles en la imagen (qué HAY, literal): prisionero, barrotes, cadenas, cumbre, mar, silueta, puerta, camino. 3-6 items.',
+    },
+    temas: {
+      type: SchemaType.ARRAY,
+      items: { type: SchemaType.STRING },
+      description: 'Conceptos, metáforas o ideas abstractas que la imagen EVOCA (qué significa, simbólico): encierro, falta de libertad, esclavitud, superación, soledad, lucha, renacer. 3-6 items.',
+    },
   },
-  required: ['emocionDominante', 'nivelEnergia', 'paletaColores', 'composicion', 'descripcionMood'],
+  required: ['emocionDominante', 'nivelEnergia', 'paletaColores', 'composicion', 'descripcionMood', 'elementos', 'temas'],
 }
 
 export async function analyzeImageStructured(imagePath: string): Promise<ImageAnalysis> {
   const model = getClient().getGenerativeModel({
-    model: 'gemini-2.5-flash',
+    model: 'gemini-3.5-flash',
     generationConfig: {
       responseMimeType: 'application/json',
       responseSchema: IMAGE_ANALYSIS_SCHEMA as any,
@@ -78,7 +91,10 @@ export async function analyzeImageStructured(imagePath: string): Promise<ImageAn
   const mimeType = mimeMap[ext] ?? 'image/jpeg'
   const imageData = fs.readFileSync(imagePath).toString('base64')
 
-  const prompt = `Analiza esta imagen y devuelve un objeto JSON con el análisis visual y emocional. Para descripcionMood, escribe 1-2 frases en español describiendo la atmósfera, sensación y mood visual de la imagen en registro perceptual/descriptivo (como si describieras qué se siente al mirarla).`
+  const prompt = `Analiza esta imagen y devuelve un objeto JSON con el análisis visual, emocional y SIMBÓLICO.
+- descripcionMood: 1-2 frases en español sobre la atmósfera y sensación (qué se siente al mirarla).
+- elementos: los sujetos/objetos/símbolos CONCRETOS que se ven (qué HAY, literal).
+- temas: las ideas abstractas o metáforas que la imagen EVOCA (qué significa). Ej: una celda con barrotes → temas "encierro, falta de libertad". Una cumbre nevada → temas "superación, meta, esfuerzo". Piensa qué mensaje motivacional podría ilustrar esta imagen.`
 
   const result = await withRetry(() =>
     model.generateContent([
@@ -90,8 +106,88 @@ export async function analyzeImageStructured(imagePath: string): Promise<ImageAn
   return JSON.parse(result.response.text()) as ImageAnalysis
 }
 
+// ── Análisis conceptual de frase (matching simbólico — 2026-07-24) ─────────────
+// Simétrico al análisis de imagen: extrae los temas/metáforas de la frase para
+// que el embedding conecte por concepto (esclavitud emocional ↔ imagen de preso),
+// no solo por atmósfera.
+
+export interface PhraseAnalysis {
+  temas: string[] // conceptos/ideas de la frase: libertad, disciplina, miedo
+  metaforasVisuales: string[] // imágenes que la representarían: cadenas, cumbre, tormenta
+  nivelEnergia: number // 0 (quieta, íntima) a 10 (intensa, épica) — para el re-rank
+  paletaIdeal: string[] // paleta que le calzaría: oscuro, frío, alto contraste
+  mood: string // 1-2 frases de atmósfera visual ideal
+}
+
+const PHRASE_ANALYSIS_SCHEMA = {
+  type: SchemaType.OBJECT,
+  properties: {
+    temas: {
+      type: SchemaType.ARRAY,
+      items: { type: SchemaType.STRING },
+      description: 'Conceptos/ideas abstractas centrales de la frase: libertad, esclavitud emocional, disciplina, miedo, soledad, superación. 3-6 items.',
+    },
+    metaforasVisuales: {
+      type: SchemaType.ARRAY,
+      items: { type: SchemaType.STRING },
+      description: 'Símbolos u objetos visuales concretos que REPRESENTARÍAN la frase: cadenas, prisión, jaula, cumbre, tormenta, camino, amanecer. 3-6 items.',
+    },
+    nivelEnergia: {
+      type: SchemaType.NUMBER,
+      description: 'Energía que pide la frase, de 0 (quieta, íntima, reflexiva) a 10 (intensa, épica, de combate).',
+    },
+    paletaIdeal: {
+      type: SchemaType.ARRAY,
+      items: { type: SchemaType.STRING },
+      description: 'Descriptores de la paleta que le calzaría: oscuro, frío, cálido, alto contraste, monocromático, vibrante. 1-3 items.',
+    },
+    mood: {
+      type: SchemaType.STRING,
+      description: '1-2 frases en español sobre la atmósfera visual ideal para acompañar la frase (registro perceptual).',
+    },
+  },
+  required: ['temas', 'metaforasVisuales', 'nivelEnergia', 'paletaIdeal', 'mood'],
+}
+
+/** Analiza una frase en su capa conceptual+simbólica (para matching con imágenes). */
+export async function analyzePhraseStructured(phrase: string): Promise<PhraseAnalysis> {
+  const model = getClient().getGenerativeModel({
+    model: 'gemini-3.5-flash',
+    generationConfig: {
+      responseMimeType: 'application/json',
+      responseSchema: PHRASE_ANALYSIS_SCHEMA as any,
+    },
+  })
+
+  const prompt = `Frase motivacional: "${phrase}"
+
+Analízala para encontrarle la imagen de fondo ideal. Extrae sus temas/conceptos, las metáforas visuales que la representarían (símbolos concretos que un banco de imágenes podría tener), la energía que pide, la paleta ideal y su mood. Piensa qué se VE en una imagen que ilustre esta frase, no solo qué se siente.`
+
+  const result = await withRetry(() => model.generateContent(prompt))
+  return JSON.parse(result.response.text()) as PhraseAnalysis
+}
+
+// ── Documentos a embeber (SOLO lo concreto — "manda el símbolo") ───────────────
+// Validado en subset (2026-07-24): embeber solo los elementos concretos de la
+// imagen contra las metáforas visuales concretas de la frase discrimina mejor y
+// hace el matching simbólico real (frase de guerrero → imagen de guerrero). Meter
+// los `temas` abstractos aplanaba el ranking (todos convergían a "superación").
+// El mood/atmósfera entra por el re-rank de energía+paleta, no por el vector.
+
+/** Texto que se vectoriza por una imagen: sus elementos visuales concretos. */
+export function buildImageDocument(a: ImageAnalysis): string {
+  const concreto = (a.elementos ?? []).join(', ')
+  return concreto || a.descripcionMood // fallback si el análisis no trae elementos
+}
+
+/** Texto que se vectoriza por una frase: las metáforas visuales que la representan. */
+export function buildPhraseDocument(a: PhraseAnalysis): string {
+  const concreto = (a.metaforasVisuales ?? []).join(', ')
+  return concreto || a.mood // fallback si no trae metáforas
+}
+
 export async function extractMoodDescription(phrase: string): Promise<string> {
-  const model = getClient().getGenerativeModel({ model: 'gemini-2.5-flash' })
+  const model = getClient().getGenerativeModel({ model: 'gemini-3.5-flash' })
 
   const prompt = `Dada esta frase motivacional: "${phrase}"
 
@@ -101,14 +197,20 @@ Devuelve únicamente 1-2 frases en español describiendo el mood visual y emocio
   return result.response.text().trim()
 }
 
-export async function embedText(text: string): Promise<Float32Array> {
+// taskType SEMANTIC_SIMILARITY = correcto para matching simétrico frase↔imagen
+// (ambos lados describen "lo mismo" en registro comparable). Cambiarlo invalida
+// los vectores guardados → hay que re-vectorizar todo el banco.
+export async function embedText(
+  text: string,
+  taskType: 'SEMANTIC_SIMILARITY' | 'RETRIEVAL_DOCUMENT' | 'RETRIEVAL_QUERY' = 'SEMANTIC_SIMILARITY',
+): Promise<Float32Array> {
   if (!config.google.apiKey) throw new Error('GOOGLE_API_KEY no está configurada')
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key=${config.google.apiKey}`
   const res = await withRetry(async () => {
     const r = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: { parts: [{ text }] } }),
+      body: JSON.stringify({ content: { parts: [{ text }] }, taskType }),
     })
     if (!r.ok) {
       const err = await r.text()
@@ -151,6 +253,26 @@ REGLAS OBLIGATORIAS:
 - Permitidas: brutal, crudo, inevitable, deuda, disciplina, proceso, forjar.
 - Solo se permite el emoji de la espada (⚔️) al final.
 - Responde ÚNICAMENTE con el copy resultante.`
+
+// Bloque fijo de hashtags de marca + nicho que se añade al final de cada caption
+// de Instagram. Deterministas (el LLM NO los genera → constantes garantizados).
+// Editá esta lista para ajustar el set. El system prompt sigue prohibiendo que
+// Gemini genere hashtags, así el bloque no se duplica.
+const IG_HASHTAGS = [
+  '#BeBetterPath',
+  '#Estoicismo',
+  '#Disciplina',
+  '#Mentalidad',
+  '#Motivacion',
+  '#Mindset',
+  '#Estoico',
+  '#DesarrolloPersonal',
+]
+
+/** Añade el bloque fijo de hashtags al final del caption de IG. */
+function appendIgHashtags(caption: string): string {
+  return `${caption.trim()}\n\n${IG_HASHTAGS.join(' ')}`
+}
 
 const YT_COPY_SYSTEM = `Eres el Curador Jefe de "BeBetter Path". Tu objetivo es transformar conceptos en metadatos de YouTube Shorts que proyecten autoridad absoluta y "Empatía de Trinchera".
 
@@ -211,7 +333,7 @@ export async function generateCopies(phrase: string): Promise<VideoCopies> {
   ])
 
   return {
-    captionIG: ig.response.text().trim(),
+    captionIG: appendIgHashtags(ig.response.text().trim()),
     ytMeta: yt.response.text().trim(),
   }
 }

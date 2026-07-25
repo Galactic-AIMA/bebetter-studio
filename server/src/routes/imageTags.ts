@@ -2,7 +2,15 @@ import { Router } from 'express'
 import path from 'path'
 import fs from 'fs'
 import { config } from '../config'
-import { analyzeImageStructured, extractMoodDescription, embedText, ImageAnalysis } from '../services/geminiService'
+import {
+  analyzeImageStructured,
+  analyzePhraseStructured,
+  buildImageDocument,
+  buildPhraseDocument,
+  embedText,
+  ImageAnalysis,
+} from '../services/geminiService'
+import { cosine, rerankScore } from '../utils/matching'
 import db from '../db'
 
 const router = Router()
@@ -44,17 +52,6 @@ function invalidateCache() {
   embeddingCache = null
 }
 
-function cosineSimilarity(a: Float32Array, b: Float32Array): number {
-  let dot = 0, na = 0, nb = 0
-  for (let i = 0; i < a.length; i++) {
-    dot += a[i] * b[i]
-    na += a[i] * a[i]
-    nb += b[i] * b[i]
-  }
-  const denom = Math.sqrt(na) * Math.sqrt(nb)
-  return denom === 0 ? 0 : dot / denom
-}
-
 const upsertImage = () => db.prepare(`
   INSERT INTO images (filename, tags, analysis_json, embedding, analyzed_at)
   VALUES (@filename, @tags, @analysis_json, @embedding, @analyzed_at)
@@ -65,11 +62,16 @@ const upsertImage = () => db.prepare(`
     analyzed_at = @analyzed_at
 `)
 
-// POST /api/images/analyze-all — analiza todas las imágenes sin análisis estructurado
-// Body opcional: { limit: number } para probar con pocas imágenes
+// POST /api/images/analyze-all — analiza imágenes y genera su embedding conceptual
+// Body opcional: { limit: number } para probar con pocas; { force: true } para
+// re-analizar TODAS (necesario tras cambiar el prompt/documento de embedding);
+// { only: string[] } para restringir a filenames concretos (validación de subset)
 router.post('/analyze-all', async (req, res) => {
   const limit: number | undefined = req.body?.limit ? parseInt(req.body.limit) : undefined
-  const files = getImageFiles()
+  const force: boolean = req.body?.force === true
+  const only: string[] | undefined = Array.isArray(req.body?.only) ? req.body.only : undefined
+  let files = getImageFiles()
+  if (only) files = files.filter((f) => only.includes(f))
 
   const analyzedSet = new Set(
     (db.prepare(`SELECT filename FROM images WHERE analysis_json IS NOT NULL`).all() as any[])
@@ -82,11 +84,11 @@ router.post('/analyze-all', async (req, res) => {
 
   for (const filename of files) {
     if (limit && processed >= limit) break
-    if (analyzedSet.has(filename)) { skipped++; continue }
+    if (!force && analyzedSet.has(filename)) { skipped++; continue }
     try {
       const imagePath = path.join(config.paths.images, filename)
       const analysis = await analyzeImageStructured(imagePath)
-      const embedding = await embedText(analysis.descripcionMood)
+      const embedding = await embedText(buildImageDocument(analysis))
       const tags = [analysis.emocionDominante, analysis.composicion, ...analysis.paletaColores].slice(0, 8)
 
       upsertImage().run({
@@ -115,7 +117,7 @@ router.post('/analyze/:filename', async (req, res) => {
 
   try {
     const analysis = await analyzeImageStructured(imagePath)
-    const embedding = await embedText(analysis.descripcionMood)
+    const embedding = await embedText(buildImageDocument(analysis))
     const tags = [analysis.emocionDominante, analysis.composicion, ...analysis.paletaColores].slice(0, 8)
 
     upsertImage().run({
@@ -144,29 +146,46 @@ router.post('/recommend', async (req, res) => {
   try {
     let phraseEmbedding: Float32Array | null = null
     let descripcionMood = ''
+    let phraseEnergia: number | null = null
+    let phrasePaleta: string[] | null = null
 
-    // Usar embedding pre-computado si existe
+    // Usar embedding + señales pre-computadas si existen
     if (phraseId) {
-      const row = db.prepare(`SELECT embedding, descripcion_mood FROM phrases WHERE id = ?`).get(phraseId) as any
+      const row = db.prepare(
+        `SELECT embedding, descripcion_mood, nivel_energia, paleta FROM phrases WHERE id = ?`
+      ).get(phraseId) as any
       if (row?.embedding) {
         phraseEmbedding = new Float32Array((row.embedding as Buffer).buffer)
         descripcionMood = row.descripcion_mood ?? ''
+        phraseEnergia = row.nivel_energia ?? null
+        phrasePaleta = row.paleta ? JSON.parse(row.paleta) : null
       }
     }
 
-    // Fallback: generar embedding en tiempo real
+    // Fallback: analizar y vectorizar en tiempo real (mismo builder que los
+    // vectores guardados → coherencia del espacio de embeddings)
     if (!phraseEmbedding) {
       const text = phrase || phraseId!
-      descripcionMood = await extractMoodDescription(text)
-      phraseEmbedding = await embedText(descripcionMood)
+      const analysis = await analyzePhraseStructured(text)
+      descripcionMood = analysis.mood
+      phraseEnergia = analysis.nivelEnergia
+      phrasePaleta = analysis.paletaIdeal
+      phraseEmbedding = await embedText(buildPhraseDocument(analysis))
     }
 
     const cache = getCache()
     if (cache.size === 0) return res.json({ descripcionMood, recommendations: [] })
 
     const scores: { imageId: string; score: number }[] = []
-    for (const [filename, { embedding: imgEmbedding }] of cache) {
-      scores.push({ imageId: filename, score: cosineSimilarity(phraseEmbedding, imgEmbedding) })
+    for (const [filename, { embedding: imgEmbedding, analysis }] of cache) {
+      const cos = cosine(phraseEmbedding, imgEmbedding)
+      const score = rerankScore(cos, {
+        energiaA: phraseEnergia,
+        energiaB: analysis?.nivelEnergia,
+        paletaA: phrasePaleta,
+        paletaB: analysis?.paletaColores,
+      })
+      scores.push({ imageId: filename, score })
     }
 
     scores.sort((a, b) => b.score - a.score)

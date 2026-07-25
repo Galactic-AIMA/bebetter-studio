@@ -1,6 +1,13 @@
 import { Router } from 'express'
 import { v4 as uuidv4 } from 'uuid'
-import { extractMoodKeywords, extractMoodDescription, embedText } from '../services/geminiService'
+import {
+  extractMoodKeywords,
+  analyzePhraseStructured,
+  buildPhraseDocument,
+  embedText,
+  ImageAnalysis,
+} from '../services/geminiService'
+import { cosine, rerankScore } from '../utils/matching'
 import db from '../db'
 
 const router = Router()
@@ -157,36 +164,55 @@ router.post('/recommend', async (req, res) => {
   if (!imageFilename) return res.status(400).json({ error: 'imageFilename required' })
   const limit = Math.min(topN ?? 20, 200)
 
-  const imgRow = db.prepare(`SELECT embedding FROM images WHERE filename = ?`).get(imageFilename) as any
+  const imgRow = db.prepare(
+    `SELECT embedding, analysis_json FROM images WHERE filename = ?`
+  ).get(imageFilename) as any
   if (!imgRow?.embedding) return res.json({ recommendations: [] })
 
   const imgEmbedding = new Float32Array((imgRow.embedding as Buffer).buffer)
+  let imgAnalysis: ImageAnalysis | null = null
+  try { imgAnalysis = imgRow.analysis_json ? JSON.parse(imgRow.analysis_json) : null } catch (_) { /* ignore */ }
 
-  const phrases = db.prepare(`SELECT id, embedding FROM phrases WHERE embedding IS NOT NULL`).all() as any[]
-
-  function cosine(a: Float32Array, b: Float32Array): number {
-    let dot = 0, na = 0, nb = 0
-    for (let i = 0; i < a.length; i++) { dot += a[i]*b[i]; na += a[i]*a[i]; nb += b[i]*b[i] }
-    const d = Math.sqrt(na) * Math.sqrt(nb)
-    return d === 0 ? 0 : dot / d
-  }
+  const phrases = db.prepare(
+    `SELECT id, embedding, nivel_energia, paleta FROM phrases WHERE embedding IS NOT NULL`
+  ).all() as any[]
 
   const scores = phrases
-    .map((p) => ({ phraseId: p.id, score: cosine(imgEmbedding, new Float32Array((p.embedding as Buffer).buffer)) }))
+    .map((p) => {
+      const cos = cosine(imgEmbedding, new Float32Array((p.embedding as Buffer).buffer))
+      const score = rerankScore(cos, {
+        energiaA: imgAnalysis?.nivelEnergia,
+        energiaB: p.nivel_energia ?? null,
+        paletaA: imgAnalysis?.paletaColores,
+        paletaB: p.paleta ? JSON.parse(p.paleta) : null,
+      })
+      return { phraseId: p.id, score }
+    })
     .sort((a, b) => b.score - a.score)
     .slice(0, limit)
 
   res.json({ recommendations: scores })
 })
 
-// POST /api/phrases/embed-all — genera descripcionMood + embedding para frases sin vectorizar
-router.post('/embed-all', async (_req, res) => {
-  const phrases = db.prepare(`
-    SELECT id, text FROM phrases WHERE embedding IS NULL OR descripcion_mood IS NULL
-  `).all() as any[]
+// POST /api/phrases/embed-all — genera análisis conceptual + embedding de frases
+// Body opcional: { force: true } re-vectoriza TODAS (necesario tras cambiar el
+// documento de embedding); { only: string[] } restringe a ids concretos (subset).
+router.post('/embed-all', async (req, res) => {
+  const force: boolean = req.body?.force === true
+  const only: string[] | undefined = Array.isArray(req.body?.only) ? req.body.only : undefined
+
+  let query = `SELECT id, text FROM phrases`
+  if (only) {
+    const placeholders = only.map(() => '?').join(',')
+    query += ` WHERE id IN (${placeholders})`
+  } else if (!force) {
+    query += ` WHERE embedding IS NULL OR descripcion_mood IS NULL`
+  }
+  const phrases = (only ? db.prepare(query).all(...only) : db.prepare(query).all()) as any[]
 
   const update = db.prepare(`
-    UPDATE phrases SET descripcion_mood = @descripcion_mood, embedding = @embedding WHERE id = @id
+    UPDATE phrases SET descripcion_mood = @descripcion_mood, nivel_energia = @nivel_energia,
+      paleta = @paleta, embedding = @embedding WHERE id = @id
   `)
 
   let processed = 0
@@ -194,11 +220,13 @@ router.post('/embed-all', async (_req, res) => {
 
   for (const phrase of phrases) {
     try {
-      const descripcionMood = await extractMoodDescription(phrase.text)
-      const embedding = await embedText(descripcionMood)
+      const analysis = await analyzePhraseStructured(phrase.text)
+      const embedding = await embedText(buildPhraseDocument(analysis))
       update.run({
         id: phrase.id,
-        descripcion_mood: descripcionMood,
+        descripcion_mood: analysis.mood,
+        nivel_energia: analysis.nivelEnergia,
+        paleta: JSON.stringify(analysis.paletaIdeal),
         embedding: Buffer.from(embedding.buffer),
       })
       processed++

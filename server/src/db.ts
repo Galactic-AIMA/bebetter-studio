@@ -87,6 +87,9 @@ for (const sql of [
   `ALTER TABLE images ADD COLUMN embedding BLOB`,
   `ALTER TABLE phrases ADD COLUMN descripcion_mood TEXT`,
   `ALTER TABLE phrases ADD COLUMN embedding BLOB`,
+  // Re-rank estructurado del matching conceptual (2026-07-24)
+  `ALTER TABLE phrases ADD COLUMN nivel_energia INTEGER`,
+  `ALTER TABLE phrases ADD COLUMN paleta TEXT`,
 ]) {
   try { db.exec(sql) } catch (_) { /* columna ya existe */ }
 }
