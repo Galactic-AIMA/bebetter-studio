@@ -1,5 +1,6 @@
 import { Router } from 'express'
-import { readCadenceConfig, writeCadenceConfig } from '../services/sheetsService'
+import { readCadenceConfig, writeCadenceConfig, readQueueRows } from '../services/sheetsService'
+import { projectSchedule } from '../utils/schedule'
 import { logInfo, logError } from '../services/logService'
 
 const router = Router()
@@ -43,6 +44,25 @@ router.get('/', async (_req, res) => {
     res.json(cfg)
   } catch (err: any) {
     logError('system', 'Leer cadencia falló', err.message)
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// GET /api/cadence/schedule — proyecta cuándo se publicará cada aprobado de la
+// cola, según la cadencia guardada (el Sheet no guarda esa hora; se calcula).
+router.get('/schedule', async (_req, res) => {
+  try {
+    const cfg = await readCadenceConfig()
+    const rows = await readQueueRows()
+    const approved = rows
+      .filter(
+        (r) => String(r.status || '').trim() === 'approved' && !String(r.publishedAt || '').trim()
+      )
+      .sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')))
+    const items = projectSchedule(approved, cfg.times, cfg.timezone)
+    res.json({ times: cfg.times, timezone: cfg.timezone, count: approved.length, items })
+  } catch (err: any) {
+    logError('system', 'Proyectar cola falló', err.message)
     res.status(500).json({ error: err.message })
   }
 })

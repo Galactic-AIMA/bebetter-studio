@@ -40,6 +40,10 @@ data/logs.jsonl
 data/bebetter.db
 data/bebetter.db-shm
 data/bebetter.db-wal
+data/bebetter.db.bak-*
+
+# Backups de workflows n8n generados por los scripts de mantenimiento
+server/scripts/wf_pub_backup_*.json
 
 # Lockfile
 package-lock.json

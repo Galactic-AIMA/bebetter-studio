@@ -72,6 +72,20 @@ function rowToValues(row: QueueRow): (string | number)[] {
   })
 }
 
+/** Lee todas las filas de la pestaña "Cola" (sin el header). */
+export async function readQueueRows(): Promise<QueueRow[]> {
+  const sheets = getSheets()
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: requireSheetId(),
+    range: `${COLA_SHEET}!A2:L`,
+  })
+  return (res.data.values || []).map((r) => {
+    const o: Record<string, string> = {}
+    QUEUE_COLUMNS.forEach((c, i) => (o[c] = r[i] ?? ''))
+    return o as unknown as QueueRow
+  })
+}
+
 /** Agrega filas al final de la pestaña "Cola". */
 export async function appendQueueRows(rows: QueueRow[]): Promise<void> {
   if (rows.length === 0) return

@@ -1,6 +1,6 @@
-import { X, Clock, Check, AlertCircle } from 'lucide-react'
+import { X, Clock, Check, AlertCircle, CalendarClock } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { cadenceApi } from '../../api'
+import { cadenceApi, ScheduleResult, UpcomingItem } from '../../api'
 
 interface Props {
   onClose: () => void
@@ -24,6 +24,16 @@ function suggest(n: number): string[] {
 const hhmm = (h: number) => String(h).padStart(2, '0') + ':00'
 const hourOf = (t: string) => Number(t.split(':')[0])
 
+/** Etiqueta legible del día proyectado: "Hoy" / "Mañana" / "Vie 8". */
+function dayLabel(item: UpcomingItem, tz: string): string {
+  if (item.dayOffset === 0) return 'Hoy'
+  if (item.dayOffset === 1) return 'Mañana'
+  if (!item.etaIso) return ''
+  const d = new Date(item.etaIso)
+  const s = d.toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', timeZone: tz })
+  return s.charAt(0).toUpperCase() + s.slice(1)
+}
+
 export default function CadenceModal({ onClose }: Props) {
   const [times, setTimes] = useState<string[]>([])
   const [timezone, setTimezone] = useState('America/Bogota')
@@ -31,6 +41,17 @@ export default function CadenceModal({ onClose }: Props) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
+  const [schedule, setSchedule] = useState<ScheduleResult | null>(null)
+  const [loadingSchedule, setLoadingSchedule] = useState(true)
+
+  const loadSchedule = () => {
+    setLoadingSchedule(true)
+    cadenceApi
+      .schedule()
+      .then(setSchedule)
+      .catch(() => setSchedule(null))
+      .finally(() => setLoadingSchedule(false))
+  }
 
   useEffect(() => {
     cadenceApi
@@ -41,6 +62,7 @@ export default function CadenceModal({ onClose }: Props) {
       })
       .catch((e) => setError(e?.response?.data?.error || e.message))
       .finally(() => setLoading(false))
+    loadSchedule()
   }, [])
 
   const applyCount = (n: number) => {
@@ -69,6 +91,7 @@ export default function CadenceModal({ onClose }: Props) {
       const res = await cadenceApi.save(ordered)
       setTimes(res.times)
       setSaved(true)
+      loadSchedule() // la proyección depende de la cadencia recién guardada
     } catch (e: any) {
       setError(e?.response?.data?.error || e.message)
     } finally {
@@ -162,6 +185,66 @@ export default function CadenceModal({ onClose }: Props) {
                 {sorted.map(hhmm).join(' · ')}
                 {evenGap && <span className="text-bone-500"> — ~cada {evenGap}h</span>}
                 <span className="block text-[10px] mt-0.5 text-bone-700/80">{timezone}</span>
+              </div>
+
+              {/* Próximas publicaciones (proyección de la cola de aprobados) */}
+              <div className="border-t border-carbon-700 pt-4">
+                <div className="flex items-center gap-1.5 mb-2">
+                  <CalendarClock size={13} className="text-gold-500" />
+                  <label className="text-[11px] font-medium text-bone-500">Próximas publicaciones</label>
+                  {schedule && schedule.count > 0 && (
+                    <span className="text-[10px] text-bone-700">({schedule.count} en cola)</span>
+                  )}
+                </div>
+                {loadingSchedule ? (
+                  <p className="text-[11px] text-bone-700">Calculando…</p>
+                ) : !schedule || schedule.count === 0 ? (
+                  <p className="text-[11px] text-bone-700">
+                    No hay videos aprobados en la cola. Los que apruebes por Telegram aparecerán aquí
+                    con su hora estimada.
+                  </p>
+                ) : schedule.times.length === 0 ? (
+                  <p className="text-[11px] text-neon-red">
+                    Hay {schedule.count} aprobado(s) pero no hay cadencia configurada — no se
+                    publicarán hasta definir horas arriba.
+                  </p>
+                ) : (
+                  <ul className="flex flex-col gap-1.5">
+                    {schedule.items.map((it, i) => (
+                      <li
+                        key={it.id}
+                        className="flex items-center gap-2.5 bg-carbon-900/60 rounded-lg px-2.5 py-1.5 border border-carbon-700"
+                      >
+                        <span className="text-[10px] text-bone-700 tabular-nums w-4 shrink-0">
+                          {i + 1}
+                        </span>
+                        {it.thumbnailUrl ? (
+                          <img
+                            src={it.thumbnailUrl}
+                            alt=""
+                            className="w-7 h-10 object-cover rounded shrink-0 bg-carbon-700"
+                          />
+                        ) : (
+                          <div className="w-7 h-10 rounded shrink-0 bg-carbon-700" />
+                        )}
+                        <span className="text-[11px] text-bone-500 leading-snug line-clamp-2 flex-1 min-w-0">
+                          {it.phrase}
+                        </span>
+                        <span className="text-[11px] text-gold-500 tabular-nums text-right shrink-0 whitespace-nowrap">
+                          {it.time ? (
+                            <>
+                              {dayLabel(it, schedule.timezone)}
+                              <br />
+                              {it.time}
+                            </>
+                          ) : (
+                            '—'
+                          )}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
 
               {error && (

@@ -127,10 +127,28 @@ export interface CadenceConfig {
   timezone: string
 }
 
+export interface UpcomingItem {
+  id: string
+  phrase: string
+  thumbnailUrl?: string
+  createdAt: string
+  etaIso?: string
+  dayOffset?: number
+  time?: string
+}
+
+export interface ScheduleResult {
+  times: string[]
+  timezone: string
+  count: number
+  items: UpcomingItem[]
+}
+
 export const cadenceApi = {
   get: () => api.get<CadenceConfig>('/cadence').then((r) => r.data),
   save: (times: string[]) =>
     api.post<{ success: boolean; times: string[] }>('/cadence', { times }).then((r) => r.data),
+  schedule: () => api.get<ScheduleResult>('/cadence/schedule').then((r) => r.data),
 }
 
 export type LogLevel = 'info' | 'error'
