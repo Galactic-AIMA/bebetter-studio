@@ -5,9 +5,9 @@ import { HistoryItem } from '../../types'
 import HistoryCard from './HistoryCard'
 import HistoryModal from './HistoryModal'
 
-export default function HistoryPanel() {
+export default function HistoryPanel({ active }: { active: boolean }) {
   const [items, setItems] = useState<HistoryItem[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [onlyViral, setOnlyViral] = useState(false)
   const [selected, setSelected] = useState<HistoryItem | null>(null)
@@ -25,7 +25,10 @@ export default function HistoryPanel() {
     }
   }
 
-  useEffect(() => { load() }, [])
+  // Recarga cada vez que se abre la pestaña Historial (las pestañas usan `hidden`
+  // y no se desmontan, así que sin esto la lista quedaba con datos viejos tras
+  // generar/publicar un video).
+  useEffect(() => { if (active) load() }, [active])
 
   async function toggleViral(e: React.MouseEvent, item: HistoryItem) {
     e.stopPropagation()

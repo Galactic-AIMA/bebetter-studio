@@ -1,4 +1,4 @@
-import { Film, Image, HardDrive, Send, RotateCcw, ChevronDown, ScrollText, Clock } from 'lucide-react'
+import { Film, Image, HardDrive, Send, RotateCcw, ChevronDown, ScrollText, Clock, ListPlus } from 'lucide-react'
 import { useRef, useEffect, useState } from 'react'
 import { useVideoStore } from '../../store/videoStore'
 import { ContentMode } from '../../store/videoStore'
@@ -12,9 +12,10 @@ interface Props {
   toast: { state: 'loading' | 'success' | 'error'; message?: string } | null
   onUploadDrive: () => void
   onPublish: (env: 'test' | 'prod') => void
+  onQueue: () => void
 }
 
-export default function Header({ lastVideoId, lastImageId, isGenerating, toast, onUploadDrive, onPublish }: Props) {
+export default function Header({ lastVideoId, lastImageId, isGenerating, toast, onUploadDrive, onPublish, onQueue }: Props) {
   const { mode, setMode, reset } = useVideoStore()
   const [showEnvMenu, setShowEnvMenu] = useState(false)
   const [showLogs, setShowLogs] = useState(false)
@@ -97,8 +98,15 @@ export default function Header({ lastVideoId, lastImageId, isGenerating, toast, 
                 {showEnvMenu && (
                   <div className="absolute top-full right-0 mt-1 bg-carbon-700 border border-carbon-600 rounded-lg overflow-hidden z-20 min-w-max shadow-xl">
                     <button
-                      onClick={() => { onPublish('test'); setShowEnvMenu(false) }}
+                      onClick={() => { onQueue(); setShowEnvMenu(false) }}
                       className="flex items-center gap-2 w-full px-3 py-2 text-xs text-bone-500 hover:bg-carbon-600 transition-colors"
+                      title="Sube a R2, genera copies y encola en el Sheet; publica en la próxima franja de cadencia tras tu aprobación"
+                    >
+                      <ListPlus size={11} /> Enviar a la cola
+                    </button>
+                    <button
+                      onClick={() => { onPublish('test'); setShowEnvMenu(false) }}
+                      className="flex items-center gap-2 w-full px-3 py-2 text-xs text-bone-500 hover:bg-carbon-600 transition-colors border-t border-carbon-600"
                     >
                       <Send size={11} /> Publicar en test
                     </button>

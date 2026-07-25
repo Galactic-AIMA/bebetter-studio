@@ -94,6 +94,21 @@ export default function Editor() {
     }
   }
 
+  // Cola: sube a R2, genera copies (con hashtags) y escribe fila `pending` en el
+  // Sheet. Al aprobar por Telegram, [Sched] lo publica en la próxima franja de
+  // cadencia (vs. "Publicar", que publica ni bien apruebas).
+  const queueVideo = async () => {
+    if (!lastVideo) return
+    setToast({ state: 'loading', loadingText: 'Enviando a la cola...', successText: 'En la cola de aprobación' })
+    try {
+      await videosApi.queue(lastVideo.id)
+      setToast({ state: 'success', successText: 'En la cola de aprobación' })
+      setTimeout(() => setToast(null), 4000)
+    } catch (e: any) {
+      setToast({ state: 'error', message: e.response?.data?.error || e.message })
+    }
+  }
+
   return (
     <div className="flex flex-col h-screen bg-carbon-900 text-bone-500 overflow-hidden">
       <Header
@@ -103,6 +118,7 @@ export default function Editor() {
         toast={toast}
         onUploadDrive={uploadToDrive}
         onPublish={publish}
+        onQueue={queueVideo}
       />
 
       <div className="flex flex-1 overflow-hidden bg-carbon-700">
