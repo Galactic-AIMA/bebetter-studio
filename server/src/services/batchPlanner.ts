@@ -27,7 +27,18 @@ export interface PlannedPair {
   audioEnergia?: number
 }
 
-const SCORE_EPSILON = 0.02 // dentro de este margen de score, desempata el uso
+// Jitter al score para dar VARIEDAD entre "Proponer lote" sucesivos: mueve el
+// ranking en los matches cercanos sin destronar a uno claramente mejor.
+const SCORE_JITTER = 0.05
+
+function shuffle<T>(arr: T[]): T[] {
+  const a = [...arr]
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[a[i], a[j]] = [a[j], a[i]]
+  }
+  return a
+}
 
 interface PhraseRow {
   id: string
@@ -72,14 +83,20 @@ export function planBatch(driver: BatchDriver, count: number, allowRepeat: boole
   if (phrases.length === 0 || images.length === 0) return []
 
   const driverIsPhrases = driver === 'phrases'
-  // Etapa 1: los `count` del driver menos usados.
-  const drivers = (driverIsPhrases ? phrases : images).slice(0, count)
+  // Etapa 1: rotación con variedad — toma un POOL de las menos usadas y muestrea
+  // `count` al azar (así "Proponer lote" da combinaciones distintas sin dejar de
+  // priorizar las poco usadas). El driver se muestrea; el otro lado va completo.
+  const poolSize = Math.min(
+    (driverIsPhrases ? phrases : images).length,
+    Math.max(count + 12, count * 4)
+  )
+  const pList: PhraseRow[] = driverIsPhrases ? shuffle(phrases.slice(0, poolSize)).slice(0, count) : phrases
+  const iList: ImageRow[] = driverIsPhrases ? images : shuffle(images.slice(0, poolSize)).slice(0, count)
+  const targetCount = driverIsPhrases ? pList.length : iList.length
 
   // Etapa 2: candidatos frase×imagen con score; asignación global greedy.
-  type Cand = { pIdx: number; iIdx: number; score: number; imgUsage: number }
+  type Cand = { pIdx: number; iIdx: number; score: number; jitter: number }
   const cands: Cand[] = []
-  const pList = driverIsPhrases ? drivers as PhraseRow[] : phrases
-  const iList = driverIsPhrases ? images : drivers as ImageRow[]
   for (let pi = 0; pi < pList.length; pi++) {
     const p = pList[pi]
     const pPal = p.paleta ? safeJson<string[]>(p.paleta) : null
@@ -90,20 +107,17 @@ export function planBatch(driver: BatchDriver, count: number, allowRepeat: boole
         energiaA: p.nivel_energia, energiaB: imgAnalysis?.nivelEnergia,
         paletaA: pPal, paletaB: imgAnalysis?.paletaColores,
       })
-      cands.push({ pIdx: pi, iIdx: ii, score: s, imgUsage: img.usage_count })
+      cands.push({ pIdx: pi, iIdx: ii, score: s, jitter: s + Math.random() * SCORE_JITTER })
     }
   }
 
-  // Orden: score desc; dentro de ε, la imagen menos usada primero.
-  cands.sort((a, b) => {
-    if (Math.abs(a.score - b.score) > SCORE_EPSILON) return b.score - a.score
-    return a.imgUsage - b.imgUsage
-  })
+  // Orden por score CON jitter: los matches cercanos rotan entre propuestas; un
+  // match claramente mejor sigue arriba.
+  cands.sort((a, b) => b.jitter - a.jitter)
 
   // Greedy global: cada driver 1 vez; imágenes únicas salvo allowRepeat.
   const pairsByDriver = new Map<number, Cand>()
   const usedImg = new Set<number>()
-  const targetCount = drivers.length
   for (const c of cands) {
     const dIdx = driverIsPhrases ? c.pIdx : c.iIdx
     const imgKey = driverIsPhrases ? c.iIdx : c.pIdx

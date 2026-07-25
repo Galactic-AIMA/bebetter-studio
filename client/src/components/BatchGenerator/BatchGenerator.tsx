@@ -91,6 +91,8 @@ export default function BatchGenerator() {
   const [planning, setPlanning] = useState(false)
   const [planError, setPlanError] = useState<string | null>(null)
   const [picker, setPicker] = useState<number | null>(null) // índice del par que edita la imagen a mano
+  const [pickerImages, setPickerImages] = useState<ImageItem[]>([])
+  const [pickerLoading, setPickerLoading] = useState(false)
 
   const [uploadToDrive, setUploadToDrive] = useState(false)
   const [publishToN8n, setPublishToN8n] = useState(false)
@@ -161,8 +163,13 @@ export default function BatchGenerator() {
     try {
       const { recommendations } = await imagesApi.recommend(pair.phraseId, pair.phraseText, images.length)
       const usedElsewhere = new Set(plannedPairs.filter((_, i) => i !== idx).map((p) => p.imageId))
-      const next = recommendations.find((r) => r.imageId !== pair.imageId && !usedElsewhere.has(r.imageId))
-        || recommendations.find((r) => r.imageId !== pair.imageId)
+      // Al azar entre las 10 mejores no usadas → variedad real (no ping-pong entre 2).
+      const candidates = recommendations
+        .filter((r) => r.imageId !== pair.imageId && !usedElsewhere.has(r.imageId))
+        .slice(0, 10)
+      const next = candidates.length
+        ? candidates[Math.floor(Math.random() * candidates.length)]
+        : recommendations.find((r) => r.imageId !== pair.imageId)
       if (!next) return
       const img = imageByName(next.imageId)
       setPlannedPairs((prev) => prev.map((p, i) =>
@@ -173,6 +180,26 @@ export default function BatchGenerator() {
 
   const excludePair = (idx: number) =>
     setPlannedPairs((prev) => prev.filter((_, i) => i !== idx))
+
+  // Abre el picker mostrando las imágenes ORDENADAS por compatibilidad con la
+  // frase del par (no las 307 en desorden). Cae al banco completo si falla.
+  const openPicker = async (idx: number) => {
+    setPicker(idx)
+    setPickerLoading(true)
+    setPickerImages([])
+    const pair = plannedPairs[idx]
+    try {
+      const { recommendations } = await imagesApi.recommend(pair.phraseId, pair.phraseText, images.length)
+      const ranked = recommendations
+        .map((r) => imageByName(r.imageId))
+        .filter((im): im is ImageItem => !!im)
+      setPickerImages(ranked.length ? ranked : images)
+    } catch {
+      setPickerImages(images)
+    } finally {
+      setPickerLoading(false)
+    }
+  }
 
   const setPairImage = (idx: number, img: ImageItem) => {
     setPlannedPairs((prev) => prev.map((p, i) =>
@@ -475,7 +502,7 @@ export default function BatchGenerator() {
                     </div>
                     <div className="flex items-center gap-0.5 shrink-0">
                       <button onClick={() => rerollPair(idx)} title="Re-rodar imagen" className="p-1 rounded text-bone-700 hover:text-gold-500"><Shuffle size={13} /></button>
-                      <button onClick={() => setPicker(idx)} title="Cambiar imagen a mano" className="p-1 rounded text-bone-700 hover:text-gold-500"><Pencil size={13} /></button>
+                      <button onClick={() => openPicker(idx)} title="Cambiar imagen a mano" className="p-1 rounded text-bone-700 hover:text-gold-500"><Pencil size={13} /></button>
                       <button onClick={() => excludePair(idx)} title="Excluir del lote" className="p-1 rounded text-bone-700 hover:text-neon-red"><Trash2 size={13} /></button>
                     </div>
                   </div>
@@ -748,22 +775,28 @@ export default function BatchGenerator() {
           <div className="relative w-full max-w-lg bg-carbon-800 rounded-xl overflow-hidden shadow-2xl flex flex-col max-h-[80vh]">
             <div className="flex items-center gap-2.5 px-4 py-3 border-b border-carbon-700 shrink-0">
               <h2 className="text-sm font-semibold text-bone-500">Elegir imagen</h2>
+              <span className="text-[11px] text-bone-700">ordenadas por compatibilidad</span>
               <button onClick={() => setPicker(null)} className="ml-auto p-1.5 rounded-lg bg-carbon-700/80 text-bone-700 hover:text-bone-500"><X size={14} /></button>
             </div>
-            <div className="overflow-y-auto p-3 grid grid-cols-4 gap-1.5">
-              {images.map((img) => (
-                <button
-                  key={img.id}
-                  onClick={() => setPairImage(picker, img)}
-                  className="relative aspect-[9/16] overflow-hidden rounded border-2 border-transparent hover:border-gold-500 transition-all"
-                >
-                  <img src={img.url} alt={img.filename} className="w-full h-full object-cover" />
-                  {(img.usageCount ?? 0) > 0 && (
-                    <span className="absolute top-0.5 right-0.5 text-[9px] bg-carbon-900/80 text-bone-700 rounded px-1">×{img.usageCount}</span>
-                  )}
-                </button>
-              ))}
-            </div>
+            {pickerLoading ? (
+              <p className="p-4 text-xs text-bone-700">Buscando compatibles…</p>
+            ) : (
+              <div className="overflow-y-auto p-3 grid grid-cols-4 gap-1.5">
+                {pickerImages.map((img) => (
+                  <button
+                    key={img.id}
+                    onClick={() => setPairImage(picker, img)}
+                    style={{ aspectRatio: '9 / 16' }}
+                    className="relative w-full overflow-hidden rounded border-2 border-transparent hover:border-gold-500 transition-all"
+                  >
+                    <img src={img.url} alt={img.filename} className="absolute inset-0 w-full h-full object-cover" />
+                    {(img.usageCount ?? 0) > 0 && (
+                      <span className="absolute top-0.5 right-0.5 text-[9px] bg-carbon-900/80 text-bone-700 rounded px-1">×{img.usageCount}</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
