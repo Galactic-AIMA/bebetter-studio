@@ -170,6 +170,29 @@ export const cadenceApi = {
   schedule: () => api.get<ScheduleResult>('/cadence/schedule').then((r) => r.data),
 }
 
+export interface BatchPair {
+  phraseId: string
+  phraseText: string
+  author?: string
+  imageId: string
+  imageUrl: string
+  score: number
+  audioTrack?: string
+  audioMood?: string
+  audioEnergia?: number
+}
+
+export const batchApi = {
+  plan: (driver: 'phrases' | 'images', count: number, allowRepeat = false) =>
+    api
+      .post<{ pairs: BatchPair[]; requested: number; produced: number }>('/batch/plan', {
+        driver,
+        count,
+        allowRepeat,
+      })
+      .then((r) => r.data),
+}
+
 export type LogLevel = 'info' | 'error'
 export type LogCategory = 'generate' | 'drive' | 'publish' | 's3' | 'system'
 export interface LogEntry {

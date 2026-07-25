@@ -1,5 +1,5 @@
 import db from '../db'
-import { getAllAudioMeta } from './audioMetadata'
+import { getAllAudioMeta, AudioMeta } from './audioMetadata'
 
 /**
  * Emparejamiento pista de audio ↔ frase por energía + mood (sin embeddings).
@@ -34,24 +34,21 @@ export function scoreAudio(
 }
 
 /**
- * Elige la mejor pista para una frase. Solo considera pistas etiquetadas (con
- * energia y mood). Empate dentro de ε → la menos usada. Devuelve null si no hay
- * pistas etiquetadas o la frase no existe.
+ * Elige la mejor pista de una lista ya cargada, para una frase (energía + mood).
+ * Solo considera pistas etiquetadas. Empate dentro de ε → la menos usada.
+ * Reutilizable por el auto-pick individual y por el batchPlanner (una sola carga
+ * de metadata para todo el lote).
  */
-export function pickAudioForPhrase(phraseId: string): AudioCandidate | null {
-  const p = db.prepare(
-    `SELECT nivel_energia, mood_category FROM phrases WHERE id = ?`
-  ).get(phraseId) as { nivel_energia: number | null; mood_category: string | null } | undefined
-  if (!p) return null
-
-  const meta = [...getAllAudioMeta().values()].filter(
-    (m) => m.energia !== null && m.moodCategory
-  )
-  if (meta.length === 0) return null
-
-  const cands: AudioCandidate[] = meta.map((m) => ({
+export function bestAudio(
+  meta: AudioMeta[],
+  phraseEnergia: number | null,
+  phraseMood: string | null
+): AudioCandidate | null {
+  const tagged = meta.filter((m) => m.energia !== null && m.moodCategory)
+  if (tagged.length === 0) return null
+  const cands: AudioCandidate[] = tagged.map((m) => ({
     filename: m.filename,
-    score: scoreAudio(p.nivel_energia, p.mood_category, m.energia, m.moodCategory),
+    score: scoreAudio(phraseEnergia, phraseMood, m.energia, m.moodCategory),
     energia: m.energia as number,
     moodCategory: m.moodCategory,
     usageCount: m.usageCount,
@@ -61,4 +58,16 @@ export function pickAudioForPhrase(phraseId: string): AudioCandidate | null {
     return a.usageCount - b.usageCount
   })
   return cands[0]
+}
+
+/**
+ * Elige la mejor pista para una frase (por id). Devuelve null si no hay pistas
+ * etiquetadas o la frase no existe.
+ */
+export function pickAudioForPhrase(phraseId: string): AudioCandidate | null {
+  const p = db.prepare(
+    `SELECT nivel_energia, mood_category FROM phrases WHERE id = ?`
+  ).get(phraseId) as { nivel_energia: number | null; mood_category: string | null } | undefined
+  if (!p) return null
+  return bestAudio([...getAllAudioMeta().values()], p.nivel_energia, p.mood_category)
 }
