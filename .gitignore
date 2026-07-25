@@ -54,3 +54,9 @@ package-lock.json
 *.log
 .DS_Store
 Thumbs.db
+server/scripts/add-facebook-reels.py
+server/scripts/enrich-notifications.py
+server/scripts/fb-only-test.py
+server/scripts/fix-ig-dup-and-hashtags.py
+server/scripts/fix-preview-gate-wiring.py
+server/scripts/wf_pub_MODIFIED.json
