@@ -197,9 +197,10 @@ export async function generateVideo(
     )
   }
 
-  const fadeIn = transition !== 'none'
-    ? `,fade=t=in:st=0:d=${transitionDuration}:color=black`
-    : ''
+  // Sin fade-desde-negro en la apertura: la imagen es visible desde el frame 0
+  // para que la grilla de Shorts de YouTube (que toma un frame del video, no la
+  // miniatura personalizada) no capture un frame negro. El texto puede seguir
+  // entrando con su propio efecto (cfg.text.effect). Mantenemos el fade-out final.
   const fadeOut = transition !== 'none'
     ? `,fade=t=out:st=${duration - transitionDuration}:d=${transitionDuration}:color=black`
     : ''
@@ -209,7 +210,6 @@ export async function generateVideo(
   const vfilter =
     `scale=${width}:${height}:force_original_aspect_ratio=increase,` +
     `crop=${width}:${height}` +
-    fadeIn +
     fadeOut +
     grainFilter +
     `,${drawTextFilters.join(',')}`
@@ -295,8 +295,8 @@ function probeDuration(videoPath: string): Promise<number> {
   })
 }
 
-// Extrae un frame como miniatura (JPG). Toma el segundo 5 —donde ya no hay
-// efectos de entrada— y cae al punto medio si el video es más corto.
+// Extrae un frame como miniatura (JPG). Toma el punto medio del video (acotado
+// a 5s), que siempre queda fuera de los fades de entrada/salida.
 export async function extractThumbnail(
   videoPath: string,
   outputName: string
@@ -308,7 +308,10 @@ export async function extractThumbnail(
   const outputPath = path.join(outputDir, filename)
 
   const duration = await probeDuration(videoPath)
-  const t = duration >= 6 ? 5 : Math.max(0.1, duration / 2)
+  // Punto medio acotado a 5s: siempre queda fuera de los fades (entrada/salida),
+  // así la miniatura nunca cae en una zona oscura (antes, para un video de 6s,
+  // el segundo 5 coincidía justo con el inicio del fade-out).
+  const t = Math.max(0.1, Math.min(5, duration / 2))
 
   return new Promise((resolve, reject) => {
     ffmpeg(videoPath)
