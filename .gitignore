@@ -43,7 +43,8 @@ data/bebetter.db-wal
 data/bebetter.db.bak-*
 
 # Backups de workflows n8n generados por los scripts de mantenimiento
-server/scripts/wf_pub_backup_*.json
+server/scripts/wf_*_backup_*.json
+server/scripts/__pycache__/
 
 # Lockfile
 package-lock.json
@@ -60,3 +61,10 @@ server/scripts/fb-only-test.py
 server/scripts/fix-ig-dup-and-hashtags.py
 server/scripts/fix-preview-gate-wiring.py
 server/scripts/wf_pub_MODIFIED.json
+# Scripts de mutación de n8n del agente + copies (se corren con --apply)
+server/scripts/create-agent-workflow.py
+server/scripts/fix-agent-proyectar.py
+server/scripts/rebot-bebetter.py
+server/scripts/update-copy-prompts.py
+server/scripts/backup-copy-prompts.py
+server/scripts/copy_prompts_backup.txt

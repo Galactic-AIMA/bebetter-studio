@@ -17,7 +17,6 @@ import logsRouter from './routes/logs'
 import cadenceRouter from './routes/cadence'
 import batchRouter from './routes/batch'
 import aiImagesRouter from './routes/aiImages'
-import { syncWithGalleryDl } from './services/galleryDlService'
 import { syncBoardImages } from './services/pinterestService'
 import { runCleanup } from './services/cleanupService'
 import { logInfo } from './services/logService'
@@ -61,11 +60,8 @@ app.listen(config.port, () => {
   cron.schedule('0 */6 * * *', () => { runCleanup() })
   console.log('Cleanup: activo (cada 6 horas, archivos >24h)')
 
-  if (config.galleryDl.boardUrl) {
-    cron.schedule('0 * * * *', () => { syncWithGalleryDl() })
-    console.log('Pinterest sync (gallery-dl): activo (cada hora)')
-  }
-
+  // gallery-dl retirado (2026-07-26): duplicaba imágenes que la Pinterest API ya
+  // baja. La sincronización queda solo por la Pinterest API v5 (abajo).
   if (config.pinterest.appId && config.pinterest.boardId) {
     console.log('Pinterest API: sincronizando al arranque...')
     syncBoardImages().then((r) => {

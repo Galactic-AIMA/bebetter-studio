@@ -6,6 +6,7 @@ import { ImageItem } from '../../types'
 interface Props {
   phrase: string
   phraseId: string | null
+  textY: number  // posición vertical del texto en el editor (0–100)
   onClose: () => void
   onGenerated: (img: ImageItem) => void
 }
@@ -18,7 +19,7 @@ const ASPECTS: { value: string; label: string }[] = [
 
 const hasPhrase = (p: string) => p && p !== 'Tu frase aquí...' && p.length >= 10
 
-export default function AIImageModal({ phrase, phraseId, onClose, onGenerated }: Props) {
+export default function AIImageModal({ phrase, phraseId, textY, onClose, onGenerated }: Props) {
   const [prompt, setPrompt] = useState('')
   const [aspect, setAspect] = useState('9:16')
   const [loadingPrompt, setLoadingPrompt] = useState(false)
@@ -30,7 +31,7 @@ export default function AIImageModal({ phrase, phraseId, onClose, onGenerated }:
     setLoadingPrompt(true)
     setError(null)
     aiImagesApi
-      .proposePrompt(phraseId ?? undefined, phraseId ? undefined : phrase)
+      .proposePrompt(phraseId ?? undefined, phraseId ? undefined : phrase, textY)
       .then((r) => setPrompt(r.prompt))
       .catch((e) => setError(e?.response?.data?.error || e.message))
       .finally(() => setLoadingPrompt(false))

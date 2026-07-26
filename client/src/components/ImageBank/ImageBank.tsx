@@ -27,7 +27,7 @@ export default function ImageBank() {
   const [recommendPhrase, setRecommendPhrase] = useState<string>('')
   const [showAIModal, setShowAIModal] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
-  const { config, setConfig, setSelectedImage, setCompatiblePhraseIds, selectedPhraseId, analyzingImages: analyzing, setAnalyzingImages: setAnalyzing, syncingPinterest: syncing, setSyncingPinterest: setSyncing } = useVideoStore()
+  const { config, setConfig, setSelectedImage, setCompatiblePhraseIds, selectedPhraseId, analyzingImages: analyzing, setAnalyzingImages: setAnalyzing } = useVideoStore()
 
   const load = async () => {
     setLoading(true)
@@ -75,16 +75,6 @@ export default function ImageBank() {
     const timer = setTimeout(() => fetchRecommendations(phrase, selectedPhraseId ?? null), 600)
     return () => clearTimeout(timer)
   }, [phrase, selectedPhraseId, fetchRecommendations])
-
-  const handlePinterestSync = async () => {
-    setSyncing(true)
-    try {
-      await pinterestApi.sync()
-      await Promise.all([load(), loadPinterestStatus()])
-    } finally {
-      setSyncing(false)
-    }
-  }
 
   const handlePinterestApiSync = async () => {
     setSyncingApi(true)
@@ -188,11 +178,12 @@ export default function ImageBank() {
         <AIImageModal
           phrase={phrase}
           phraseId={selectedPhraseId ?? null}
+          textY={config.text.position.y}
           onClose={() => setShowAIModal(false)}
           onGenerated={handleAIGenerated}
         />
       )}
-      {(pinterest?.galleryDlConfigured || pinterest?.pinterestApiConfigured) && (
+      {pinterest?.pinterestApiConfigured && (
         <div className="flex flex-col gap-1.5 text-xs bg-carbon-700/50 rounded-lg px-3 py-2 border border-carbon-600/50">
           <div className="flex items-center justify-between">
             <span className="flex items-center gap-1.5 text-bone-700">
@@ -203,29 +194,14 @@ export default function ImageBank() {
             </span>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            {pinterest.galleryDlConfigured && (
-              <button
-                onClick={handlePinterestSync}
-                disabled={syncing || syncingApi}
-                className="flex items-center gap-1 text-bone-700 hover:text-bone-500 transition-colors disabled:opacity-50"
-              >
-                <RefreshCw size={11} className={syncing ? 'animate-spin' : ''} />
-                {syncing ? 'Sincronizando...' : 'gallery-dl'}
-              </button>
-            )}
-            {pinterest.galleryDlConfigured && pinterest.pinterestApiConfigured && (
-              <span className="text-carbon-600">·</span>
-            )}
-            {pinterest.pinterestApiConfigured && (
-              <button
-                onClick={handlePinterestApiSync}
-                disabled={syncing || syncingApi}
-                className="flex items-center gap-1 text-gold-500 hover:text-gold-400 transition-colors disabled:opacity-50"
-              >
-                <RefreshCw size={11} className={syncingApi ? 'animate-spin' : ''} />
-                {syncingApi ? 'Sincronizando...' : 'Pinterest API'}
-              </button>
-            )}
+            <button
+              onClick={handlePinterestApiSync}
+              disabled={syncingApi}
+              className="flex items-center gap-1 text-gold-500 hover:text-gold-400 transition-colors disabled:opacity-50"
+            >
+              <RefreshCw size={11} className={syncingApi ? 'animate-spin' : ''} />
+              {syncingApi ? 'Sincronizando...' : 'Pinterest API'}
+            </button>
           </div>
         </div>
       )}

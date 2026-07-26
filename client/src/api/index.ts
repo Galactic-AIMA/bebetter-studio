@@ -24,9 +24,10 @@ export const imagesApi = {
 }
 
 export const aiImagesApi = {
-  // Propone un prompt de marca editable a partir de la frase activa
-  proposePrompt: (phraseId?: string, phrase?: string) =>
-    api.post<{ prompt: string; analysis: unknown }>('/ai-images/prompt', { phraseId, phrase }).then((r) => r.data),
+  // Propone un prompt de marca editable a partir de la frase activa.
+  // textY (0–100) = posición vertical del texto en el editor, para reservar su franja.
+  proposePrompt: (phraseId?: string, phrase?: string, textY?: number) =>
+    api.post<{ prompt: string; analysis: unknown }>('/ai-images/prompt', { phraseId, phrase, textY }).then((r) => r.data),
   // Genera la imagen con KIE, la guarda en el banco y la devuelve (tarda ~40-100s)
   generate: (prompt: string, aspectRatio?: string) =>
     api.post<{ image: ImageItem }>('/ai-images/generate', { prompt, aspectRatio }).then((r) => r.data.image),
