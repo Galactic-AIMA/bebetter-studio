@@ -5,7 +5,7 @@ import { TransitionType, TextAlign, TextEffect, VisualStyle } from '../../types'
 import { PRESETS } from '../../presets'
 import { usePresets, PresetConfig } from '../../hooks/usePresets'
 import { FONT_FAMILIES, FontStyleKey, parseFontKey } from '../../config/fonts'
-import { audioApi, AudioTrack } from '../../api'
+import { audioApi, AudioTrack, AutoPick } from '../../api'
 
 const VISUAL_STYLES = Object.entries(PRESETS) as [VisualStyle, (typeof PRESETS)[VisualStyle]][]
 
@@ -55,13 +55,15 @@ function SectionPanel({
 }
 
 export default function VideoEditor() {
-  const { config, mode, setText, setConfig, setWatermark, setTextEffect, applyPreset, applyConfig } = useVideoStore()
+  const { config, mode, selectedPhraseId, setText, setConfig, setWatermark, setTextEffect, applyPreset, applyConfig } = useVideoStore()
   const { text, duration, transition, transitionDuration, watermark, textEffect, visualStyle, grain, audioTrack } = config
   const { presets, savePreset, removePreset } = usePresets()
   const [savingName, setSavingName] = useState<string | null>(null)
   const [open, setOpen] = useState<Set<string>>(new Set(['frase', 'tipografia', 'video']))
   const [audioTracks, setAudioTracks] = useState<AudioTrack[]>([])
   const [audioPlaying, setAudioPlaying] = useState(false)
+  const [autoPick, setAutoPick] = useState<AutoPick | null>(null)
+  const [autoPickLoading, setAutoPickLoading] = useState(false)
   const audioRef = useRef<HTMLAudioElement>(null)
   const lastStrokeWidthRef = useRef(2)
 
@@ -69,12 +71,25 @@ export default function VideoEditor() {
     audioApi.list().then(setAudioTracks).catch(() => setAudioTracks([]))
   }, [])
 
-  // Al cambiar de pista, detener cualquier preview en curso.
+  // Preview del "Auto (por mood)": muestra qué pista se elegiría ANTES de generar.
+  useEffect(() => {
+    if (audioTrack !== 'auto' || !selectedPhraseId) { setAutoPick(null); return }
+    setAutoPickLoading(true)
+    audioApi.pick(selectedPhraseId)
+      .then(setAutoPick)
+      .catch(() => setAutoPick(null))
+      .finally(() => setAutoPickLoading(false))
+  }, [audioTrack, selectedPhraseId])
+
+  // Archivo a reproducir en el preview: la pista fija, o la auto-elegida en modo "auto".
+  const previewFile = audioTrack === 'auto' ? autoPick?.filename : (audioTrack && audioTrack !== 'auto' ? audioTrack : undefined)
+
+  // Al cambiar de pista (o de auto-elegida), detener cualquier preview en curso.
   useEffect(() => {
     const el = audioRef.current
     if (el) { el.pause(); el.currentTime = 0 }
     setAudioPlaying(false)
-  }, [audioTrack])
+  }, [previewFile])
 
   function toggleAudioPreview() {
     const el = audioRef.current
@@ -461,8 +476,8 @@ export default function VideoEditor() {
               <button
                 type="button"
                 onClick={toggleAudioPreview}
-                disabled={!audioTrack || audioTrack === 'auto'}
-                title={audioTrack === 'auto' ? 'La pista se elige al generar (por mood)' : audioTrack ? (audioPlaying ? 'Pausar' : 'Escuchar pista') : 'Selecciona una pista'}
+                disabled={!previewFile}
+                title={previewFile ? (audioPlaying ? 'Pausar' : 'Escuchar pista') : 'Selecciona una pista o frase'}
                 className="shrink-0 p-2 rounded-lg bg-carbon-700 border border-carbon-600 text-bone-500 hover:text-gold-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
                 {audioPlaying ? <Pause size={14} /> : <Play size={14} />}
@@ -470,15 +485,27 @@ export default function VideoEditor() {
             </div>
             <audio
               ref={audioRef}
-              src={audioTrack && audioTrack !== 'auto' ? `/api/audio/file/${encodeURIComponent(audioTrack)}` : undefined}
+              src={previewFile ? `/api/audio/file/${encodeURIComponent(previewFile)}` : undefined}
               onPlay={() => setAudioPlaying(true)}
               onPause={() => setAudioPlaying(false)}
               onEnded={() => setAudioPlaying(false)}
             />
             {audioTrack === 'auto' && (
-              <p className="text-[10px] text-gold-500">
-                Se elige la pista que mejor encaja con el mood de la frase al generar.
-              </p>
+              !selectedPhraseId ? (
+                <p className="text-[10px] text-bone-700">
+                  Selecciona una frase del banco para ver y oír la pista que se elegirá.
+                </p>
+              ) : autoPickLoading ? (
+                <p className="text-[10px] text-bone-700">Buscando la mejor pista…</p>
+              ) : autoPick ? (
+                <p className="text-[10px] text-gold-500">
+                  Elegida: <span className="font-medium">{autoPick.name}</span> · {autoPick.moodCategory ?? 'sin mood'} · energía {autoPick.energia} — escúchala con ▶ antes de generar.
+                </p>
+              ) : (
+                <p className="text-[10px] text-bone-700">
+                  No hay pistas etiquetadas para emparejar. Etiqueta pistas en el panel 🎵.
+                </p>
+              )
             )}
             {audioTracks.length === 0 && (
               <p className="text-[10px] text-bone-700">

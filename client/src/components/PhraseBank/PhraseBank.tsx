@@ -65,7 +65,7 @@ export default function PhraseBank() {
   const [analyzeResult, setAnalyzeResult] = useState<string | null>(null)
   const dragId = useRef<string | null>(null)
   const dragOverId = useRef<string | null>(null)
-  const { setText, setConfig, setSelectedPhraseId, selectedImageTags, compatiblePhraseIds, analyzingPhrases: analyzing, setAnalyzingPhrases: setAnalyzing } = useVideoStore()
+  const { setText, setConfig, setSelectedPhraseId, compatiblePhraseIds } = useVideoStore()
 
   const load = async () => {
     const data = await phrasesApi.list()
@@ -73,25 +73,6 @@ export default function PhraseBank() {
   }
 
   const [embedding, setEmbedding] = useState(false)
-
-  const handleAnalyzeAll = async () => {
-    setAnalyzing(true)
-    setAnalyzeResult(null)
-    try {
-      const { processed, skipped, errors } = await phrasesApi.analyzeAll()
-      await load()
-      if (errors.length > 0) {
-        setAnalyzeResult(`Error: ${errors[0]}`)
-      } else {
-        setAnalyzeResult(`${processed} analizadas, ${skipped} ya tenían keywords`)
-        setTimeout(() => setAnalyzeResult(null), 5000)
-      }
-    } catch {
-      setAnalyzeResult('Error al analizar')
-    } finally {
-      setAnalyzing(false)
-    }
-  }
 
   const handleEmbedAll = async () => {
     setEmbedding(true)
@@ -112,14 +93,9 @@ export default function PhraseBank() {
   }
 
   function scorePhrase(phrase: Phrase): number {
-    if (compatiblePhraseIds.length > 0) {
-      const idx = compatiblePhraseIds.indexOf(phrase.id)
-      return idx === -1 ? 0 : (compatiblePhraseIds.length - idx) / compatiblePhraseIds.length
-    }
-    // Fallback al sistema anterior si no hay embeddings
-    if (!selectedImageTags.length || !phrase.moodKeywords?.length) return 0
-    const matches = selectedImageTags.filter((t) => phrase.moodKeywords!.includes(t)).length
-    return matches / phrase.moodKeywords.length
+    if (compatiblePhraseIds.length === 0) return 0
+    const idx = compatiblePhraseIds.indexOf(phrase.id)
+    return idx === -1 ? 0 : (compatiblePhraseIds.length - idx) / compatiblePhraseIds.length
   }
 
   useEffect(() => { load() }, [])
@@ -333,23 +309,6 @@ export default function PhraseBank() {
         </div>
       </div>
 
-      {/* Botón analizar frases */}
-      <button
-        onClick={handleAnalyzeAll}
-        disabled={analyzing}
-        className="flex items-center justify-between gap-2 text-xs bg-carbon-700/50 hover:bg-carbon-700 border border-carbon-600/50 rounded-lg px-3 py-2 text-bone-700 hover:text-bone-500 transition-colors disabled:opacity-50"
-      >
-        <span className="flex items-center gap-1.5">
-          <Sparkles size={11} className={analyzing ? 'animate-pulse text-gold-500' : ''} />
-          {analyzing ? 'Analizando... (puede tardar varios minutos)' : 'Analizar frases con IA'}
-        </span>
-        {phrases.filter((p) => !p.moodKeywords?.length).length > 0 && !analyzing && (
-          <span className="text-[10px] bg-gold-500/10 text-gold-500 px-1.5 py-0.5 rounded">
-            {phrases.filter((p) => !p.moodKeywords?.length).length} sin analizar
-          </span>
-        )}
-      </button>
-
       {/* Botón embeddings semánticos */}
       <button
         onClick={handleEmbedAll}
@@ -386,7 +345,7 @@ export default function PhraseBank() {
       <div className="flex flex-col gap-2">
         {(() => {
           const filtered = phrases.filter((p) => !hideUsed || (p.usageCount ?? 0) === 0)
-          const hasRecs = selectedImageTags.length > 0
+          const hasRecs = compatiblePhraseIds.length > 0
           const sorted = hasRecs
             ? [
                 ...filtered.filter((p) => scorePhrase(p) > 0).sort((a, b) => scorePhrase(b) - scorePhrase(a)),

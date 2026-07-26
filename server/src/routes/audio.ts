@@ -6,6 +6,7 @@ import { execFile } from 'child_process'
 import { config } from '../config'
 import { getAllAudioMeta, upsertAudioMeta } from '../services/audioMetadata'
 import { analyzeAudioStructured, MOOD_CATEGORIES } from '../services/geminiService'
+import { pickAudioForPhrase } from '../services/audioMatching'
 
 const router = Router()
 
@@ -45,6 +46,24 @@ router.get('/', (_req, res) => {
     }
   })
   res.json(tracks)
+})
+
+// GET /api/audio/pick?phraseId=X — pista que elegiría el auto-pick para esa frase.
+// Sirve para PREVISUALIZAR el "Auto (por mood)" antes de generar y poder verificar.
+router.get('/pick', (req, res) => {
+  const phraseId = String(req.query.phraseId || '')
+  if (!phraseId) return res.status(400).json({ error: 'phraseId requerido' })
+  const pick = pickAudioForPhrase(phraseId)
+  if (!pick) return res.json({ pick: null })
+  res.json({
+    pick: {
+      filename: pick.filename,
+      name: path.basename(pick.filename, path.extname(pick.filename)).replace(/[-_]/g, ' '),
+      moodCategory: pick.moodCategory,
+      energia: pick.energia,
+      score: pick.score,
+    },
+  })
 })
 
 // GET /api/audio/file/:filename — sirve una pista de audio (para preview en el UI)

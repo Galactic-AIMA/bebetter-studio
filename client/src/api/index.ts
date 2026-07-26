@@ -43,8 +43,6 @@ export const phrasesApi = {
   update: (id: string, data: Partial<Phrase>) =>
     api.put<Phrase>(`/phrases/${id}`, data).then((r) => r.data),
   remove: (id: string) => api.delete(`/phrases/${id}`),
-  analyzeAll: () =>
-    api.post<{ processed: number; skipped: number; errors: string[] }>('/phrases/analyze-all').then((r) => r.data),
   embedAll: () =>
     api.post<{ processed: number; total: number; errors: string[] }>('/phrases/embed-all').then((r) => r.data),
   recommendForImage: (imageFilename: string, topN?: number) =>
@@ -124,8 +122,19 @@ export interface AudioProposal {
   descripcion: string
 }
 
+export interface AutoPick {
+  filename: string
+  name: string
+  moodCategory: string | null
+  energia: number
+  score: number
+}
+
 export const audioApi = {
   list: () => api.get<AudioTrack[]>('/audio').then((r) => r.data),
+  // Pista que elegiría el auto-pick para una frase (preview antes de generar)
+  pick: (phraseId: string) =>
+    api.get<{ pick: AutoPick | null }>('/audio/pick', { params: { phraseId } }).then((r) => r.data.pick),
   analyze: (filenames?: string[]) =>
     api
       .post<{ proposals: AudioProposal[]; errors: string[] }>('/audio/analyze', { filenames })

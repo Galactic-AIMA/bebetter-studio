@@ -1,7 +1,6 @@
 import { Router } from 'express'
 import { v4 as uuidv4 } from 'uuid'
 import {
-  extractMoodKeywords,
   analyzePhraseStructured,
   buildPhraseDocument,
   embedText,
@@ -27,40 +26,11 @@ router.get('/', (_req, res) => {
   res.json(phrases)
 })
 
-// POST /api/phrases/analyze-all — extrae mood keywords de todas las frases sin analizar
-router.post('/analyze-all', async (_req, res) => {
-  const rows = db.prepare(
-    `SELECT id, text FROM phrases WHERE mood_keywords IS NULL OR mood_keywords = '[]'`
-  ).all() as any[]
-
-  let processed = 0
-  let skipped = 0
-  const errors: string[] = []
-
-  for (const phrase of rows) {
-    try {
-      const keywords = await extractMoodKeywords(phrase.text)
-      db.prepare(
-        `UPDATE phrases SET mood_keywords = @kw, analyzed_at = @at WHERE id = @id`
-      ).run({ kw: JSON.stringify(keywords), at: new Date().toISOString(), id: phrase.id })
-      processed++
-      // 6s entre peticiones para respetar el límite de 10 RPM de gemini-2.5-flash
-      await new Promise((r) => setTimeout(r, 6000))
-    } catch (err: any) {
-      errors.push(`${phrase.id}: ${err.message}`)
-    }
-  }
-
-  skipped = (db.prepare(`SELECT COUNT(*) as n FROM phrases`).get() as any).n - processed - errors.length
-
-  res.json({ processed, skipped, errors })
-})
-
 // GET /api/phrases/random
 router.get('/random', (_req, res) => {
-  // Preferir frases ya analizadas para que el matching de imágenes funcione
+  // Preferir frases ya vectorizadas para que el matching de imágenes funcione
   const analyzed = db.prepare(
-    `SELECT * FROM phrases WHERE mood_keywords IS NOT NULL AND mood_keywords != '[]' ORDER BY RANDOM() LIMIT 1`
+    `SELECT * FROM phrases WHERE embedding IS NOT NULL ORDER BY RANDOM() LIMIT 1`
   ).get() as any
   const row = analyzed ?? db.prepare(`SELECT * FROM phrases ORDER BY RANDOM() LIMIT 1`).get() as any
 

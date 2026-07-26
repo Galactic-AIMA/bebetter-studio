@@ -35,9 +35,11 @@ export function scoreAudio(
 
 /**
  * Elige la mejor pista de una lista ya cargada, para una frase (energía + mood).
- * Solo considera pistas etiquetadas. Empate dentro de ε → la menos usada.
- * Reutilizable por el auto-pick individual y por el batchPlanner (una sola carga
- * de metadata para todo el lote).
+ * Solo considera pistas etiquetadas. El **mood manda**: si hay pistas del mismo
+ * mood_category que la frase, se elige SOLO entre ellas (por energía; empate → la
+ * menos usada). Si no hay ninguna de ese mood, cae a todas (energía + mood). Así
+ * el registro emocional casi nunca se desajusta cuando existe una pista del mood.
+ * Reutilizable por el auto-pick individual y por el batchPlanner.
  */
 export function bestAudio(
   meta: AudioMeta[],
@@ -46,7 +48,12 @@ export function bestAudio(
 ): AudioCandidate | null {
   const tagged = meta.filter((m) => m.energia !== null && m.moodCategory)
   if (tagged.length === 0) return null
-  const cands: AudioCandidate[] = tagged.map((m) => ({
+
+  // Gate por mood: preferir las del mismo mood; si no hay, usar todas.
+  const sameMood = phraseMood ? tagged.filter((m) => m.moodCategory === phraseMood) : []
+  const pool = sameMood.length > 0 ? sameMood : tagged
+
+  const cands: AudioCandidate[] = pool.map((m) => ({
     filename: m.filename,
     score: scoreAudio(phraseEnergia, phraseMood, m.energia, m.moodCategory),
     energia: m.energia as number,
