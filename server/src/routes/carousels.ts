@@ -11,6 +11,7 @@ import {
   appendCarouselQueueRows,
   readCarouselQueueRows,
   readCarouselCadence,
+  writeCarouselCadence,
   CarouselQueueRow,
 } from '../services/sheetsService'
 import { nextCarouselSlots } from '../utils/schedule'
@@ -36,6 +37,26 @@ function rowToCarousel(row: any) {
     slides: JSON.parse(row.slides_json || '[]') as StoredSlide[],
     status: row.status,
     createdAt: row.created_at,
+  }
+}
+
+// Título corto y legible de un carrusel: el texto de la PORTADA (el titular).
+// El campo `tema` suele ser el material fuente entero (un capítulo, el resumen de
+// un video…), que no sirve como identificador en la cola ni en el aviso de
+// Telegram. Cae al `tema` recortado si el carrusel ya no está en la DB.
+function tituloCorto(slides: StoredSlide[], fallback: string): string {
+  const portada = slides.find((s) => s.rol === 'portada') ?? slides[0]
+  const t = (portada?.texto ?? '').trim()
+  return (t || fallback).slice(0, 300)
+}
+
+function tituloDeCarousel(carouselId: string, fallback: string): string {
+  const row = db.prepare(`SELECT slides_json FROM carousels WHERE id = ?`).get(carouselId) as any
+  if (!row) return fallback.slice(0, 300)
+  try {
+    return tituloCorto(JSON.parse(row.slides_json || '[]') as StoredSlide[], fallback)
+  } catch {
+    return fallback.slice(0, 300)
   }
 }
 
@@ -222,7 +243,7 @@ router.post('/:id/queue', async (req, res) => {
     const queueRow: CarouselQueueRow = {
       id: uuidv4(),
       carouselId: carousel.id,
-      tema: carousel.tema.slice(0, 300),
+      tema: tituloCorto(carousel.slides, carousel.tema),
       referencia: carousel.fuente?.referencia,
       imageUrls: JSON.stringify(imageUrls),
       altTexts: JSON.stringify(altTexts.map((a) => a ?? '')),
@@ -262,7 +283,7 @@ router.post('/:id/publish', async (req, res) => {
       {
         id: uuidv4(),
         carouselId: carousel.id,
-        tema: carousel.tema.slice(0, 300),
+        tema: tituloCorto(carousel.slides, carousel.tema),
         referencia: carousel.fuente?.referencia,
         imageUrls: JSON.stringify(imageUrls),
         altTexts: JSON.stringify(altTexts.map((a) => a ?? '')),
@@ -303,7 +324,7 @@ router.get('/queue/upcoming', async (_req, res) => {
       items: pendientes.map((r, i) => ({
         id: r.id,
         carouselId: r.carouselId,
-        tema: r.tema,
+        tema: tituloDeCarousel(r.carouselId, r.tema),
         referencia: r.referencia,
         firstImage: (() => {
           try {
@@ -319,6 +340,51 @@ router.get('/queue/upcoming', async (_req, res) => {
   } catch (err: any) {
     logError('carousel', 'Error proyectando la cola de carruseles', err.message)
     res.status(500).json({ error: err.message })
+  }
+})
+
+// POST /api/carousels/cadence — persiste la cadencia semanal de carruseles.
+// Body: { days: number[] (ISO 1=lunes…7=domingo), times: string[] ('HH:00') }
+// Misma filosofía que la cadencia de videos (horas en punto, franja diurna),
+// pero con días de la semana: los carruseles salen 2-3 veces por semana.
+const CAROUSEL_MIN_HOUR = 6
+const CAROUSEL_MAX_HOUR = 22
+const CAROUSEL_MAX_TIMES = 3
+
+router.post('/cadence', async (req, res) => {
+  try {
+    const rawDays = Array.isArray(req.body?.days) ? req.body.days : []
+    const days: number[] = [...new Set<number>(rawDays.map((d: any) => Number(d)))]
+      .filter((d) => Number.isInteger(d) && d >= 1 && d <= 7)
+      .sort((a, b) => a - b)
+    if (!days.length) throw new Error('Elige al menos un día de la semana')
+
+    const rawTimes = Array.isArray(req.body?.times) ? req.body.times : []
+    if (!rawTimes.length) throw new Error('Envía al menos una hora')
+    if (rawTimes.length > CAROUSEL_MAX_TIMES) {
+      throw new Error(`Máximo ${CAROUSEL_MAX_TIMES} publicaciones por día`)
+    }
+    const hours = new Set<number>()
+    for (const raw of rawTimes) {
+      const m = /^(\d{1,2}):(\d{2})$/.exec(String(raw).trim())
+      if (!m) throw new Error(`Hora inválida: "${raw}" (usa formato HH:MM)`)
+      if (Number(m[2]) !== 0) throw new Error(`Solo horas en punto: "${raw}"`)
+      const h = Number(m[1])
+      if (h < CAROUSEL_MIN_HOUR || h > CAROUSEL_MAX_HOUR) {
+        throw new Error(`"${raw}" fuera de la franja diurna (${CAROUSEL_MIN_HOUR}:00–${CAROUSEL_MAX_HOUR}:00)`)
+      }
+      hours.add(h)
+    }
+    const times = [...hours].sort((a, b) => a - b).map((h) => String(h).padStart(2, '0') + ':00')
+
+    await writeCarouselCadence(days, times)
+    logInfo('carousel', `Cadencia de carruseles actualizada: días ${days.join(',')} · ${times.join(', ')}`)
+    res.json({ success: true, days, times })
+  } catch (err: any) {
+    // Errores de validación → 400; fallos del Sheet → 500
+    const isValidation = !/sheet|google|token|network/i.test(err.message)
+    if (!isValidation) logError('carousel', 'Guardar cadencia de carruseles falló', err.message)
+    res.status(isValidation ? 400 : 500).json({ error: err.message })
   }
 })
 

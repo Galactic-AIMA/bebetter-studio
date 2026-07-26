@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import { carouselsApi, Carousel, CarouselSlide, SlideRole, CarouselFuente } from '../../api'
 import SlideViewer from './SlideViewer'
+import CarouselQueue from './CarouselQueue'
 
 type Phase = 'input' | 'script' | 'work'
 type Tipo = 'narrativo' | 'serie'
@@ -51,6 +52,19 @@ export default function CarouselStudio() {
   const [history, setHistory] = useState<Carousel[]>([])
   const [loadingHistory, setLoadingHistory] = useState(false)
 
+  // Borrador del formulario, guardado al abrir un carrusel del historial: abrirlo
+  // pisa los campos (tema, atribución…), así que se restaura al pulsar "Volver".
+  const draftRef = useRef<{
+    tema: string
+    tipo: Tipo
+    nSlides: number
+    aspect: string
+    autor: string
+    obra: string
+    referencia: string
+    conHistoria: boolean
+  } | null>(null)
+
   const aspectRatio = aspect === '1:1' ? '1 / 1' : '4 / 5'
   const hasTema = tema.trim().length >= 3
 
@@ -81,6 +95,7 @@ export default function CarouselStudio() {
 
   // Abre un carrusel guardado en la vista de trabajo (ver slides, regenerar, encolar)
   const openCarousel = (c: Carousel) => {
+    draftRef.current = { tema, tipo, nSlides, aspect, autor, obra, referencia, conHistoria }
     setCarousel(c)
     setTema(c.tema)
     setTipo(c.tipo)
@@ -264,11 +279,11 @@ export default function CarouselStudio() {
     }
   }
 
-  const startOver = () => {
+  // Deja la pantalla inicial limpia (sin carrusel abierto ni guion a medias).
+  const resetWorkState = () => {
     stopRef.current = false
     setQueuedEta(null)
     setPublishedOk(false)
-    setPhase('input')
     setSlides([])
     setCarousel(null)
     setError(null)
@@ -276,6 +291,37 @@ export default function CarouselStudio() {
     setGeneratingN(null)
     setPaused(false)
     setStopping(false)
+    setViewerIdx(null)
+    setPhase('input')
+  }
+
+  // Empezar de cero: además de cerrar el carrusel, vacía el tema y la atribución
+  // (el tipo, el nº de slides y el formato se conservan como preferencias).
+  const startOver = () => {
+    draftRef.current = null
+    setTema('')
+    setAutor('')
+    setObra('')
+    setReferencia('')
+    resetWorkState()
+  }
+
+  // Volver a la pantalla inicial SIN perder lo que hubiera escrito antes de
+  // entrar a un carrusel del historial.
+  const backToStart = () => {
+    const d = draftRef.current
+    if (d) {
+      setTema(d.tema)
+      setTipo(d.tipo)
+      setNSlides(d.nSlides)
+      setAspect(d.aspect)
+      setAutor(d.autor)
+      setObra(d.obra)
+      setReferencia(d.referencia)
+      setConHistoria(d.conHistoria)
+      draftRef.current = null
+    }
+    resetWorkState()
   }
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -416,6 +462,9 @@ export default function CarouselStudio() {
             </button>
           </div>
         )}
+
+        {/* ── Cola de publicación + cadencia semanal (pantalla inicial) ── */}
+        {phase === 'input' && <CarouselQueue />}
 
         {/* ── Historial de carruseles (siempre visible en la pantalla inicial) ── */}
         {phase === 'input' && (
@@ -561,7 +610,15 @@ export default function CarouselStudio() {
         {phase === 'work' && carousel && (
           <div className="flex flex-col gap-4">
             <div className="flex items-center justify-between gap-3">
-              <div className="text-xs text-bone-500 font-medium truncate min-w-0">
+              <button
+                onClick={backToStart}
+                disabled={generatingN !== null}
+                className="flex items-center gap-1 text-[11px] text-bone-700 hover:text-bone-500 disabled:opacity-40 shrink-0"
+                title="Volver a la pantalla inicial (conserva lo que tuvieras escrito)"
+              >
+                <ChevronLeft size={13} /> Volver
+              </button>
+              <div className="text-xs text-bone-500 font-medium truncate min-w-0 flex-1">
                 {carousel.tema}
                 {generatingN !== null && (
                   <span className="ml-2 text-[10px] text-gold-500 inline-flex items-center gap-1 whitespace-nowrap">

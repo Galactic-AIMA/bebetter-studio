@@ -59,6 +59,24 @@ export interface Carousel {
   createdAt: string
 }
 
+// Carrusel en cola + cuándo saldría según la cadencia semanal
+export interface CarouselUpcomingItem {
+  id: string
+  carouselId: string
+  tema: string
+  referencia?: string
+  firstImage?: string
+  createdAt: string
+  etaIso?: string
+}
+export interface CarouselUpcoming {
+  days: number[] // ISO 1=lunes … 7=domingo
+  times: string[]
+  timezone: string
+  count: number
+  items: CarouselUpcomingItem[]
+}
+
 export const carouselsApi = {
   // Propone el guion editable (no gasta créditos de KIE)
   script: (
@@ -94,23 +112,12 @@ export const carouselsApi = {
       .post<{ success: boolean; mediaId: string; caption: string }>(`/carousels/${id}/publish`)
       .then((r) => r.data),
   // Proyección de la cola: qué carruseles salen y cuándo
-  upcoming: () =>
+  upcoming: () => api.get<CarouselUpcoming>('/carousels/queue/upcoming').then((r) => r.data),
+  // Cadencia semanal de carruseles (días ISO 1=lunes…7=domingo + horas en punto).
+  // Para LEERLA se usa upcoming(), que ya devuelve days/times/timezone.
+  saveCadence: (days: number[], times: string[]) =>
     api
-      .get<{
-        days: number[]
-        times: string[]
-        timezone: string
-        count: number
-        items: {
-          id: string
-          carouselId: string
-          tema: string
-          referencia?: string
-          firstImage?: string
-          createdAt: string
-          etaIso?: string
-        }[]
-      }>('/carousels/queue/upcoming')
+      .post<{ success: boolean; days: number[]; times: string[] }>('/carousels/cadence', { days, times })
       .then((r) => r.data),
   list: () => api.get<Carousel[]>('/carousels').then((r) => r.data),
   get: (id: string) => api.get<Carousel>(`/carousels/${id}`).then((r) => r.data),
