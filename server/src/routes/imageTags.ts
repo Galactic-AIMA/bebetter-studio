@@ -52,6 +52,13 @@ function invalidateCache() {
   embeddingCache = null
 }
 
+// Permite a otras rutas (p. ej. la generación de imágenes IA) refrescar el cache
+// de embeddings para que una imagen recién añadida entre en las recomendaciones
+// sin reiniciar el servidor.
+export function invalidateImageCache() {
+  invalidateCache()
+}
+
 const upsertImage = () => db.prepare(`
   INSERT INTO images (filename, tags, analysis_json, embedding, analyzed_at)
   VALUES (@filename, @tags, @analysis_json, @embedding, @analyzed_at)

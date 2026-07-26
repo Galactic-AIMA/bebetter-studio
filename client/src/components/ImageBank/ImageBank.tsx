@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react'
-import { Shuffle, Upload, RefreshCw, Sparkles } from 'lucide-react'
+import { Shuffle, Upload, RefreshCw, Sparkles, Wand2 } from 'lucide-react'
 import { imagesApi, phrasesApi, pinterestApi, PinterestStatus } from '../../api'
 import { ImageItem, ImageRecommendation } from '../../types'
 import { useVideoStore } from '../../store/videoStore'
+import AIImageModal from './AIImageModal'
 
 function formatTimeAgo(timestamp: string): string {
   const diffMs = Date.now() - new Date(timestamp).getTime()
@@ -24,6 +25,7 @@ export default function ImageBank() {
   const [analyzeProg, setAnalyzeProg] = useState<{ done: number; total: number } | null>(null)
   const [recommendations, setRecommendations] = useState<ImageRecommendation[]>([])
   const [recommendPhrase, setRecommendPhrase] = useState<string>('')
+  const [showAIModal, setShowAIModal] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const { config, setConfig, setSelectedImage, setCompatiblePhraseIds, selectedPhraseId, analyzingImages: analyzing, setAnalyzingImages: setAnalyzing, syncingPinterest: syncing, setSyncingPinterest: setSyncing } = useVideoStore()
 
@@ -157,6 +159,13 @@ export default function ImageBank() {
     selectImage(img)
   }
 
+  const handleAIGenerated = async (img: ImageItem) => {
+    setShowAIModal(false)
+    await load()
+    if (recommendPhrase) await fetchRecommendations(recommendPhrase, selectedPhraseId ?? null)
+    selectImage(img)
+  }
+
   const scoreMap = new Map(recommendations.map((r) => [r.imageId, r.score]))
   const hasRecommendations = recommendations.length > 0
 
@@ -175,6 +184,14 @@ export default function ImageBank() {
 
   return (
     <div className="flex flex-col gap-3 p-4">
+      {showAIModal && (
+        <AIImageModal
+          phrase={phrase}
+          phraseId={selectedPhraseId ?? null}
+          onClose={() => setShowAIModal(false)}
+          onGenerated={handleAIGenerated}
+        />
+      )}
       {(pinterest?.galleryDlConfigured || pinterest?.pinterestApiConfigured) && (
         <div className="flex flex-col gap-1.5 text-xs bg-carbon-700/50 rounded-lg px-3 py-2 border border-carbon-600/50">
           <div className="flex items-center justify-between">
@@ -225,6 +242,12 @@ export default function ImageBank() {
           className="flex items-center gap-1.5 text-xs bg-carbon-700 hover:bg-carbon-600 border border-carbon-600 rounded-lg px-3 py-2 text-bone-500 transition-colors"
         >
           <Upload size={13} /> Subir imagen
+        </button>
+        <button
+          onClick={() => setShowAIModal(true)}
+          className="flex items-center gap-1.5 text-xs bg-gold-500/10 hover:bg-gold-500/20 border border-gold-500/40 rounded-lg px-3 py-2 text-gold-500 transition-colors"
+        >
+          <Wand2 size={13} /> Generar con IA
         </button>
         <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleUpload} />
       </div>
@@ -315,6 +338,13 @@ export default function ImageBank() {
                 {isCompatible && !isSelected && (
                   <span className="absolute bottom-1 left-1 text-[9px] bg-gold-500/90 text-carbon-900 rounded px-1 py-0.5 font-bold leading-none">
                     ✦
+                  </span>
+                )}
+
+                {/* Badge origen IA */}
+                {img.origen === 'ia' && (
+                  <span className="absolute top-1 left-1 text-[8px] bg-gold-500/90 text-carbon-900 rounded px-1 py-0.5 font-bold leading-none tracking-wide">
+                    IA
                   </span>
                 )}
               </button>

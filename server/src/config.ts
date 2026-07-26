@@ -40,6 +40,10 @@ export const config = {
     sheetId: process.env.GOOGLE_SHEET_ID || '',  // Sheet "Cola bebetter" (Fase 4) — lo crea scripts/setup-queue-sheet.ts
   },
 
+  kie: {
+    apiKey: process.env.KIE_API_KEY || '',  // KIE AI (Nano Banana Pro) — generación de imágenes IA para el banco
+  },
+
   pinterest: {
     appId: process.env.PINTEREST_APP_ID || '',
     appSecret: process.env.PINTEREST_APP_SECRET || '',

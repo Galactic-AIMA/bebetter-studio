@@ -72,6 +72,9 @@ export interface ImageItem {
   path: string
   url: string
   usageCount?: number
+  tags?: string[]
+  analyzedAt?: string
+  origen?: string  // 'ia' = generada con IA (KIE); null/undefined = banco/Pinterest
 }
 
 export interface WebhookPayload {

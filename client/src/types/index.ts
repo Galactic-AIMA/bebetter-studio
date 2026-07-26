@@ -49,6 +49,7 @@ export interface ImageItem {
   usageCount?: number
   tags?: string[]
   analyzedAt?: string
+  origen?: string  // 'ia' = generada con IA (KIE); si no, banco/Pinterest
 }
 
 export interface ImageRecommendation {

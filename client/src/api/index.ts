@@ -23,6 +23,15 @@ export const imagesApi = {
     api.post<{ descripcionMood: string; recommendations: ImageRecommendation[] }>('/images/recommend', { phraseId, phrase, topN }).then((r) => r.data),
 }
 
+export const aiImagesApi = {
+  // Propone un prompt de marca editable a partir de la frase activa
+  proposePrompt: (phraseId?: string, phrase?: string) =>
+    api.post<{ prompt: string; analysis: unknown }>('/ai-images/prompt', { phraseId, phrase }).then((r) => r.data),
+  // Genera la imagen con KIE, la guarda en el banco y la devuelve (tarda ~40-100s)
+  generate: (prompt: string, aspectRatio?: string) =>
+    api.post<{ image: ImageItem }>('/ai-images/generate', { prompt, aspectRatio }).then((r) => r.data.image),
+}
+
 export const phrasesApi = {
   list: () => api.get<Phrase[]>('/phrases').then((r) => r.data),
   random: () => api.get<Phrase>('/phrases/random').then((r) => r.data),

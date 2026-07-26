@@ -28,7 +28,7 @@ router.get('/', (_req, res) => {
     )
 
     const dbRows = new Map(
-      (db.prepare(`SELECT filename, tags, analyzed_at, usage_count FROM images`).all() as any[])
+      (db.prepare(`SELECT filename, tags, analyzed_at, usage_count, origen FROM images`).all() as any[])
         .map((r) => [r.filename, r])
     )
 
@@ -42,6 +42,7 @@ router.get('/', (_req, res) => {
         usageCount: row?.usage_count ?? 0,
         tags: row?.tags ? JSON.parse(row.tags) : undefined,
         analyzedAt: row?.analyzed_at ?? undefined,
+        origen: row?.origen ?? undefined,
       }
     })
 

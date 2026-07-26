@@ -101,6 +101,8 @@ for (const sql of [
   `ALTER TABLE phrases ADD COLUMN paleta TEXT`,
   // Categoría de mood para el emparejamiento de audio (2026-07-25)
   `ALTER TABLE phrases ADD COLUMN mood_category TEXT`,
+  // Origen de la imagen: null/'banco' = subida/Pinterest, 'ia' = generada con IA (2026-07-25)
+  `ALTER TABLE images ADD COLUMN origen TEXT`,
 ]) {
   try { db.exec(sql) } catch (_) { /* columna ya existe */ }
 }
