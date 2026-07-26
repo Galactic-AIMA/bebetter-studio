@@ -17,6 +17,7 @@ import logsRouter from './routes/logs'
 import cadenceRouter from './routes/cadence'
 import batchRouter from './routes/batch'
 import aiImagesRouter from './routes/aiImages'
+import carouselsRouter from './routes/carousels'
 import { syncBoardImages } from './services/pinterestService'
 import { runCleanup } from './services/cleanupService'
 import { logInfo } from './services/logService'
@@ -42,6 +43,7 @@ app.use('/api/logs', logsRouter)
 app.use('/api/cadence', cadenceRouter)
 app.use('/api/batch', batchRouter)
 app.use('/api/ai-images', aiImagesRouter)
+app.use('/api/carousels', carouselsRouter)
 
 app.get('/api/watermark', (req, res) => {
   const wmPath = config.watermark.path

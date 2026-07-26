@@ -3,7 +3,7 @@ import path from 'path'
 import { config } from '../config'
 
 export type LogLevel = 'info' | 'error'
-export type LogCategory = 'generate' | 'drive' | 'publish' | 's3' | 'system'
+export type LogCategory = 'generate' | 'drive' | 'publish' | 's3' | 'system' | 'carousel'
 
 export interface LogEntry {
   id: number

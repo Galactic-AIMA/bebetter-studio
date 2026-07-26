@@ -33,6 +33,90 @@ export const aiImagesApi = {
     api.post<{ image: ImageItem }>('/ai-images/generate', { prompt, aspectRatio }).then((r) => r.data.image),
 }
 
+export type SlideRole = 'portada' | 'desarrollo' | 'historia' | 'cta'
+
+// Atribución + marca de serie (se rinde solo en portada y CTA)
+export interface CarouselFuente {
+  autor?: string // "Robert Greene"
+  obra?: string // "Las 48 Leyes del Poder"
+  referencia?: string // "LEY 15" — badge de serie en la portada
+}
+export interface CarouselSlide {
+  n: number
+  rol: SlideRole
+  texto: string
+  simbolo?: string // escena visual concreta de la slide (varía entre slides)
+  publicUrl?: string // presente cuando la slide ya se generó
+}
+export interface Carousel {
+  id: string
+  tema: string
+  tipo: 'narrativo' | 'serie'
+  aspect: string
+  fuente?: CarouselFuente
+  slides: CarouselSlide[]
+  status: 'draft' | 'partial' | 'done' | 'queued' | 'published'
+  createdAt: string
+}
+
+export const carouselsApi = {
+  // Propone el guion editable (no gasta créditos de KIE)
+  script: (
+    tema: string,
+    tipo: 'narrativo' | 'serie' = 'narrativo',
+    nSlides = 6,
+    fuente?: CarouselFuente,
+    conHistoria = true
+  ) =>
+    api
+      .post<{ slides: CarouselSlide[] }>('/carousels/script', { tema, tipo, nSlides, fuente, conHistoria })
+      .then((r) => r.data.slides),
+  // Crea el registro (draft) con el guion aprobado/editado
+  create: (
+    tema: string,
+    tipo: 'narrativo' | 'serie',
+    aspect: string,
+    slides: CarouselSlide[],
+    fuente?: CarouselFuente
+  ) => api.post<Carousel>('/carousels', { tema, tipo, aspect, slides, fuente }).then((r) => r.data),
+  // Genera (o regenera) la slide n con KIE — tarda ~40-100s
+  generateSlide: (id: string, n: number) =>
+    api.post<{ n: number; url: string }>(`/carousels/${id}/slides/${n}`).then((r) => r.data),
+  // Sube las slides a R2, genera el caption y encola el carrusel; el scheduler de
+  // n8n lo publica en Instagram en la próxima franja de la cadencia de carruseles.
+  queue: (id: string) =>
+    api
+      .post<{ success: boolean; queueId: string; imageUrls: string[]; caption: string }>(`/carousels/${id}/queue`)
+      .then((r) => r.data),
+  // Carril express: publica en Instagram AHORA (no espera a la cadencia)
+  publish: (id: string) =>
+    api
+      .post<{ success: boolean; mediaId: string; caption: string }>(`/carousels/${id}/publish`)
+      .then((r) => r.data),
+  // Proyección de la cola: qué carruseles salen y cuándo
+  upcoming: () =>
+    api
+      .get<{
+        days: number[]
+        times: string[]
+        timezone: string
+        count: number
+        items: {
+          id: string
+          carouselId: string
+          tema: string
+          referencia?: string
+          firstImage?: string
+          createdAt: string
+          etaIso?: string
+        }[]
+      }>('/carousels/queue/upcoming')
+      .then((r) => r.data),
+  list: () => api.get<Carousel[]>('/carousels').then((r) => r.data),
+  get: (id: string) => api.get<Carousel>(`/carousels/${id}`).then((r) => r.data),
+  remove: (id: string) => api.delete(`/carousels/${id}`),
+}
+
 export const phrasesApi = {
   list: () => api.get<Phrase[]>('/phrases').then((r) => r.data),
   random: () => api.get<Phrase>('/phrases/random').then((r) => r.data),

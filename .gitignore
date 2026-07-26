@@ -68,3 +68,6 @@ server/scripts/rebot-bebetter.py
 server/scripts/update-copy-prompts.py
 server/scripts/backup-copy-prompts.py
 server/scripts/copy_prompts_backup.txt
+# Scheduler de carruseles en n8n (se corre con --apply)
+server/scripts/add-carousel-scheduler.py
+server/scripts/fix-igtoken-sheet-schema.py

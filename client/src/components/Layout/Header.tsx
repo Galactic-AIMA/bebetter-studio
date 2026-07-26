@@ -1,4 +1,4 @@
-import { Film, Image, HardDrive, Send, RotateCcw, ChevronDown, ScrollText, Clock, ListPlus, Music } from 'lucide-react'
+import { Film, Image, GalleryHorizontalEnd, HardDrive, Send, RotateCcw, ChevronDown, ScrollText, Clock, ListPlus, Music } from 'lucide-react'
 import { useRef, useEffect, useState } from 'react'
 import { useVideoStore } from '../../store/videoStore'
 import { ContentMode } from '../../store/videoStore'
@@ -53,6 +53,7 @@ export default function Header({ lastVideoId, lastImageId, isGenerating, toast, 
         {([
           { id: 'video' as ContentMode, icon: Film, label: 'Video' },
           { id: 'image' as ContentMode, icon: Image, label: 'Imagen' },
+          { id: 'carousel' as ContentMode, icon: GalleryHorizontalEnd, label: 'Carrusel' },
         ]).map(({ id, icon: Icon, label }) => (
           <button
             key={id}

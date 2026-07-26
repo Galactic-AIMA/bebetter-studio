@@ -71,7 +71,9 @@ function computeLines(text: string, fontSize: number, font: string, maxPx: numbe
 }
 
 export default function BatchGenerator() {
-  const { config, mode } = useVideoStore()
+  const { config, mode: rawMode } = useVideoStore()
+  // El batch solo aplica a video/imagen (no se monta en modo carrusel).
+  const mode: 'video' | 'image' = rawMode === 'video' ? 'video' : 'image'
 
   const [phrases, setPhrases] = useState<Phrase[]>([])
   const [images, setImages] = useState<ImageItem[]>([])

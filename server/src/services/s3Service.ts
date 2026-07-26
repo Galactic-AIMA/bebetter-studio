@@ -55,6 +55,29 @@ export async function uploadThumbnailToS3(
   return `${config.aws.publicUrl}/${key}`
 }
 
+// Sube una slide de carrusel a R2 y devuelve su URL pública.
+// Meta exige URLs públicas accesibles para crear los contenedores de media —
+// las rutas locales (/output/...) no sirven. Key: carruseles/<id>/slide_N.png
+export async function uploadCarouselSlideToS3(
+  localPath: string,
+  carouselId: string,
+  filename: string
+): Promise<string> {
+  const fileStream = fs.createReadStream(localPath)
+  const key = `carruseles/${carouselId}/${filename}`
+
+  await s3.send(
+    new PutObjectCommand({
+      Bucket: config.aws.bucket,
+      Key: key,
+      Body: fileStream,
+      ContentType: 'image/png',
+    })
+  )
+
+  return `${config.aws.publicUrl}/${key}`
+}
+
 export async function getPresignedUrl(
   filename: string,
   expiresIn = 3600

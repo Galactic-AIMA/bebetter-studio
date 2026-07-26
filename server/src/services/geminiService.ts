@@ -418,6 +418,178 @@ export async function generateCopies(phrase: string): Promise<VideoCopies> {
   }
 }
 
+// ── Guion de carrusel (Fase 2 carrusel) ──────────────────────────────────────
+// Genera el texto de cada slide desde un tema, con la VOZ de marca de
+// estilo-bebetter.md. NO genera imágenes (eso lo hace carouselService con KIE);
+// esto es el "preview editable" que el usuario aprueba antes de gastar créditos.
+
+export type SlideRole = 'portada' | 'desarrollo' | 'historia' | 'cta'
+export interface CarouselSlide {
+  n: number
+  rol: SlideRole
+  texto: string
+  simbolo: string // escena/objeto visual concreto de la slide (distinto entre slides)
+}
+
+// Atribución + marca de serie. Permite carruseles seriados ("LEY 15" de las 48
+// Leyes del Poder) con crédito al autor. Se renderiza SOLO en portada y CTA
+// (no en todas las slides: la biblia de marca prohíbe el clutter y más texto
+// por slide = más errores de render en Nano Banana).
+export interface CarouselFuente {
+  autor?: string // "Robert Greene"
+  obra?: string // "Las 48 Leyes del Poder"
+  referencia?: string // "LEY 15" — badge de serie en la portada
+}
+
+const CAROUSEL_SCRIPT_SYSTEM = `Eres el redactor de carruseles de Instagram de la marca "bebetter" (@bebetter.path), una marca motivacional estoica. Esencia: RAW, STOIC, CINEMATIC — crudo, estoico, cinematográfico. Nada de hype ni motivación barata.
+
+Escribes el TEXTO de cada slide de un carrusel. Cada texto va INTEGRADO dentro de una imagen, así que debe ser CORTO y contundente (los textos largos se ven mal). Reglas de voz:
+- HACER: frases cortas. Tutear siempre. Confrontar sin insultar. Priorizar la acción sobre la emoción. Citar estoicos clásicos solo cuando aporte peso real.
+- NO HACER: nada de "increíble/asombroso/bendecido" ni clichés de hype; CERO emojis; CERO signos de exclamación; no cerrar con preguntas blandas.
+
+Estructura del carrusel:
+- PORTADA (slide 1): un gancho que detiene el scroll. Una sola frase potente, muy breve (máx ~8 palabras). Es el titular.
+- DESARROLLO (slides intermedios): UNA idea por slide, progresión lógica del tema. Texto breve (máx ~20 palabras): puede ser un titular corto y una o dos frases de cuerpo.
+- HISTORIA (opcional, una sola): un caso concreto o anécdota del material fuente, comprimida: quién, qué hizo, qué resultado. Es la slide más concreta del carrusel. Máx ~30 palabras.
+- CTA (última slide): una VERDAD INCÓMODA de cierre (no un consejo blando), muy breve, con fuerza. Cierra el tema.
+
+Si el tipo es "serie", cada slide es una frase de marca independiente (sin hilo narrativo), la última igual funciona como cierre.
+
+MATERIAL FUENTE: el tema que recibes puede ser material fuente extenso (un capítulo de libro, el resumen de un video, una escena de película). En ese caso NO generalices ni inventes: EXTRAE las ideas reales del material y respeta la tesis del autor. Elige los puntos más potentes y accionables — no intentes cubrirlo todo. Usa el vocabulario y los conceptos del propio material.
+
+Además del texto, propón para CADA slide un "simbolo": una escena o objeto visual CONCRETO y CINEMATOGRÁFICO que ilustre su mensaje (una metáfora visual), en 3-8 palabras y en inglés. Reglas del símbolo:
+- Debe ser DISTINTO en cada slide — NUNCA repitas el mismo objeto/escena entre slides (no repitas "hammer on stone" en dos slides).
+- Concreto y fotografiable: "a lone chisel carving raw stone", "a dead cracked tree splitting dry earth", "a sparking anvil in the dark", "a chain breaking apart", "a lone warrior on a cliff at dusk". Nada abstracto.
+- Coherente con la estética oscura, estoica y cinematográfica de la marca.
+
+Devuelve SIEMPRE el número exacto de slides pedido. Escribe el texto en español con tildes correctas y el simbolo en inglés. NO incluyas el handle @bebetter.path en los textos (se añade en la imagen automáticamente).`
+
+const CAROUSEL_SCRIPT_SCHEMA = {
+  type: SchemaType.OBJECT,
+  properties: {
+    slides: {
+      type: SchemaType.ARRAY,
+      items: {
+        type: SchemaType.OBJECT,
+        properties: {
+          n: { type: SchemaType.NUMBER, description: 'Número de slide, empezando en 1' },
+          rol: { type: SchemaType.STRING, description: 'portada, desarrollo, historia o cta' },
+          texto: { type: SchemaType.STRING, description: 'El texto de la slide, corto, según su rol' },
+          simbolo: { type: SchemaType.STRING, description: 'Escena/objeto visual concreto en inglés (3-8 palabras), DISTINTO en cada slide' },
+        },
+        required: ['n', 'rol', 'texto', 'simbolo'],
+      },
+    },
+  },
+  required: ['slides'],
+}
+
+export async function generateCarouselScript(
+  tema: string,
+  tipo: 'narrativo' | 'serie' = 'narrativo',
+  nSlides = 6,
+  opts: { fuente?: CarouselFuente; conHistoria?: boolean } = {}
+): Promise<CarouselSlide[]> {
+  const n = Math.min(8, Math.max(5, Math.round(nSlides)))
+  const model = getClient().getGenerativeModel({
+    model: 'gemini-3.5-flash',
+    systemInstruction: CAROUSEL_SCRIPT_SYSTEM,
+    generationConfig: {
+      temperature: 0.85,
+      topP: 0.9,
+      responseMimeType: 'application/json',
+      responseSchema: CAROUSEL_SCRIPT_SCHEMA as any,
+    },
+  })
+
+  const { fuente, conHistoria } = opts
+  const credito = [fuente?.autor, fuente?.obra].filter(Boolean).join(' · ')
+  const contexto = [
+    credito ? `El material proviene de: ${credito}. Respeta su tesis y su vocabulario.` : '',
+    fuente?.referencia
+      ? `Este carrusel es la entrega "${fuente.referencia}" de una serie: la PORTADA debe titular exactamente ese punto (p. ej. el enunciado de la ley), no un gancho genérico. IMPORTANTE: NO repitas la etiqueta "${fuente.referencia}" dentro del texto de la portada — ese rótulo se añade aparte como sello visual. Escribe solo el enunciado, sin el numeral ni dos puntos iniciales.`
+      : '',
+  ].filter(Boolean).join(' ')
+
+  const estructura =
+    tipo === 'serie'
+      ? `Tipo: serie de ${n} frases de marca independientes (sin hilo narrativo). Slide 1 = portada, slide ${n} = cta.`
+      : conHistoria
+      ? `Tipo: narrativo de ${n} slides. Slide 1 = portada; slide 2 = el axioma o tesis central; UNA slide intermedia con rol "historia" (el caso concreto o anécdota del material — si el material no trae ninguno, usa "desarrollo" en su lugar); el resto = desarrollo (una idea accionable por slide); slide ${n} = cta con el matiz o la verdad incómoda de cierre.`
+      : `Tipo: narrativo de ${n} slides. Slide 1 = portada, slides 2 a ${n - 1} = desarrollo (una idea por slide, progresión), slide ${n} = cta.`
+
+  const instr = `MATERIAL / TEMA:\n"""\n${tema}\n"""\n\n${contexto}\n${estructura}`
+
+  const res = await withRetry(() => model.generateContent(instr))
+  const parsed = JSON.parse(res.response.text())
+  const slides: CarouselSlide[] = (parsed.slides ?? [])
+    .map((s: any, i: number) => ({
+      n: typeof s.n === 'number' ? s.n : i + 1,
+      rol: (['portada', 'desarrollo', 'historia', 'cta'].includes(s.rol) ? s.rol : i === 0 ? 'portada' : 'desarrollo') as SlideRole,
+      texto: String(s.texto ?? '').trim(),
+      simbolo: String(s.simbolo ?? '').trim(),
+    }))
+    .filter((s: CarouselSlide) => s.texto)
+    .sort((a: CarouselSlide, b: CarouselSlide) => a.n - b.n)
+
+  // Garantiza que el primero sea portada y el último cta (por si el LLM se desvía)
+  if (slides.length) {
+    slides[0].rol = 'portada'
+    slides[slides.length - 1].rol = 'cta'
+  }
+  return slides
+}
+
+// Caption de Instagram para un carrusel ya generado. A diferencia del copy de
+// Reel (que parte de UNA frase), aquí se resume el hilo completo de las slides y
+// se empuja a deslizar/guardar. Los hashtags NO los genera el LLM: se anexan con
+// appendIgHashtags para que el bloque sea idéntico en toda la cuenta.
+const CAROUSEL_CAPTION_SYSTEM = `Eres el copywriter de Instagram de la marca "bebetter" (@bebetter.path), motivacional estoica. Voz cruda, estoica y cinematográfica: nace de la disciplina y la verdad, nunca de la motivación barata.
+
+Se te dará el TEMA de un carrusel y el texto de sus slides. Escribe la descripción (caption) del post.
+
+Formato EXACTO:
+
+[Gancho: frase corta, máximo 8 palabras, golpe al ego o a la curiosidad]
+
+[Párrafo 1: el problema o la trampa que el carrusel desmonta, 2-3 líneas]
+
+[Párrafo 2: la verdad incómoda o la idea central del carrusel, 2-3 líneas]
+
+[Párrafo 3: la acción concreta que debe tomar, 2-3 líneas]
+
+[Cierre: invita a deslizar y a guardar el post, en una línea, sin sonar a marketing]
+
+El proceso no se negocia.
+@bebetter.path ⚔️
+
+REGLAS: tutea siempre. Frases cortas. CERO emojis (salvo el ⚔️ del cierre). CERO signos de exclamación. NO escribas hashtags (se añaden aparte). NO uses markdown ni asteriscos. Si se indica una fuente (autor y obra), menciónala con naturalidad en el párrafo 2, dando crédito.`
+
+export async function generateCarouselCaption(
+  tema: string,
+  slides: { rol: SlideRole; texto: string }[],
+  fuente?: CarouselFuente
+): Promise<string> {
+  const model = getClient().getGenerativeModel({
+    model: 'gemini-3.5-flash',
+    systemInstruction: CAROUSEL_CAPTION_SYSTEM,
+    generationConfig: { temperature: 0.8, topP: 0.9 },
+  })
+
+  const credito = [fuente?.autor, fuente?.obra].filter(Boolean).join(' · ')
+  const cuerpo = slides.map((s) => `(${s.rol}) ${s.texto}`).join('\n')
+  const prompt = [
+    `TEMA: ${tema.slice(0, 1500)}`,
+    credito ? `FUENTE: ${credito}${fuente?.referencia ? ` — ${fuente.referencia}` : ''}` : '',
+    `SLIDES:\n${cuerpo}`,
+  ]
+    .filter(Boolean)
+    .join('\n\n')
+
+  const res = await withRetry(() => model.generateContent(prompt))
+  return appendIgHashtags(res.response.text().trim())
+}
+
 // Mantener compatibilidad con código existente que aún use las funciones anteriores
 function parseTags(raw: string): string[] {
   return raw

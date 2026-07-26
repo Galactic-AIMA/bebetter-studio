@@ -104,3 +104,52 @@ export function projectSchedule(
     }
   })
 }
+
+/**
+ * Próximas franjas de la cadencia de CARRUSELES (bloque 2).
+ *
+ * A diferencia de los videos (todos los días a ciertas horas), los carruseles
+ * usan una cadencia semanal: días concretos + horas. Devuelve las `count`
+ * próximas franjas a partir de `now`, en orden.
+ *
+ * @param days  días ISO de la semana (1=lunes … 7=domingo)
+ * @param times horas en punto, p. ej. ['19:00']
+ */
+export function nextCarouselSlots(
+  cadence: { days: number[]; times: string[]; timezone: string },
+  count: number,
+  now: Date = new Date()
+): Date[] {
+  const out: Date[] = []
+  if (count <= 0) return out
+
+  const days = [...new Set(cadence.days)].filter((d) => d >= 1 && d <= 7).sort((a, b) => a - b)
+  const hours = cadence.times
+    .map((t) => Number(String(t).split(':')[0]))
+    .filter((h) => Number.isInteger(h) && h >= 0 && h <= 23)
+    .sort((a, b) => a - b)
+  if (!days.length || !hours.length) return out
+
+  const tz = cadence.timezone || 'America/Bogota'
+  const off = tzOffsetMinutes(tz, now)
+  const wall = new Date(now.getTime() + off * 60000)
+  const Y = wall.getUTCFullYear()
+  const Mo = wall.getUTCMonth()
+  const D = wall.getUTCDate()
+  const curHour = wall.getUTCHours()
+  const curMin = wall.getUTCMinutes()
+
+  // Recorre hasta un año por delante; se corta al llenar `count`.
+  for (let day = 0; out.length < count && day < 366; day++) {
+    const d = new Date(Date.UTC(Y, Mo, D + day))
+    const iso = d.getUTCDay() === 0 ? 7 : d.getUTCDay() // 1=lunes … 7=domingo
+    if (!days.includes(iso)) continue
+    for (const h of hours) {
+      // Hoy: descarta las franjas ya pasadas (el cron dispara en punto).
+      if (day === 0 && (h < curHour || (h === curHour && curMin > 0))) continue
+      out.push(new Date(Date.UTC(Y, Mo, D + day, h, 0, 0) - off * 60000))
+      if (out.length >= count) break
+    }
+  }
+  return out
+}

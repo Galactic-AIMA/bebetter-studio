@@ -75,6 +75,17 @@ db.exec(`
     analyzed_at   TEXT
   );
 
+  CREATE TABLE IF NOT EXISTS carousels (
+    id            TEXT PRIMARY KEY,
+    tema          TEXT NOT NULL,
+    tipo          TEXT,
+    aspect        TEXT,
+    slides_json   TEXT,
+    cover_kie_url TEXT,
+    status        TEXT DEFAULT 'draft',
+    created_at    TEXT DEFAULT (datetime('now'))
+  );
+
   CREATE TABLE IF NOT EXISTS pinterest_pins (
     pin_id        TEXT PRIMARY KEY,
     downloaded_at TEXT DEFAULT (datetime('now'))
@@ -103,6 +114,8 @@ for (const sql of [
   `ALTER TABLE phrases ADD COLUMN mood_category TEXT`,
   // Origen de la imagen: null/'banco' = subida/Pinterest, 'ia' = generada con IA (2026-07-25)
   `ALTER TABLE images ADD COLUMN origen TEXT`,
+  // Atribución + marca de serie del carrusel ({autor,obra,referencia}) (2026-07-26)
+  `ALTER TABLE carousels ADD COLUMN fuente_json TEXT`,
 ]) {
   try { db.exec(sql) } catch (_) { /* columna ya existe */ }
 }

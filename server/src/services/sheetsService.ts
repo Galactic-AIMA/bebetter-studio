@@ -99,6 +99,20 @@ export async function appendQueueRows(rows: QueueRow[]): Promise<void> {
   })
 }
 
+/** Lee toda la pestaña "config" como mapa key→value. */
+export async function readConfigMap(): Promise<Map<string, string>> {
+  const sheets = getSheets()
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: requireSheetId(),
+    range: `${CONFIG_SHEET}!A:B`,
+  })
+  const map = new Map<string, string>()
+  for (const [k, v] of res.data.values || []) {
+    if (k) map.set(String(k).trim(), String(v ?? '').trim())
+  }
+  return map
+}
+
 export interface CadenceConfig {
   times: string[] // franjas del día, p. ej. ['07:00','13:00','19:00']
   timezone: string
@@ -179,4 +193,119 @@ export async function writeCadenceConfig(times: string[], timezone?: string): Pr
   const entries: Record<string, string> = { cadence_times: times.join(',') }
   if (timezone) entries.timezone = timezone
   await upsertConfig(entries)
+}
+
+// ── Cola de CARRUSELES (bloque 2) ────────────────────────────────────────────
+// Pestaña propia (no la "Cola" de videos): un carrusel lleva N imágenes, no una
+// sola URL, y su cadencia es más larga (2-3 por semana vs. 3 al día). Así el
+// scheduler de videos `[Sched]` queda intacto.
+
+export interface CarouselQueueRow {
+  id: string
+  carouselId: string
+  tema: string
+  referencia?: string // "LEY 15"
+  imageUrls: string // JSON array de URLs públicas de R2, EN ORDEN
+  altTexts?: string // JSON array de alt text, emparejado por índice con imageUrls
+  captionIG: string
+  status: QueueStatus
+  createdAt: string
+  publishedAt?: string
+  attempts?: number
+  error?: string
+}
+
+/** Orden de columnas de la pestaña "ColaCarruseles" — DEBE coincidir con el script de setup. */
+export const CAROUSEL_QUEUE_COLUMNS: (keyof CarouselQueueRow)[] = [
+  'id',
+  'carouselId',
+  'tema',
+  'referencia',
+  'imageUrls',
+  'altTexts',
+  'captionIG',
+  'status',
+  'createdAt',
+  'publishedAt',
+  'attempts',
+  'error',
+]
+
+export const CAROUSEL_SHEET = 'ColaCarruseles'
+
+/** Lee todas las filas de la cola de carruseles (sin el header). */
+export async function readCarouselQueueRows(): Promise<CarouselQueueRow[]> {
+  const sheets = getSheets()
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: requireSheetId(),
+    range: `${CAROUSEL_SHEET}!A2:L`,
+  })
+  return (res.data.values || []).map((r) => {
+    const o: Record<string, string> = {}
+    CAROUSEL_QUEUE_COLUMNS.forEach((c, i) => (o[c] = r[i] ?? ''))
+    return o as unknown as CarouselQueueRow
+  })
+}
+
+/** Agrega filas al final de la cola de carruseles. */
+export async function appendCarouselQueueRows(rows: CarouselQueueRow[]): Promise<void> {
+  if (rows.length === 0) return
+  const sheets = getSheets()
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: requireSheetId(),
+    range: `${CAROUSEL_SHEET}!A1`,
+    valueInputOption: 'RAW',
+    insertDataOption: 'INSERT_ROWS',
+    requestBody: {
+      values: rows.map((row) =>
+        CAROUSEL_QUEUE_COLUMNS.map((c) => {
+          const v = row[c]
+          return v === undefined || v === null ? '' : (v as string | number)
+        })
+      ),
+    },
+  })
+}
+
+export interface CarouselCadence {
+  days: number[] // días ISO de la semana: 1=lunes … 7=domingo
+  times: string[] // horas en punto, p. ej. ['19:00']
+  timezone: string
+}
+
+const DEFAULT_CAROUSEL_DAYS = [2, 5] // martes y viernes
+const DEFAULT_CAROUSEL_TIMES = ['19:00']
+
+/** Lee la cadencia de carruseles desde "config" (más larga que la de videos). */
+export async function readCarouselCadence(): Promise<CarouselCadence> {
+  const sheets = getSheets()
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: requireSheetId(),
+    range: `${CONFIG_SHEET}!A:B`,
+  })
+  const map = new Map<string, string>()
+  for (const [k, v] of res.data.values || []) {
+    if (k) map.set(String(k).trim(), String(v ?? '').trim())
+  }
+  const days = (map.get('carousel_cadence_days') || '')
+    .split(',')
+    .map((s) => parseInt(s.trim(), 10))
+    .filter((n) => n >= 1 && n <= 7)
+  const times = (map.get('carousel_cadence_times') || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+  return {
+    days: days.length ? days : DEFAULT_CAROUSEL_DAYS,
+    times: times.length ? times : DEFAULT_CAROUSEL_TIMES,
+    timezone: map.get('timezone') || 'America/Bogota',
+  }
+}
+
+/** Persiste la cadencia de carruseles en "config". */
+export async function writeCarouselCadence(days: number[], times: string[]): Promise<void> {
+  await upsertConfig({
+    carousel_cadence_days: days.join(','),
+    carousel_cadence_times: times.join(','),
+  })
 }

@@ -9,6 +9,7 @@ import LeftPanel from '../components/Layout/LeftPanel'
 import RightPanel from '../components/Layout/RightPanel'
 import VideoPreview from '../components/Preview/VideoPreview'
 import VideoResultModal from '../components/Preview/VideoResultModal'
+import CarouselStudio from '../components/Carousel/CarouselStudio'
 
 type ToastState = { state: 'loading' | 'success' | 'error'; loadingText?: string; successText?: string; message?: string }
 
@@ -122,6 +123,12 @@ export default function Editor() {
       />
 
       <div className="flex flex-1 overflow-hidden bg-carbon-700">
+        {mode === 'carousel' ? (
+          <main className="flex-1 bg-carbon-900 overflow-hidden">
+            <CarouselStudio />
+          </main>
+        ) : (
+        <>
         <LeftPanel />
 
         {/* Center */}
@@ -184,6 +191,8 @@ export default function Editor() {
         </main>
 
         <RightPanel isGenerating={isGenerating} onGenerate={generate} />
+        </>
+        )}
       </div>
 
       {/* Toast */}
