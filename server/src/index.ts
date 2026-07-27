@@ -18,6 +18,8 @@ import cadenceRouter from './routes/cadence'
 import batchRouter from './routes/batch'
 import aiImagesRouter from './routes/aiImages'
 import carouselsRouter from './routes/carousels'
+import analyticsRouter from './routes/analytics'
+import { collectInsights } from './services/insightsService'
 import { syncBoardImages } from './services/pinterestService'
 import { runCleanup } from './services/cleanupService'
 import { logInfo } from './services/logService'
@@ -44,6 +46,7 @@ app.use('/api/cadence', cadenceRouter)
 app.use('/api/batch', batchRouter)
 app.use('/api/ai-images', aiImagesRouter)
 app.use('/api/carousels', carouselsRouter)
+app.use('/api/analytics', analyticsRouter)
 
 app.get('/api/watermark', (req, res) => {
   const wmPath = config.watermark.path
@@ -61,6 +64,19 @@ app.listen(config.port, () => {
 
   cron.schedule('0 */6 * * *', () => { runCleanup() })
   console.log('Cleanup: activo (cada 6 horas, archivos >24h)')
+
+  // Snapshot diario de insights. De madrugada porque no compite con nada y la
+  // granularidad de la serie es el día. Best-effort: si el token o la red fallan,
+  // se pierde un punto de la serie, no la app.
+  cron.schedule('30 4 * * *', async () => {
+    try {
+      const r = await collectInsights(true)
+      console.log(`Insights: snapshot de ${r.ok}/${r.total} publicaciones`)
+    } catch (err: any) {
+      console.error('Insights: fallo al recoger —', err.message)
+    }
+  })
+  console.log('Insights: activo (snapshot diario 4:30)')
 
   // gallery-dl retirado (2026-07-26): duplicaba imágenes que la Pinterest API ya
   // baja. La sincronización queda solo por la Pinterest API v5 (abajo).

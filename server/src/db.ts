@@ -108,6 +108,19 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_publications_video    ON publications(video_id);
   CREATE INDEX IF NOT EXISTS idx_publications_carousel ON publications(carousel_id);
 
+  -- Snapshots de rendimiento. Fechados a propósito: los números crecen con el
+  -- tiempo y la API solo conserva 90 días, así que guardando series (a) el
+  -- histórico propio es ilimitado y (b) se puede medir la VELOCIDAD (cuánto pegó
+  -- en las primeras 24 h), que compara piezas de distinta antigüedad sin castigar
+  -- a las recientes. metrics_json va crudo: si Meta cambia el vocabulario de
+  -- métricas —ya lo hizo en v21— se reinterpreta sin perder lo recogido.
+  CREATE TABLE IF NOT EXISTS media_insights (
+    media_id    TEXT NOT NULL,
+    captured_at TEXT NOT NULL,
+    metrics_json TEXT NOT NULL,
+    PRIMARY KEY (media_id, captured_at)
+  );
+
   CREATE TABLE IF NOT EXISTS pinterest_pins (
     pin_id        TEXT PRIMARY KEY,
     downloaded_at TEXT DEFAULT (datetime('now'))
@@ -145,5 +158,24 @@ for (const sql of [
 ]) {
   try { db.exec(sql) } catch (_) { /* columna ya existe */ }
 }
+
+// Estado de la receta de cada publicación, DERIVADO (no duplicamos estado que se
+// pueda desincronizar):
+//   full    → hay pieza en la DB: se sabe frase, imagen, audio, estilo de render.
+//   partial → solo se recuperó la frase (publicado antes del historial): sirve
+//             para analizar tema/mood, no estilo visual. Queda así marcado para
+//             poder completarlo a mano más adelante.
+//   none    → sin identificar.
+db.exec(`
+  CREATE VIEW IF NOT EXISTS v_publication_recipe AS
+  SELECT
+    p.*,
+    CASE
+      WHEN p.video_id IS NOT NULL OR p.carousel_id IS NOT NULL THEN 'full'
+      WHEN p.phrase_id IS NOT NULL THEN 'partial'
+      ELSE 'none'
+    END AS recipe_status
+  FROM publications p
+`)
 
 export default db
