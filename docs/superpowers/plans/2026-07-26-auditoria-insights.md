@@ -8,7 +8,14 @@
 
 **Tech Stack:** Node + TS (server), `better-sqlite3`, `graph.instagram.com` (cuenta propia, token del Sheet) + `graph.facebook.com` (nicho, Page token de n8n), `node-cron`, Gemini (visión + audio, ya en uso), FFmpeg (ya en uso), React (panel).
 
-**Decisión de David (2026-07-26):** vía = **Graph API propia**; consumo = **panel en la app**.
+**Decisión de David (2026-07-26):** vía = **Graph API propia** para @bebetter.path; consumo = **panel en la app**.
+**Decisión (2026-07-27):** el nicho va por **Apify**, no por `business_discovery` → la Fase 0 deja de ser bloqueante.
+
+> [!success] Estado 2026-07-27
+> **Fases 1 y 2 IMPLEMENTADAS y verificadas contra la cuenta real.** 60 publicaciones
+> reconciliadas (59 con receta, 1 sin identificar) y 60/60 con insights recogidos.
+> Commits `fe3509c`, `f732880`, `f55df9e`, `f939fe2` en `main`.
+> Falta: **Fase 4 (panel)** y **Fase 5 (nicho por Apify)**.
 
 ---
 
@@ -40,9 +47,13 @@
 
 ---
 
-## Fase 0 — Desbloqueo del nicho (verificación, ~5 min)
+## Fase 0 — Desbloqueo del nicho ~~(verificación)~~ → **DESCARTADA (2026-07-27)**
 
-**No bloquea las fases 1–4.** Se hace pronto solo porque define si la Fase 5 existe.
+> El nicho pasa a **Apify** (ver Fase 5), que no necesita Facebook Login, ni vínculo
+> de página, ni permisos nuevos. Esta fase queda documentada por si algún día se
+> quiere la vía oficial.
+
+**No bloquea las fases 1–4.** Se hacía solo para saber si la Fase 5 era viable por API oficial.
 
 1. Con el Page token: `GET /v25.0/1058087370724713?fields=instagram_business_account`
    - Devuelve un id → @bebetter.path **está vinculada** a la página ⇒ el nicho es viable.
@@ -144,16 +155,28 @@ Cuarto modo junto a Video / Imagen / Carrusel (o pestaña en el LeftPanel):
 
 ---
 
-## Fase 5 — Nicho (condicionada a la Fase 0)
+## Fase 5 — Nicho, por **Apify** (decisión 2026-07-27)
 
-`business_discovery` con el Page token, por cada @username:
-`business_discovery.username(X){followers_count,media_count,media{caption,like_count,comments_count,media_type,media_url,permalink,timestamp}}`
+Se descarta `business_discovery` como vía principal. Apify **no necesita Facebook
+Login, ni vínculo de página, ni permisos nuevos**, y devuelve *más* que la API
+oficial — incluido `musicInfo` (`song_name`, `artist_name`, `uses_original_audio`)
+y `videoPlayCount`, que la API oficial **no da para cuentas ajenas**.
 
-Enriquecimiento con lo que ya está montado (ver la sección siguiente). Reutiliza `analyzeImageStructured` y la taxonomía de 6 moods, para que las cuentas del nicho queden descritas **en el mismo vocabulario** que el contenido propio — sin eso, la comparación no es comparación.
+**Coste:** ~$1.50–2.70 / 1000 resultados. Un barrido de 5 cuentas × 50 posts ≈ **$0.40**.
+
+**Riesgo, dicho claro:** scrapear incumple los ToS de Instagram (recolectar datos
+públicos no es ilegal, pero es incumplimiento contractual) y los actores se rompen
+cuando IG cambia el HTML. El matiz que lo hace aceptable aquí: **Apify usa sus
+propios proxies, no el login de bebetter** — la cuenta no queda expuesta a un
+bloqueo. Para la cuenta propia jamás se usa scraping: ahí la API oficial da reach,
+saves y shares, que son privados y ningún scraper ve.
+
+**Pipeline:** actor de Apify → posts del nicho → enriquecimiento con la cadena de
+percepción (ver abajo) → tablas propias, en el **mismo vocabulario** que el
+contenido propio (taxonomía de 6 moods, `nivel_energia`), porque si no, la
+comparación no es comparación.
 
 Esto es lo que destraba los **formatos virales** congelados en la v1.8 del roadmap.
-
----
 
 ## Cómo se "ve" el contenido (percepción)
 
@@ -165,7 +188,7 @@ La app **produjo** cada pieza: frase, imagen, audio, estilo y efecto ya están e
 
 | Qué queremos | Cómo se obtiene | ¿Existe ya? |
 |---|---|---|
-| Caption, tipo, likes, comments, fecha | Directo de la API | — |
+| Caption, tipo, likes, comments, fecha, **views**, **canción** | Directo de Apify | — |
 | Imagen de fondo, elementos, paleta, composición | Frame → `analyzeImageStructured` (Gemini vision) | ✅ en uso |
 | **Hook** (texto en pantalla de los primeros segundos) | FFmpeg extrae frames 0–3 s → Gemini lee el texto incrustado | ✅ FFmpeg + visión |
 | Guion completo / voz en off | Descargar el mp4 → transcribir con **Gemini audio input** | ✅ verificado en la fundación de audio |
@@ -174,9 +197,9 @@ La app **produjo** cada pieza: frase, imagen, audio, estilo y efecto ya están e
 
 **Sin pantallazos y sin asistencia manual.** Lo único que necesito de ti: la Fase 0 (el Page token no está en el repo) y **la lista de @usernames**.
 
-**Dos límites honestos:**
-1. **La canción/audio original de un reel ajeno no se puede identificar por API** — no hay campo de audio track en `business_discovery`, y reconocer la pista (tipo Shazam) es otro problema. Si te importa saber qué audios usan, eso sí es revisión manual.
-2. **Nada de Stories de terceros** — no son accesibles.
+**Límites (actualizado 2026-07-27):**
+1. ~~La canción de un reel ajeno no se puede identificar~~ → **con Apify sí**: sus actores devuelven `musicInfo` con `song_name`, `artist_name` y `uses_original_audio`. Con la API oficial seguiría siendo imposible.
+2. **Nada de Stories de terceros** — no son accesibles por ninguna vía.
 
 Para una revisión **cualitativa puntual** de un reel concreto (tuyo o ajeno) tengo además el MCP `claude-video-vision`, que ve el video directamente. Sirve para "mira este reel y dime por qué funciona", no para procesar cien en lote — eso es la cadena de arriba.
 
@@ -197,7 +220,37 @@ Para una revisión **cualitativa puntual** de un reel concreto (tuyo o ajeno) te
 
 ## Orden de ejecución
 
-**1 → 2 → 0 → 3 → 4 → 5.** La Fase 1 es la única con coste de oportunidad diario. La 0 se puede colar en cualquier hueco (son 5 minutos y depende de David).
+~~1 → 2 → 0 → 3 → 4 → 5~~ → **1 ✅ → 2 ✅ → 3 ✅ → 4 → 5.** La Fase 0 desaparece (el nicho
+va por Apify). Las fases 1, 2 y 3 quedaron hechas el 2026-07-27; el cruce (3) salió
+dentro del mismo servicio que el recolector, no hizo falta un `analyticsService` aparte.
+
+## Lo aprendido al ejecutar (2026-07-27)
+
+**1. La receta se puede leer en la propia miniatura.** El plan asumía que lo publicado
+antes del historial estaba perdido. No: los reels llevan **la frase quemada en el video**,
+así que la miniatura la contiene *literal* — a diferencia del caption, que es una
+reescritura de Gemini. Leyéndola con visión (`extractOverlayText`) y comparando frase
+contra frase, de **40 huérfanas quedó 1**. Nueve se ataron a su video; treinta
+recuperaron al menos la frase (`recipe_status = 'partial'`: sirven para analizar tema y
+mood, no estilo visual).
+
+**2. El emparejamiento por caption es estructuralmente débil.** Solapamiento léxico del
+25-50% incluso cuando el post SÍ correspondía, porque el caption es texto generado. El
+pase por embeddings solo rescató 1 de 40 — útil, pero muy por detrás de la visión.
+
+**3. El Sheet ya era el puente.** La fila `published` guarda `videoUrl`, que es
+exactamente `videos.s3_url` → vínculo con confianza total sin adivinar. Eso degradó el
+cambio de n8n de requisito a mejora (se hizo igual, `add-mediaid-to-queues.py`).
+
+**4. La Fase 3 no necesitó servicio propio:** el cruce vive en `insightsService`
+(`pieceStats`, `summaryByDimension`), porque comparte todo el contexto con el recolector.
+
+**5. Primera lectura de datos reales** (60 publicaciones, 60/60 con métricas): el reach
+varía **dos órdenes de magnitud** entre piezas (de ~45 a ~11.400). Con esa dispersión,
+cualquier media por grupo es engañosa hasta tener bastantes piezas por celda — el
+`MIN_N` del panel no es un adorno defensivo, es necesario. Además hoy casi toda la
+variedad está en la frase: `efecto` y `origen de imagen` son prácticamente constantes
+(28 piezas, un solo valor), así que esas dimensiones no pueden discriminar todavía.
 
 ## Links
 
