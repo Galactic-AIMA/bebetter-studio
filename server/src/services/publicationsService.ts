@@ -594,3 +594,92 @@ export function persistReconcile(report: ReconcileReport, includeOrphans = true)
   tx(filas)
   return filas.length
 }
+
+// ---------------------------------------------------------------------------
+// Completar recetas parciales
+// ---------------------------------------------------------------------------
+
+/**
+ * Identifica la **imagen de fondo** de una publicación mirando su miniatura.
+ *
+ * Para lo publicado antes del historial no hay pieza en la DB, así que la imagen
+ * no se puede consultar: hay que reconocerla. Se analiza la miniatura con el
+ * mismo pipeline del banco (`analyzeImageStructured` → embedding) y se busca la
+ * imagen más cercana entre las 238 vectorizadas.
+ *
+ * Validado contra 5 publicaciones cuya imagen sí conocíamos: 4 acertaron en el
+ * primer puesto (coseno 0,91–0,96) y la que falló se quedó en 0,896 — por debajo
+ * del umbral, o sea que se habría rechazado sola. De ahí los dos filtros:
+ * **score mínimo** y **margen sobre la segunda**, porque un top1 que gana por poco
+ * suele significar que hay varias imágenes parecidas y no que sea la correcta.
+ *
+ * Devuelve la imagen SOLO si pasa ambos; si no, no identifica. Es identificación,
+ * no adivinación: el score se guarda para poder revisarlo.
+ */
+export const IMAGE_MATCH_MIN = 0.9
+export const IMAGE_MATCH_MARGIN = 0.015
+
+export interface ImageMatch {
+  mediaId: string
+  filename?: string
+  score: number
+  second: number
+  reason: string
+}
+
+export async function identifyBackgroundImage(
+  mediaId: string,
+  thumbnailUrl: string,
+  analyze: (url: string) => Promise<Float32Array>,
+  cosine: (a: Float32Array, b: Float32Array) => number
+): Promise<ImageMatch> {
+  const banco = (db.prepare(`SELECT filename, embedding FROM images WHERE embedding IS NOT NULL`).all() as any[]).map(
+    (r) => {
+      const b = r.embedding as Buffer
+      return { filename: r.filename as string, vec: new Float32Array(b.buffer, b.byteOffset, b.byteLength / 4) }
+    }
+  )
+  if (!banco.length) return { mediaId, score: 0, second: 0, reason: 'el banco no tiene embeddings' }
+
+  const vec = await analyze(thumbnailUrl)
+  const rank = banco
+    .map((b) => ({ filename: b.filename, score: cosine(vec, b.vec) }))
+    .sort((a, b) => b.score - a.score)
+
+  const [uno, dos] = rank
+  const margen = uno.score - (dos?.score ?? 0)
+
+  if (uno.score < IMAGE_MATCH_MIN) {
+    return {
+      mediaId,
+      score: uno.score,
+      second: dos?.score ?? 0,
+      reason: `mejor candidato ${uno.score.toFixed(3)} < ${IMAGE_MATCH_MIN} — no se identifica`,
+    }
+  }
+  if (margen < IMAGE_MATCH_MARGIN) {
+    return {
+      mediaId,
+      score: uno.score,
+      second: dos?.score ?? 0,
+      reason: `${uno.filename} y ${dos.filename} empatan (margen ${margen.toFixed(3)}) — ambiguo, no se identifica`,
+    }
+  }
+
+  return {
+    mediaId,
+    filename: uno.filename,
+    score: uno.score,
+    second: dos?.score ?? 0,
+    reason: `${uno.filename} (coseno ${uno.score.toFixed(3)}, margen ${margen.toFixed(3)})`,
+  }
+}
+
+export function saveImageMatch(m: ImageMatch): void {
+  if (!m.filename) return
+  db.prepare(`UPDATE publications SET image_filename = ?, image_match_score = ? WHERE media_id = ?`).run(
+    m.filename,
+    m.score,
+    m.mediaId
+  )
+}

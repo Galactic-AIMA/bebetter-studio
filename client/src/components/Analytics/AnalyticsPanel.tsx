@@ -41,6 +41,35 @@ function veces(v?: number): string {
   return v == null ? '—' : `${v.toFixed(2).replace('.', ',')}×`
 }
 
+/**
+ * Cobertura de la receta como cuatro puntos: contenido, visual, sonoro, render.
+ *
+ * Sustituye al antiguo "completa / parcial", que mentía por los dos lados: una
+ * pieza con vídeo pero sin pista de audio salía como completa, y otra a la que se
+ * le había reconocido la imagen se veía igual que una que solo tenía la frase.
+ */
+function Cobertura({ p }: { p: PieceStats }) {
+  const bloques: [string, boolean][] = [
+    ['Frase', p.hasPhrase],
+    ['Imagen', p.hasImage],
+    ['Audio', p.hasAudio],
+    ['Render', p.hasRender],
+  ]
+  return (
+    <span
+      className="inline-flex gap-[3px] align-middle"
+      title={bloques.map(([n, ok]) => `${ok ? '✓' : '·'} ${n}`).join('   ')}
+    >
+      {bloques.map(([n, ok]) => (
+        <span
+          key={n}
+          className={`w-1.5 h-1.5 rounded-full ${ok ? 'bg-gold-500' : 'bg-carbon-600'}`}
+        />
+      ))}
+    </span>
+  )
+}
+
 function fecha(iso: string): string {
   const d = new Date(iso)
   return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString('es-CO', { day: '2-digit', month: 'short' })
@@ -106,8 +135,14 @@ export default function AnalyticsPanel() {
     return [...m.entries()]
   }, [dims])
 
-  const completas = pieces.filter((p) => p.recipeStatus === 'full').length
-  const parciales = pieces.filter((p) => p.recipeStatus === 'partial').length
+  const completas = pieces.filter((p) => p.recipeBlocks === 4).length
+  const medias = pieces.filter((p) => p.recipeBlocks > 0 && p.recipeBlocks < 4).length
+  const cobertura = {
+    frase: pieces.filter((p) => p.hasPhrase).length,
+    imagen: pieces.filter((p) => p.hasImage).length,
+    audio: pieces.filter((p) => p.hasAudio).length,
+    render: pieces.filter((p) => p.hasRender).length,
+  }
 
   return (
     <div className="h-full overflow-y-auto px-8 py-6 text-bone-500">
@@ -134,9 +169,16 @@ export default function AnalyticsPanel() {
         </button>
       </div>
 
-      <p className="text-xs text-bone-700 mb-5">
-        {pieces.length} publicaciones · {completas} con receta completa · {parciales} solo con la frase
+      <p className="text-xs text-bone-700 mb-1">
+        {pieces.length} publicaciones · {completas} con la receta entera · {medias} incompletas
         {conDatos.length < pieces.length && ` · ${pieces.length - conDatos.length} sin métricas todavía`}
+      </p>
+      <p className="text-[11px] text-bone-700 mb-5">
+        Se conoce la <span className="text-bone-500">frase</span> de {cobertura.frase}, la{' '}
+        <span className="text-bone-500">imagen</span> de {cobertura.imagen}, el{' '}
+        <span className="text-bone-500">audio</span> de {cobertura.audio} y el{' '}
+        <span className="text-bone-500">render</span> de {cobertura.render}. Una dimensión solo puede
+        compararse sobre las piezas donde ese bloque se conoce.
       </p>
 
       {aviso && <div className="mb-4 text-xs text-gold-500 bg-carbon-800 rounded-md px-3 py-2">{aviso}</div>}
@@ -202,14 +244,9 @@ export default function AnalyticsPanel() {
                     <td className="px-3 py-2 text-bone-700 whitespace-nowrap">{fecha(p.publishedAt)}</td>
                     <td className="px-3 py-2 max-w-md">
                       <span className="line-clamp-1">{p.texto ?? <em className="text-bone-700">sin identificar</em>}</span>
-                      {p.recipeStatus === 'partial' && (
-                        <span
-                          className="ml-1.5 text-[10px] text-gold-600"
-                          title="Publicado antes del historial: se recuperó la frase, pero no el estilo, la imagen ni el audio"
-                        >
-                          receta parcial
-                        </span>
-                      )}
+                      <span className="ml-2">
+                        <Cobertura p={p} />
+                      </span>
                     </td>
                     <td className="px-3 py-2 text-bone-700 whitespace-nowrap">{p.moodCategory ?? '—'}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{num(p.reach)}</td>

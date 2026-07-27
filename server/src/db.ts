@@ -155,27 +155,65 @@ for (const sql of [
   // historial): sin video_id, pero con la frase ya se tiene media receta —
   // mood, energía y paleta salen de `phrases` (2026-07-26)
   `ALTER TABLE publications ADD COLUMN phrase_id TEXT`,
+  // Imagen de fondo IDENTIFICADA en la miniatura (no la que dice el historial:
+  // estas publicaciones no tienen pieza en la DB). Se guarda con su score para
+  // poder revisar o rehacer la identificación con otro umbral (2026-07-27).
+  `ALTER TABLE publications ADD COLUMN image_filename TEXT`,
+  `ALTER TABLE publications ADD COLUMN image_match_score REAL`,
 ]) {
   try { db.exec(sql) } catch (_) { /* columna ya existe */ }
 }
 
-// Estado de la receta de cada publicación, DERIVADO (no duplicamos estado que se
-// pueda desincronizar):
-//   full    → hay pieza en la DB: se sabe frase, imagen, audio, estilo de render.
-//   partial → solo se recuperó la frase (publicado antes del historial): sirve
-//             para analizar tema/mood, no estilo visual. Queda así marcado para
-//             poder completarlo a mano más adelante.
-//   none    → sin identificar.
+// Cobertura de la receta de cada publicación, DERIVADA por bloques.
+//
+// Antes esto era un binario (`hay pieza en la DB` = completa) y mentía por los
+// dos lados: una publicación con pieza pero sin audio se contaba como completa,
+// y una a la que se le había reconocido la imagen se veía igual que una que solo
+// tenía la frase. Ahora cada bloque se comprueba por separado y `recipe_status`
+// sale de cuántos hay.
+//
+// En carruseles, `audio` y `render` NO APLICAN (no llevan música y el "render" es
+// el prompt de marca, que ya vive en slides_json) → cuentan como cubiertos, para
+// no marcarlos incompletos por algo que nunca van a tener.
+db.exec(`DROP VIEW IF EXISTS v_publication_recipe`)
 db.exec(`
-  CREATE VIEW IF NOT EXISTS v_publication_recipe AS
+  CREATE VIEW v_publication_recipe AS
   SELECT
     p.*,
+    CASE WHEN p.phrase_id IS NOT NULL OR v.phrase_id IS NOT NULL OR p.carousel_id IS NOT NULL
+         THEN 1 ELSE 0 END AS has_phrase,
+    CASE WHEN p.image_filename IS NOT NULL
+              OR json_extract(v.config_extra, '$.imageId') IS NOT NULL
+              OR p.carousel_id IS NOT NULL
+         THEN 1 ELSE 0 END AS has_image,
+    CASE WHEN COALESCE(json_extract(v.config_extra, '$.audioTrack'), '') NOT IN ('', 'auto')
+              OR p.carousel_id IS NOT NULL
+         THEN 1 ELSE 0 END AS has_audio,
+    CASE WHEN v.style IS NOT NULL OR v.font IS NOT NULL OR p.carousel_id IS NOT NULL
+         THEN 1 ELSE 0 END AS has_render,
+    (
+      CASE WHEN p.phrase_id IS NOT NULL OR v.phrase_id IS NOT NULL OR p.carousel_id IS NOT NULL THEN 1 ELSE 0 END +
+      CASE WHEN p.image_filename IS NOT NULL OR json_extract(v.config_extra, '$.imageId') IS NOT NULL OR p.carousel_id IS NOT NULL THEN 1 ELSE 0 END +
+      CASE WHEN COALESCE(json_extract(v.config_extra, '$.audioTrack'), '') NOT IN ('', 'auto') OR p.carousel_id IS NOT NULL THEN 1 ELSE 0 END +
+      CASE WHEN v.style IS NOT NULL OR v.font IS NOT NULL OR p.carousel_id IS NOT NULL THEN 1 ELSE 0 END
+    ) AS recipe_blocks,
     CASE
-      WHEN p.video_id IS NOT NULL OR p.carousel_id IS NOT NULL THEN 'full'
-      WHEN p.phrase_id IS NOT NULL THEN 'partial'
+      WHEN (
+        CASE WHEN p.phrase_id IS NOT NULL OR v.phrase_id IS NOT NULL OR p.carousel_id IS NOT NULL THEN 1 ELSE 0 END +
+        CASE WHEN p.image_filename IS NOT NULL OR json_extract(v.config_extra, '$.imageId') IS NOT NULL OR p.carousel_id IS NOT NULL THEN 1 ELSE 0 END +
+        CASE WHEN COALESCE(json_extract(v.config_extra, '$.audioTrack'), '') NOT IN ('', 'auto') OR p.carousel_id IS NOT NULL THEN 1 ELSE 0 END +
+        CASE WHEN v.style IS NOT NULL OR v.font IS NOT NULL OR p.carousel_id IS NOT NULL THEN 1 ELSE 0 END
+      ) = 4 THEN 'full'
+      WHEN (
+        CASE WHEN p.phrase_id IS NOT NULL OR v.phrase_id IS NOT NULL OR p.carousel_id IS NOT NULL THEN 1 ELSE 0 END +
+        CASE WHEN p.image_filename IS NOT NULL OR json_extract(v.config_extra, '$.imageId') IS NOT NULL OR p.carousel_id IS NOT NULL THEN 1 ELSE 0 END +
+        CASE WHEN COALESCE(json_extract(v.config_extra, '$.audioTrack'), '') NOT IN ('', 'auto') OR p.carousel_id IS NOT NULL THEN 1 ELSE 0 END +
+        CASE WHEN v.style IS NOT NULL OR v.font IS NOT NULL OR p.carousel_id IS NOT NULL THEN 1 ELSE 0 END
+      ) > 0 THEN 'partial'
       ELSE 'none'
     END AS recipe_status
   FROM publications p
+  LEFT JOIN videos v ON v.id = p.video_id
 `)
 
 export default db

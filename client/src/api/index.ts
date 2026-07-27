@@ -334,6 +334,12 @@ export interface PieceStats {
   publishedAt: string
   mediaType?: string
   recipeStatus: 'full' | 'partial' | 'none'
+  recipeBlocks: number
+  hasPhrase: boolean
+  hasImage: boolean
+  hasAudio: boolean
+  hasRender: boolean
+  imagenArchivo?: string
   texto?: string
   moodCategory?: string
   nivelEnergia?: number

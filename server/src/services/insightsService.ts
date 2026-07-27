@@ -151,6 +151,14 @@ export interface PieceStats {
   publishedAt: string
   mediaType?: string
   recipeStatus: 'full' | 'partial' | 'none'
+  /** Cuántos de los cuatro bloques de receta se conocen (contenido/visual/sonoro/render) */
+  recipeBlocks: number
+  hasPhrase: boolean
+  hasImage: boolean
+  hasAudio: boolean
+  hasRender: boolean
+  /** Archivo de la imagen de fondo: el del historial o el identificado en la miniatura */
+  imagenArchivo?: string
   /** Texto de la frase o de la portada del carrusel */
   texto?: string
   moodCategory?: string
@@ -187,6 +195,9 @@ export function pieceStats(): PieceStats[] {
     .prepare(
       `SELECT
          r.media_id, r.permalink, r.published_at, r.media_type, r.recipe_status,
+         r.recipe_blocks, r.has_phrase, r.has_image, r.has_audio, r.has_render,
+         COALESCE(r.image_filename, json_extract(v.config_extra, '$.imageId')) AS imagen_archivo,
+         img.origen AS imagen_origen,
          COALESCE(pv.text, pc.text) AS frase_video,
          COALESCE(pv.mood_category, pc.mood_category) AS mood,
          COALESCE(pv.nivel_energia, pc.nivel_energia) AS energia,
@@ -195,6 +206,7 @@ export function pieceStats(): PieceStats[] {
          i.metrics_json
        FROM v_publication_recipe r
        LEFT JOIN videos    v  ON v.id = r.video_id
+       LEFT JOIN images    img ON img.filename = COALESCE(r.image_filename, json_extract(v.config_extra, '$.imageId'))
        LEFT JOIN carousels c  ON c.id = r.carousel_id
        LEFT JOIN phrases   pv ON pv.id = v.phrase_id
        LEFT JOIN phrases   pc ON pc.id = r.phrase_id
@@ -220,17 +232,14 @@ export function pieceStats(): PieceStats[] {
     }
 
     let audio: string | undefined
-    let imagenOrigen: string | undefined
     if (f.config_extra) {
       try {
-        const extra = JSON.parse(f.config_extra)
-        audio = extra.audioTrack
-        if (extra.imageId) {
-          const img = db.prepare(`SELECT origen FROM images WHERE filename = ?`).get(extra.imageId) as any
-          imagenOrigen = img?.origen ?? 'banco'
-        }
+        audio = JSON.parse(f.config_extra).audioTrack
       } catch { /* ignorado */ }
     }
+    // 'banco' por defecto: si la imagen existe y no dice origen, vino del banco
+    // (la columna `origen` solo se rellena desde que hay imágenes de IA).
+    const imagenOrigen = f.imagen_archivo ? (f.imagen_origen ?? 'banco') : undefined
 
     const interacciones = (m.likes ?? 0) + (m.comments ?? 0) + (m.saved ?? 0) + (m.shares ?? 0)
 
@@ -240,6 +249,12 @@ export function pieceStats(): PieceStats[] {
       publishedAt: f.published_at,
       mediaType: f.media_type ?? undefined,
       recipeStatus: f.recipe_status,
+      recipeBlocks: f.recipe_blocks ?? 0,
+      hasPhrase: !!f.has_phrase,
+      hasImage: !!f.has_image,
+      hasAudio: !!f.has_audio,
+      hasRender: !!f.has_render,
+      imagenArchivo: f.imagen_archivo ?? undefined,
       texto,
       moodCategory: f.mood ?? undefined,
       nivelEnergia: f.energia ?? undefined,
