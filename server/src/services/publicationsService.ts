@@ -86,6 +86,62 @@ function rowToPublication(r: any): Publication {
   }
 }
 
+/**
+ * Trae a la DB los `mediaId` que n8n haya escrito en las colas del Sheet.
+ *
+ * `[Pub]` y `[SchedCarrusel]` publican cuando la app no está corriendo, así que
+ * no pueden llamarla: dejan el media id en la fila `published` y la app lo
+ * recoge de ahí. Evita tocar los 58 nodos de `[Pub]` con un webhook de vuelta.
+ *
+ * Devuelve cuántos vínculos nuevos se registraron.
+ */
+export async function syncPublicationsFromSheet(): Promise<number> {
+  const [queue, carouselQueue] = await Promise.all([
+    readQueueRows().catch(() => []),
+    readCarouselQueueRows().catch(() => []),
+  ])
+
+  const videosByUrl = new Map<string, string>()
+  for (const v of db.prepare(`SELECT id, s3_url FROM videos WHERE s3_url IS NOT NULL`).all() as any[]) {
+    videosByUrl.set(v.s3_url, v.id)
+  }
+
+  let n = 0
+
+  for (const r of queue) {
+    if (!r.mediaId || r.status !== 'published') continue
+    recordPublication({
+      mediaId: r.mediaId,
+      platform: 'instagram',
+      permalink: r.permalink,
+      publishedAt: r.publishedAt ?? r.createdAt,
+      videoId: videosByUrl.get(r.videoUrl),
+      queueId: r.id,
+      caption: r.captionIG,
+      matchSource: 'sheet',
+    })
+    n++
+  }
+
+  for (const r of carouselQueue) {
+    if (!r.mediaId || r.status !== 'published') continue
+    recordPublication({
+      mediaId: r.mediaId,
+      platform: 'instagram',
+      mediaType: 'CAROUSEL_ALBUM',
+      permalink: r.permalink,
+      publishedAt: r.publishedAt ?? r.createdAt,
+      carouselId: r.carouselId,
+      queueId: r.id,
+      caption: r.captionIG,
+      matchSource: 'sheet',
+    })
+    n++
+  }
+
+  return n
+}
+
 // ---------------------------------------------------------------------------
 // Reconciliación
 // ---------------------------------------------------------------------------

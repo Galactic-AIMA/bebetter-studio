@@ -29,6 +29,9 @@ export interface QueueRow {
   attempts?: number
   publishedAt?: string
   error?: string
+  /** media id de Instagram del post publicado — puente hacia `publications` */
+  mediaId?: string
+  permalink?: string
 }
 
 /** Orden de columnas en la pestaña "Cola" — DEBE coincidir con setup-queue-sheet.ts */
@@ -45,6 +48,8 @@ export const QUEUE_COLUMNS: (keyof QueueRow)[] = [
   'attempts',
   'publishedAt',
   'error',
+  'mediaId',
+  'permalink',
 ]
 
 const COLA_SHEET = 'Cola'
@@ -77,7 +82,7 @@ export async function readQueueRows(): Promise<QueueRow[]> {
   const sheets = getSheets()
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: requireSheetId(),
-    range: `${COLA_SHEET}!A2:L`,
+    range: `${COLA_SHEET}!A2:N`,
   })
   return (res.data.values || []).map((r) => {
     const o: Record<string, string> = {}
@@ -213,6 +218,9 @@ export interface CarouselQueueRow {
   publishedAt?: string
   attempts?: number
   error?: string
+  /** media id de Instagram del post publicado — puente hacia `publications` */
+  mediaId?: string
+  permalink?: string
 }
 
 /** Orden de columnas de la pestaña "ColaCarruseles" — DEBE coincidir con el script de setup. */
@@ -229,6 +237,8 @@ export const CAROUSEL_QUEUE_COLUMNS: (keyof CarouselQueueRow)[] = [
   'publishedAt',
   'attempts',
   'error',
+  'mediaId',
+  'permalink',
 ]
 
 export const CAROUSEL_SHEET = 'ColaCarruseles'
@@ -238,7 +248,7 @@ export async function readCarouselQueueRows(): Promise<CarouselQueueRow[]> {
   const sheets = getSheets()
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: requireSheetId(),
-    range: `${CAROUSEL_SHEET}!A2:L`,
+    range: `${CAROUSEL_SHEET}!A2:N`,
   })
   return (res.data.values || []).map((r) => {
     const o: Record<string, string> = {}
