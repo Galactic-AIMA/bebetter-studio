@@ -14,6 +14,7 @@ import {
   writeCarouselCadence,
   CarouselQueueRow,
 } from '../services/sheetsService'
+import { recordPublication } from '../services/publicationsService'
 import { nextCarouselSlots } from '../utils/schedule'
 import { logInfo, logError } from '../services/logService'
 
@@ -277,11 +278,27 @@ router.post('/:id/publish', async (req, res) => {
 
     const mediaId = await publishCarousel(imageUrls, caption, altTexts)
     const publishedAt = new Date().toISOString()
+    const queueId = uuidv4()
+
+    // Puente pieza ↔ publicación real. Aquí el media id lo tenemos en la mano;
+    // en la vía programada hay que reconstruirlo después (backfill-publications).
+    if (mediaId) {
+      recordPublication({
+        mediaId,
+        platform: 'instagram',
+        mediaType: 'CAROUSEL_ALBUM',
+        publishedAt,
+        carouselId: carousel.id,
+        queueId,
+        caption,
+        matchSource: 'app',
+      })
+    }
 
     // Registro en la cola (ya publicado): el Sheet mantiene el histórico.
     await appendCarouselQueueRows([
       {
-        id: uuidv4(),
+        id: queueId,
         carouselId: carousel.id,
         tema: tituloCorto(carousel.slides, carousel.tema),
         referencia: carousel.fuente?.referencia,

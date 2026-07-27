@@ -159,3 +159,59 @@ export async function publishCarousel(
   await waitFinished(containerId, token)
   return publishContainer(containerId, token)
 }
+
+/** Un post ya publicado en la cuenta, tal como lo devuelve `/me/media`. */
+export interface PublishedMedia {
+  id: string
+  caption?: string
+  /** IMAGE | VIDEO | CAROUSEL_ALBUM */
+  mediaType?: string
+  /** FEED | REELS | STORY — distingue un Reel de un video de feed */
+  productType?: string
+  permalink?: string
+  /** ISO 8601 con offset, p. ej. 2026-07-26T21:55:00+0000 */
+  timestamp?: string
+  thumbnailUrl?: string
+}
+
+/**
+ * Lista los posts publicados en la cuenta (más reciente primero), paginando.
+ *
+ * Es la fuente de verdad de QUÉ hay publicado: la usamos para reconciliar con
+ * las piezas de la DB y detectar publicaciones anteriores al historial.
+ */
+export async function fetchPublishedMedia(limit = 200): Promise<PublishedMedia[]> {
+  const token = await getToken()
+  const fields = 'id,caption,media_type,media_product_type,permalink,timestamp,thumbnail_url'
+  const out: PublishedMedia[] = []
+
+  let url: string | undefined = `${IG_API}/${IG_USER_ID}/media`
+  let params: Record<string, unknown> | undefined = { fields, limit: 50, access_token: token }
+
+  while (url && out.length < limit) {
+    let data: any
+    try {
+      ;({ data } = await axios.get(url, { params, timeout: 30_000 }))
+    } catch (err: any) {
+      throw igError(err, 'listar los posts publicados')
+    }
+
+    for (const m of data?.data ?? []) {
+      out.push({
+        id: m.id,
+        caption: m.caption,
+        mediaType: m.media_type,
+        productType: m.media_product_type,
+        permalink: m.permalink,
+        timestamp: m.timestamp,
+        thumbnailUrl: m.thumbnail_url,
+      })
+    }
+
+    // El `next` ya viene firmado y con cursor: se pide tal cual, sin params.
+    url = data?.paging?.next
+    params = undefined
+  }
+
+  return out.slice(0, limit)
+}

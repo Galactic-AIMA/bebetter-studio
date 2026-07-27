@@ -86,6 +86,28 @@ db.exec(`
     created_at    TEXT DEFAULT (datetime('now'))
   );
 
+  -- Publicaciones reales en redes. Es el eslabón que une una pieza generada
+  -- (video/carrusel) con su rendimiento: sin el media_id no se puede pedir
+  -- insights ni saber qué receta produjo qué resultado.
+  -- video_id/carousel_id son nullable a propósito: hay publicaciones anteriores
+  -- al historial que no tienen pieza en la DB (se detectan y se dejan sin vincular).
+  CREATE TABLE IF NOT EXISTS publications (
+    media_id     TEXT PRIMARY KEY,
+    platform     TEXT NOT NULL DEFAULT 'instagram',
+    permalink    TEXT,
+    media_type   TEXT,
+    published_at TEXT NOT NULL,
+    video_id     TEXT,
+    carousel_id  TEXT,
+    queue_id     TEXT,
+    caption      TEXT,
+    match_source TEXT,
+    created_at   TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_publications_video    ON publications(video_id);
+  CREATE INDEX IF NOT EXISTS idx_publications_carousel ON publications(carousel_id);
+
   CREATE TABLE IF NOT EXISTS pinterest_pins (
     pin_id        TEXT PRIMARY KEY,
     downloaded_at TEXT DEFAULT (datetime('now'))
