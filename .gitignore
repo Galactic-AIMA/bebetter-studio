@@ -71,3 +71,4 @@ server/scripts/copy_prompts_backup.txt
 # Scheduler de carruseles en n8n (se corre con --apply)
 server/scripts/add-carousel-scheduler.py
 server/scripts/fix-igtoken-sheet-schema.py
+server/scripts/add-carousels-to-agent.py
