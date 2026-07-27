@@ -34,8 +34,11 @@ async function getToken(): Promise<string> {
  * vez de darse por vencido.
  */
 const METRICS_BY_TYPE: Record<string, string[]> = {
-  REELS: ['reach', 'likes', 'comments', 'saved', 'shares', 'views', 'total_interactions', 'ig_reels_avg_watch_time', 'ig_reels_video_view_total_time'],
-  VIDEO: ['reach', 'likes', 'comments', 'saved', 'shares', 'views', 'total_interactions'],
+  // `follows` y `profile_visits` NO existen para reels — verificado contra la API:
+  // "does not support the follows metric for this media product type". Solo el
+  // feed (imagen/carrusel) los expone.
+  REELS: ['reach', 'likes', 'comments', 'saved', 'shares', 'views', 'total_interactions', 'ig_reels_avg_watch_time', 'ig_reels_video_view_total_time', 'reels_skip_rate'],
+  VIDEO: ['reach', 'likes', 'comments', 'saved', 'shares', 'views', 'total_interactions', 'ig_reels_avg_watch_time', 'reels_skip_rate'],
   CAROUSEL_ALBUM: ['reach', 'likes', 'comments', 'saved', 'shares', 'views', 'total_interactions', 'follows', 'profile_visits'],
   IMAGE: ['reach', 'likes', 'comments', 'saved', 'shares', 'views', 'total_interactions', 'follows', 'profile_visits'],
 }
@@ -163,6 +166,14 @@ export interface PieceStats {
   saved?: number
   shares?: number
   views?: number
+  /** Seguidores ganados con el post — solo feed, los reels no lo exponen */
+  follows?: number
+  /** Segundos de visionado medio (reels) */
+  avgWatchTime?: number
+  /** % que pasa de largo sin verlo (reels). Cuanto más bajo, mejor engancha */
+  skipRate?: number
+  /** views/reach: cuántas veces se vio por persona alcanzada. >1 = replays */
+  viewsPerReach?: number
   /** saves/reach — proxy de "esto merece guardarse" */
   saveRate?: number
   /** shares/reach — el que más correlaciona con alcance nuevo */
@@ -242,6 +253,11 @@ export function pieceStats(): PieceStats[] {
       saved: m.saved,
       shares: m.shares,
       views: m.views,
+      follows: m.follows,
+      // La API lo da en milisegundos.
+      avgWatchTime: m.ig_reels_avg_watch_time != null ? m.ig_reels_avg_watch_time / 1000 : undefined,
+      skipRate: m.reels_skip_rate != null ? m.reels_skip_rate / 100 : undefined,
+      viewsPerReach: reach && m.views != null ? m.views / reach : undefined,
       saveRate: reach ? (m.saved ?? 0) / reach : undefined,
       shareRate: reach ? (m.shares ?? 0) / reach : undefined,
       engagementRate: reach ? interacciones / reach : undefined,
@@ -269,6 +285,21 @@ export const MIN_N = 5
  * entre grupos es ruido, y el consumidor debe poder callarse en vez de pintar un
  * ganador inventado. Por eso no se filtra aquí — se informa.
  */
+/**
+ * Agrupa la energía en tramos con nombre.
+ *
+ * Agrupar no es cosmético: la energía viene con decimales (3.5, 6.5, 7.5), así que
+ * usarla en crudo parte 60 piezas en diez grupos de uno o dos y ninguno llega al
+ * mínimo — todo sale "insuficiente" y la dimensión no dice nada.
+ */
+export function rangoEnergia(n?: number): string | undefined {
+  if (n == null) return undefined
+  if (n < 4) return 'baja (1-3)'
+  if (n < 6.5) return 'media (4-6)'
+  if (n < 8.5) return 'alta (7-8)'
+  return 'máxima (9-10)'
+}
+
 export function summaryByDimension(stats: PieceStats[] = pieceStats()): DimensionSummary[] {
   const dims: [string, (s: PieceStats) => string | undefined][] = [
     ['mood', (s) => s.moodCategory],
@@ -276,7 +307,7 @@ export function summaryByDimension(stats: PieceStats[] = pieceStats()): Dimensio
     ['imagen', (s) => s.imagenOrigen],
     ['estilo', (s) => s.estilo],
     ['efecto', (s) => s.efecto],
-    ['energia', (s) => (s.nivelEnergia == null ? undefined : String(s.nivelEnergia))],
+    ['energia', (s) => rangoEnergia(s.nivelEnergia)],
     ['hora', (s) => `${new Date(s.publishedAt).getHours()}h`],
   ]
 

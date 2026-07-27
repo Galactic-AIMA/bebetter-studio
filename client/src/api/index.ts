@@ -347,6 +347,10 @@ export interface PieceStats {
   saved?: number
   shares?: number
   views?: number
+  follows?: number
+  avgWatchTime?: number
+  skipRate?: number
+  viewsPerReach?: number
   saveRate?: number
   shareRate?: number
   engagementRate?: number

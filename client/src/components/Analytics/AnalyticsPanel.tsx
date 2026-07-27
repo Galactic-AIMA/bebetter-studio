@@ -11,7 +11,7 @@ import { useVideoStore } from '../../store/videoStore'
  * de pintar un ganador — con pocas piezas la diferencia entre grupos es ruido.
  */
 
-type Orden = 'reach' | 'saveRate' | 'shareRate' | 'engagementRate' | 'fecha'
+type Orden = 'reach' | 'views' | 'saveRate' | 'shareRate' | 'engagementRate' | 'skipRate' | 'fecha'
 
 const ETIQUETA_DIMENSION: Record<string, string> = {
   mood: 'Registro emocional',
@@ -29,6 +29,16 @@ function pct(v?: number): string {
 
 function num(v?: number): string {
   return v == null ? '—' : v.toLocaleString('es-CO')
+}
+
+/** Segundos con un decimal: "4,2 s". */
+function seg(v?: number): string {
+  return v == null ? '—' : `${v.toFixed(1).replace('.', ',')} s`
+}
+
+/** Veces vista por persona alcanzada: por encima de 1 hay replays. */
+function veces(v?: number): string {
+  return v == null ? '—' : `${v.toFixed(2).replace('.', ',')}×`
 }
 
 function fecha(iso: string): string {
@@ -146,9 +156,11 @@ export default function AnalyticsPanel() {
             <div className="flex items-center rounded-md overflow-hidden border border-carbon-600 text-[11px]">
               {([
                 ['reach', 'Alcance'],
+                ['views', 'Vistas'],
                 ['saveRate', 'Guardados'],
                 ['shareRate', 'Compartidos'],
                 ['engagementRate', 'Interacción'],
+                ['skipRate', 'Se lo saltan'],
                 ['fecha', 'Fecha'],
               ] as [Orden, string][]).map(([id, label]) => (
                 <button
@@ -174,9 +186,13 @@ export default function AnalyticsPanel() {
                   <th className="text-left font-normal px-3 py-2">Contenido</th>
                   <th className="text-left font-normal px-3 py-2">Registro</th>
                   <th className="text-right font-normal px-3 py-2">Alcance</th>
-                  <th className="text-right font-normal px-3 py-2">Guard.</th>
-                  <th className="text-right font-normal px-3 py-2">Comp.</th>
-                  <th className="text-right font-normal px-3 py-2">Interac.</th>
+                  <th className="text-right font-normal px-3 py-2" title="Reproducciones totales">Vistas</th>
+                  <th className="text-right font-normal px-3 py-2" title="Vistas por persona alcanzada: por encima de 1× hay quien lo repite">Repet.</th>
+                  <th className="text-right font-normal px-3 py-2" title="Segundos de visionado medio (solo reels)">Reten.</th>
+                  <th className="text-right font-normal px-3 py-2" title="Porcentaje que pasa de largo sin verlo. Cuanto más bajo, mejor engancha">Skip</th>
+                  <th className="text-right font-normal px-3 py-2" title="Guardados sobre alcance">Guard.</th>
+                  <th className="text-right font-normal px-3 py-2" title="Compartidos sobre alcance">Comp.</th>
+                  <th className="text-right font-normal px-3 py-2" title="Likes + comentarios + guardados + compartidos, sobre alcance">Interac.</th>
                   <th className="px-2 py-2"></th>
                 </tr>
               </thead>
@@ -197,6 +213,10 @@ export default function AnalyticsPanel() {
                     </td>
                     <td className="px-3 py-2 text-bone-700 whitespace-nowrap">{p.moodCategory ?? '—'}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{num(p.reach)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{num(p.views)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-bone-700">{veces(p.viewsPerReach)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-bone-700">{seg(p.avgWatchTime)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-bone-700">{pct(p.skipRate)}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{pct(p.saveRate)}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{pct(p.shareRate)}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{pct(p.engagementRate)}</td>
@@ -232,10 +252,24 @@ export default function AnalyticsPanel() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pb-8">
             {porDimension.map(([dimension, valores]) => (
               <div key={dimension} className="rounded-md border border-carbon-600 overflow-hidden">
-                <div className="bg-carbon-800 px-3 py-2 text-xs font-medium">
-                  {ETIQUETA_DIMENSION[dimension] ?? dimension}
+                <div className="bg-carbon-800 px-3 py-2 text-xs font-medium flex items-center justify-between">
+                  <span>{ETIQUETA_DIMENSION[dimension] ?? dimension}</span>
+                  {valores.length === 1 && (
+                    <span className="text-[10px] text-bone-700 font-normal">
+                      un solo valor — todavía no compara nada
+                    </span>
+                  )}
                 </div>
                 <table className="w-full text-xs">
+                  <thead className="text-bone-700 text-[10px]">
+                    <tr className="border-t border-carbon-700">
+                      <th className="text-left font-normal px-3 py-1">Valor</th>
+                      <th className="text-left font-normal px-2 py-1">Piezas</th>
+                      <th className="text-right font-normal px-2 py-1">Alcance medio</th>
+                      <th className="text-right font-normal px-2 py-1">Guardados</th>
+                      <th className="text-right font-normal px-3 py-1">Compartidos</th>
+                    </tr>
+                  </thead>
                   <tbody>
                     {valores.map((d) => {
                       const flojo = d.n < minN
