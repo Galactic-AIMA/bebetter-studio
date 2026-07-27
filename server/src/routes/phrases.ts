@@ -22,6 +22,7 @@ router.get('/', (_req, res) => {
     usageCount: p.usage_count,
     moodKeywords: p.mood_keywords ? JSON.parse(p.mood_keywords) : undefined,
     analyzedAt: p.analyzed_at ?? undefined,
+    createdAt: p.created_at ?? undefined,
   }))
   res.json(phrases)
 })

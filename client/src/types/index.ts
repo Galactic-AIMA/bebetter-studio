@@ -39,6 +39,7 @@ export interface Phrase {
   author?: string
   usageCount?: number
   moodKeywords?: string[]
+  createdAt?: string
 }
 
 export interface ImageItem {
@@ -49,6 +50,7 @@ export interface ImageItem {
   usageCount?: number
   tags?: string[]
   analyzedAt?: string
+  createdAt?: string
   origen?: string  // 'ia' = generada con IA (KIE); si no, banco/Pinterest
 }
 

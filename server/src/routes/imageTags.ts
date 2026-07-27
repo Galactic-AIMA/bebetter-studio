@@ -110,7 +110,9 @@ router.post('/analyze-all', async (req, res) => {
       if (!force && analyzedSet.has(filename)) { continue }
       try {
         const imagePath = path.join(config.paths.images, filename)
-        const analysis = await analyzeImageStructured(imagePath)
+        // Lote en segundo plano sobre imágenes del banco (no contenido propio):
+        // va por la capa gratuita, con caída a la de pago si agota su cuota.
+        const analysis = await analyzeImageStructured(imagePath, 'free')
         const embedding = await embedText(buildImageDocument(analysis))
         const tags = [analysis.emocionDominante, analysis.composicion, ...analysis.paletaColores].slice(0, 8)
 

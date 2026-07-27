@@ -37,6 +37,11 @@ export const config = {
 
   google: {
     apiKey: process.env.GOOGLE_API_KEY || '',
+    // Key de un proyecto SIN billing = capa gratuita. Se usa para el trabajo por
+    // lotes (banco de imágenes, audio, análisis del nicho), donde un límite de
+    // peticiones solo significa "tarda más". NO se usa para contenido propio
+    // —frases, guiones, copies—: en la capa gratuita Google entrena con los datos.
+    apiKeyFree: process.env.GOOGLE_API_KEY_FREE || '',
     sheetId: process.env.GOOGLE_SHEET_ID || '',  // Sheet "Cola bebetter" (Fase 4) — lo crea scripts/setup-queue-sheet.ts
   },
 

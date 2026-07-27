@@ -4,6 +4,14 @@ import { phrasesApi } from '../../api'
 import { Phrase } from '../../types'
 import { useVideoStore } from '../../store/videoStore'
 
+/** Marca las frases añadidas hace poco, para reconocer una tanda recién metida. */
+const DIAS_NUEVA = 7
+function esNueva(p: Phrase): boolean {
+  if (!p.createdAt) return false
+  const t = Date.parse(p.createdAt)
+  return !Number.isNaN(t) && Date.now() - t < DIAS_NUEVA * 24 * 60 * 60 * 1000
+}
+
 function extractAuthor(line: string): { text: string; author?: string } {
   // 1. “(cualquier cosa - Fuente: Meditaciones)” o “(Fuente: Meditaciones)”
   const fuenteMatch = line.match(/^(.*?)\s*\(.*?[Ff]uente:\s*([^)]+)\)\s*$/)
@@ -346,12 +354,24 @@ export default function PhraseBank() {
         {(() => {
           const filtered = phrases.filter((p) => !hideUsed || (p.usageCount ?? 0) === 0)
           const hasRecs = compatiblePhraseIds.length > 0
+          // El orden responde a "¿cuál produzco ahora?":
+          //  - con una imagen activa manda la afinidad (lo que encaja con lo que
+          //    estás montando ahora mismo);
+          //  - sin ella, suben las que nunca has producido y, dentro de cada
+          //    grupo, las más nuevas primero. El arrastre manual dejó de tener
+          //    sentido con 137 frases.
+          const porUso = (a: Phrase, b: Phrase) => {
+            const ua = a.usageCount ?? 0
+            const ub = b.usageCount ?? 0
+            if (ua !== ub) return ua - ub
+            return (b.createdAt ?? '').localeCompare(a.createdAt ?? '')
+          }
           const sorted = hasRecs
             ? [
                 ...filtered.filter((p) => scorePhrase(p) > 0).sort((a, b) => scorePhrase(b) - scorePhrase(a)),
-                ...filtered.filter((p) => scorePhrase(p) === 0),
+                ...filtered.filter((p) => scorePhrase(p) === 0).sort(porUso),
               ]
-            : filtered
+            : [...filtered].sort(porUso)
           return sorted.map((phrase) => {
             const score = scorePhrase(phrase)
             const isCompatible = score > 0
@@ -382,6 +402,14 @@ export default function PhraseBank() {
                   )}
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
+                  {esNueva(phrase) && (
+                    <span
+                      className="text-[9px] uppercase tracking-wider text-gold-500 border border-gold-500/40 rounded px-1 py-0.5"
+                      title="Añadida en los últimos 7 días"
+                    >
+                      nueva
+                    </span>
+                  )}
                   {isCompatible && (
                     <span className="text-[10px] text-gold-500 font-bold">✦</span>
                   )}

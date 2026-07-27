@@ -82,7 +82,7 @@ async function revectorizeImages() {
   const errors: string[] = []
   for (const [i, img] of images.entries()) {
     try {
-      const analysis = await analyzeImageStructured(path.join(config.paths.images, img.filename))
+      const analysis = await analyzeImageStructured(path.join(config.paths.images, img.filename), 'free')
       const embedding = await embedText(buildImageDocument(analysis))
       const tags = [analysis.emocionDominante, analysis.composicion, ...analysis.paletaColores].slice(0, 8)
       upsert.run({

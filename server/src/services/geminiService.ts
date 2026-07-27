@@ -3,12 +3,35 @@ import fs from 'fs'
 import path from 'path'
 import { config } from '../config'
 
-let client: GoogleGenerativeAI | null = null
+/**
+ * Dos capas de Gemini.
+ *
+ * `paid` es el proyecto con billing: sin límites molestos y —lo que importa—
+ * Google NO entrena con lo que se le manda. Ahí va todo el **contenido propio**
+ * (frases, guiones, copies) y todo lo que esté en el camino crítico de una
+ * publicación, donde un 429 rompe algo.
+ *
+ * `free` es una key de un proyecto sin billing. Ahí va el trabajo **por lotes y
+ * en segundo plano** (banco de imágenes, audio, análisis del nicho): son cientos
+ * de llamadas y un límite de peticiones solo significa que tarda más.
+ *
+ * Si no hay key gratuita configurada, `free` cae en `paid` — así nada depende de
+ * que exista, y si la gratuita agota su cuota diaria, el reintento también.
+ */
+export type GeminiTier = 'paid' | 'free'
 
-function getClient(): GoogleGenerativeAI {
-  if (!config.google.apiKey) throw new Error('GOOGLE_API_KEY no está configurada en el archivo .env del servidor')
-  if (!client) client = new GoogleGenerativeAI(config.google.apiKey)
-  return client
+const clients: Partial<Record<GeminiTier, GoogleGenerativeAI>> = {}
+
+function getClient(tier: GeminiTier = 'paid'): GoogleGenerativeAI {
+  const key = tier === 'free' ? config.google.apiKeyFree || config.google.apiKey : config.google.apiKey
+  if (!key) throw new Error('GOOGLE_API_KEY no está configurada en el archivo .env del servidor')
+  if (!clients[tier]) clients[tier] = new GoogleGenerativeAI(key)
+  return clients[tier]!
+}
+
+/** true si `tier` era 'free' y hay una key de pago distinta a la que reintentar. */
+function puedeCaerAPago(tier: GeminiTier): boolean {
+  return tier === 'free' && !!config.google.apiKeyFree && !!config.google.apiKey
 }
 
 async function withRetry<T>(fn: () => Promise<T>, retries = 3, delayMs = 8000): Promise<T> {
@@ -95,8 +118,11 @@ export async function extractOverlayText(imageBuffer: Buffer, mimeType = 'image/
   return texto === 'SIN_TEXTO' ? '' : texto
 }
 
-export async function analyzeImageStructured(imagePath: string): Promise<ImageAnalysis> {
-  const model = getClient().getGenerativeModel({
+export async function analyzeImageStructured(
+  imagePath: string,
+  tier: GeminiTier = 'paid'
+): Promise<ImageAnalysis> {
+  const model = getClient(tier).getGenerativeModel({
     model: 'gemini-3.5-flash',
     generationConfig: {
       responseMimeType: 'application/json',
@@ -118,12 +144,21 @@ export async function analyzeImageStructured(imagePath: string): Promise<ImageAn
 - elementos: los sujetos/objetos/símbolos CONCRETOS que se ven (qué HAY, literal).
 - temas: las ideas abstractas o metáforas que la imagen EVOCA (qué significa). Ej: una celda con barrotes → temas "encierro, falta de libertad". Una cumbre nevada → temas "superación, meta, esfuerzo". Piensa qué mensaje motivacional podría ilustrar esta imagen.`
 
-  const result = await withRetry(() =>
-    model.generateContent([
-      prompt,
-      { inlineData: { mimeType, data: imageData } },
-    ])
-  )
+  const partes = [prompt, { inlineData: { mimeType, data: imageData } }]
+
+  let result
+  try {
+    result = await withRetry(() => model.generateContent(partes))
+  } catch (err: any) {
+    // La capa gratuita agota su cuota diaria; en ese caso se termina el lote por
+    // la de pago en vez de dejar el banco a medio analizar.
+    if (!puedeCaerAPago(tier)) throw err
+    const modelPago = getClient('paid').getGenerativeModel({
+      model: 'gemini-3.5-flash',
+      generationConfig: { responseMimeType: 'application/json', responseSchema: IMAGE_ANALYSIS_SCHEMA as any },
+    })
+    result = await withRetry(() => modelPago.generateContent(partes))
+  }
 
   return JSON.parse(result.response.text()) as ImageAnalysis
 }
@@ -271,9 +306,10 @@ const AUDIO_MIME: Record<string, string> = {
  */
 export async function analyzeAudioStructured(
   audioBuffer: Buffer,
-  ext: string
+  ext: string,
+  tier: GeminiTier = 'free'
 ): Promise<AudioAnalysis> {
-  const model = getClient().getGenerativeModel({
+  const model = getClient(tier).getGenerativeModel({
     model: 'gemini-3.5-flash',
     generationConfig: {
       responseMimeType: 'application/json',
