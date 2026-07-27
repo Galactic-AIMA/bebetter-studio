@@ -1,0 +1,4524 @@
+{
+  "updatedAt": "2026-07-27T05:19:26.443Z",
+  "createdAt": "2026-05-03T05:55:48.823Z",
+  "id": "fRgHVl5PndZVDNa8",
+  "name": "[Pub] bebetter",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "videopublish",
+        "authentication": "headerAuth",
+        "options": {}
+      },
+      "id": "efcfcccc-1e5b-4cfd-8c91-f8d3e3f71063",
+      "name": "📥 Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        448
+      ],
+      "webhookId": "56022efa-c15a-4a16-879a-bae41034a274",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "0qjDl3g2KlzN7fDL",
+          "name": "Webhook Header Auth (Galactic publishers)"
+        }
+      },
+      "notes": "PAYLOAD ESPERADO:\n{\n  \"videoUrl\": \"https://...\",\n  \"phrase\": \"La frase del video\",\n  \"filename\": \"nombre.mp4\",\n  \"createdAt\": \"2026-...\"\n}\nResponde HTTP 200 inmediatamente. El procesamiento es asíncrono."
+    },
+    {
+      "parameters": {
+        "jsCode": "const _b = $('📥 Webhook Trigger').item.json.body;\nif (_b.preApproved && _b.ytMeta) {\n  let m = _b.ytMeta;\n  if (typeof m === 'string') { try { m = JSON.parse(m); } catch(e) { m = null; } }\n  if (m && m.title) {\n    let desc = m.description || '';\n    if (!String(desc).includes('#Shorts')) desc = String(desc).trimEnd() + '\\n\\n#Shorts';\n    return [{ json: { ytTitle: m.title, ytDescription: desc, ytTags: m.tags } }];\n  }\n}\nconst raw = $input.item.json.candidates?.[0]?.content?.parts?.[0]?.text || '';\nlet ytMeta;\ntry {\n  const cleaned = raw.trim().replace(/^```json\\s*/i, '').replace(/```\\s*$/, '');\n  ytMeta = JSON.parse(cleaned);\n  if (!ytMeta.title || !ytMeta.description || !ytMeta.tags) throw new Error('Campos incompletos');\n} catch(e) {\n  const phrase = $('📥 Webhook Trigger').item.json.body.phrase || '';\n  ytMeta = {\n    title: phrase.slice(0, 60).replace(/[\\/\\\\:*?\"<>|]/g, '').trim(),\n    description: 'El proceso no se negocia.\\n@bebetter.path ⚔️\\n\\n#Shorts',\n    tags: 'bebetter,motivacion,disciplina,estoicismo,shorts,mindset'\n  };\n}\nif (!ytMeta.description.includes('#Shorts')) {\n  ytMeta.description = ytMeta.description.trimEnd() + '\\n\\n#Shorts';\n}\nreturn [{ json: { ytTitle: ytMeta.title, ytDescription: ytMeta.description, ytTags: ytMeta.tags } }];"
+      },
+      "id": "b8a6ac4a-7c5e-4a73-b242-11aea215e1b0",
+      "name": "🎬 Parse YT Meta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        576,
+        448
+      ],
+      "notes": "Parsea la respuesta de Gemini para YouTube.\nFallback determinista si la IA falla.\nGarantiza #Shorts en la description."
+    },
+    {
+      "parameters": {
+        "url": "={{ $('📥 Webhook Trigger').item.json.body.videoUrl }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          },
+          "timeout": 300000
+        }
+      },
+      "id": "25c590ff-29d3-41a2-897e-56ad5983f634",
+      "name": "⬇️ Download Video",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2368,
+        352
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "notes": "Descarga el video como binario para YouTube.\nURL viene del Webhook Trigger."
+    },
+    {
+      "parameters": {
+        "resource": "video",
+        "operation": "upload",
+        "title": "={{ $('🎬 Parse YT Meta').item.json.ytTitle }}",
+        "regionCode": "CO",
+        "categoryId": "27",
+        "options": {
+          "description": "={{ $('🎬 Parse YT Meta').item.json.ytDescription }}",
+          "notifySubscribers": true,
+          "privacyStatus": "public",
+          "selfDeclaredMadeForKids": false,
+          "tags": "={{ $('🎬 Parse YT Meta').item.json.ytTags }}"
+        }
+      },
+      "id": "c4f7daf8-9022-4341-b324-35246a4d6601",
+      "name": "▶️ YouTube Upload",
+      "type": "n8n-nodes-base.youTube",
+      "typeVersion": 1,
+      "position": [
+        2592,
+        352
+      ],
+      "credentials": {
+        "youTubeOAuth2Api": {
+          "id": "hTJRxZS65ecjS4Zh",
+          "name": "YouTube bebetter.path"
+        }
+      },
+      "continueOnFail": true,
+      "notes": "✅ Credencial: YouTube API Ciro\nprivacyStatus: private\ncontinueOnFail: TRUE"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.item;\nconst isError = !!(item.json.error || item.json.status === 'failed');\nreturn [{ json: {\n  platform: 'YouTube',\n  status: isError ? 'ERROR' : 'SUCCESS',\n  videoId: isError ? null : (item.json.uploadId || item.json.id || null),\n  errorDetails: isError ? (item.json.error?.message || JSON.stringify(item.json)) : null,\n  timestamp: new Date().toISOString()\n}}];"
+      },
+      "id": "7f929a77-eead-4660-a957-4bdab318b714",
+      "name": "✅ YouTube Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3264,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const IG_HASHTAGS = [\"#BeBetterPath\", \"#Estoicismo\", \"#Disciplina\", \"#Mentalidad\", \"#Motivacion\", \"#Mindset\", \"#Estoico\", \"#DesarrolloPersonal\"];\nconst _b = $('📥 Webhook Trigger').item.json.body;\nif (_b.preApproved && _b.captionIG) {\n  return [{ json: { message1: _b.phrase || '', message2: _b.captionIG } }];\n}\nconst caption = $input.item.json.candidates?.[0]?.content?.parts?.[0]?.text || '';\nconst phrase = $('📥 Webhook Trigger').item.json.body.phrase || '';\nconst captionWithTags = caption.trim() + '\\n\\n' + IG_HASHTAGS.join(' ');\nreturn [{ json: { message1: phrase, message2: captionWithTags } }];"
+      },
+      "id": "fc4b7222-d243-4f9d-af42-4d78cb9469a7",
+      "name": "📱 Format WhatsApp",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3840,
+        352
+      ],
+      "notes": "Construye el mensaje de WhatsApp:\n- Header con la frase del video\n- Bloque de copy listo para copiar y pegar"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://open.tiktokapis.com/v2/post/publish/video/init/",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer REEMPLAZAR_CON_TIKTOK_ACCESS_TOKEN"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json; charset=UTF-8",
+        "body": "{}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "681bed2f-4491-46f7-9fb4-6323aa0512cd",
+      "name": "🎵 TikTok Direct Post",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        1584
+      ],
+      "continueOnFail": true,
+      "notes": "🔌 DESCONECTADO — pendiente activar para TikTok."
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { platform: 'TikTok', status: 'PENDING' } }];"
+      },
+      "id": "9129538b-8b9e-4ab7-8b2e-f91f9cb8e64c",
+      "name": "✅ TikTok Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        1584
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 📤 Publisher de contenido — bebetter\n**Webhook:** `/videopublish`. Lo llama **beBetterStudio** (app local de David).\n🔒 Protegido con **Header Auth** `x-galactic-auth` (cred *Webhook Header Auth publishers*, F2).\nPublica a **YouTube**. Usa Gemini (*Gemini Query Key*, restringida por IP, F1).\n📣 Aviso del copy → **Telegram al chat de David** (cambiado 2026-07-10, antes era Gmail).\n⚠️ **PENDIENTE David:** el nodo *'Enviar copy Telegram (David)'* está SIN credencial y con chatId vacío → asignar tu bot Telegram + tu chat_id. (Tiene onError:continue para no romper las publicaciones mientras tanto.)",
+        "height": 180,
+        "width": 440,
+        "color": 5
+      },
+      "id": "note-fRgHVl5PndZVDNa8",
+      "name": "📌 Nota mantenimiento",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -256
+      ]
+    },
+    {
+      "parameters": {
+        "updates": [
+          "callback_query",
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        1072
+      ],
+      "id": "c5247380-aed9-4b70-ae43-6e3b93654572",
+      "name": "Telegram Trigger",
+      "webhookId": "b208cdaf-effb-4df6-93e1-8c6097b65f4c",
+      "credentials": {
+        "telegramApi": {
+          "id": "0OI6UNjhK2UhgSJw",
+          "name": "beBetter Agent Pub"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "8739538908",
+        "text": "={{ \"*Reel:* \" + $('📱 Format WhatsApp').item.json.message1 }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "tg-david-copy-01",
+      "name": "Enviar reelName Telegram (David)",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        4064,
+        352
+      ],
+      "webhookId": "dcc48eaf-90b2-4e32-a5c2-c017e5433a5a",
+      "credentials": {
+        "telegramApi": {
+          "id": "0OI6UNjhK2UhgSJw",
+          "name": "beBetter Agent Pub"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "chatId": "8739538908",
+        "text": "={{ $('📱 Format WhatsApp').item.json.message2 }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "93782d21-af6d-4e15-b7c2-ce24f3eede24",
+      "name": "Enviar copy Telegram (David)",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        4288,
+        352
+      ],
+      "webhookId": "dcc48eaf-90b2-4e32-a5c2-c017e5433a5a",
+      "credentials": {
+        "telegramApi": {
+          "id": "0OI6UNjhK2UhgSJw",
+          "name": "beBetter Agent Pub"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const b = $('📥 Webhook Trigger').item.json.body;\nconst meta = $('🎬 Parse YT Meta').item.json;\nconst caption = `🎬 ${meta.ytTitle}\\n\\n${b.phrase || ''}`;\nreturn [{ json: { caption, ytTitle: meta.ytTitle } }];"
+      },
+      "id": "ceacb42b-a94f-4973-a159-b8390a416fd6",
+      "name": "🧰 Prep Preview",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        448
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $('📥 Webhook Trigger').item.json.body.videoUrl }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          },
+          "timeout": 300000
+        }
+      },
+      "id": "6195a6a5-b9bd-46e1-bc08-94361ee5e738",
+      "name": "⬇️ Download Preview",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1248,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "sendVideo",
+        "chatId": "8739538908",
+        "binaryData": true,
+        "additionalFields": {
+          "caption": "={{ $('🧰 Prep Preview').item.json.caption }}"
+        }
+      },
+      "id": "9fa19430-d4da-4a0a-9dc1-608e79d5bddd",
+      "name": "🎥 Enviar preview (David)",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1472,
+        512
+      ],
+      "webhookId": "c015d79c-3b59-4038-bc93-1471f53b1cfe",
+      "credentials": {
+        "telegramApi": {
+          "id": "0OI6UNjhK2UhgSJw",
+          "name": "beBetter Agent Pub"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "8739538908",
+        "text": "={{ '¿Publicar en YouTube?\\n\\n🎬 ' + $('🧰 Prep Preview').item.json.ytTitle }}",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "✅ Publicar",
+                    "additionalFields": {
+                      "callback_data": "={{ '1:' + $execution.id }}"
+                    }
+                  },
+                  {
+                    "text": "❌ Descartar",
+                    "additionalFields": {
+                      "callback_data": "={{ '0:' + $execution.id }}"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "additionalFields": {}
+      },
+      "id": "9772f47c-45de-4628-93f9-8cc5c4e46a15",
+      "name": "🔔 Pedir aprobacion (David)",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1696,
+        512
+      ],
+      "webhookId": "37c460c0-4244-416b-a6b9-7a9ec3c2e9aa",
+      "credentials": {
+        "telegramApi": {
+          "id": "0OI6UNjhK2UhgSJw",
+          "name": "beBetter Agent Pub"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resume": "webhook",
+        "options": {}
+      },
+      "id": "9e72a4e5-4e83-47fa-90ec-e719e6d99587",
+      "name": "⏸️ Esperar decision",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1920,
+        512
+      ],
+      "webhookId": "7c039005-8f20-4baf-a59f-b5a903cf51f1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "afcad5ef-ff92-49f4-86cc-44e4c6b9a719",
+              "leftValue": "={{ String($json.body?.approved ?? $json.query?.approved ?? $json.approved) }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "0d498318-7cad-4027-a1ce-558b024a66cd",
+      "name": "IF Aprobado",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2144,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "8739538908",
+        "text": "={{ '❌ Descartado: ' + $('🧰 Prep Preview').item.json.ytTitle }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "2482b2f4-645c-4a85-9088-4ab4e50b91fb",
+      "name": "❌ Descartado (David)",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2368,
+        560
+      ],
+      "webhookId": "84a1313a-e284-4e14-822d-90e7722cad72",
+      "credentials": {
+        "telegramApi": {
+          "id": "0OI6UNjhK2UhgSJw",
+          "name": "beBetter Agent Pub"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const j = $json;\nconst cq = j.callback_query || j.callbackQuery || (j.body && j.body.callback_query) || j;\nconst data = String(cq.data || '');\nconst [dec, execId] = data.split(':');\nreturn [{ json: { approved: dec === '1', execId, callbackQueryId: cq.id } }];"
+      },
+      "id": "d0f4dad4-5a08-405f-9472-f06ba5104c77",
+      "name": "🔓 Parse Callback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        976
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ 'https://n8n.galacticaima.com/api/v1/executions/' + $json.execId + '?includeData=true' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-N8N-API-KEY",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJmNzYzZThjYS00Yzg4LTQ4NWMtOTA4ZC1hMWZmNmY3ODA1MDQiLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwianRpIjoiYjhjNzE1NzctZDg1Yy00MmI3LThmZGMtNDI1MWRjZTM0Mzg5IiwiaWF0IjoxNzg0NzgzNTQ2fQ.xipD277ekVbWl9l1lY-t45ny6ocJY5U3DLdJWlF4cOI"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b290c8d9-fd05-45f5-b8db-41d54fbc76dc",
+      "name": "🔎 Obtener resumeUrl",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1120,
+        976
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const s = JSON.stringify($input.item.json);\nconst m = s.match(/https?:\\/\\/[^\"'\\\\ ]*webhook-waiting\\/\\d+\\?signature=[a-f0-9]+/);\nconst pc = $('🔓 Parse Callback').item.json;\nreturn [{ json: { resumeUrl: m ? m[0] : null, approved: pc.approved, callbackQueryId: pc.callbackQueryId } }];"
+      },
+      "id": "c865fdf2-4791-4741-82c7-0a21dee64564",
+      "name": "🧩 Extraer resumeUrl",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        976
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.resumeUrl + '&approved=' + ($json.approved ? 'true' : 'false') }}",
+        "options": {}
+      },
+      "id": "1a5eefe2-10e1-4294-9c56-2e22aba4500f",
+      "name": "▶️ Reanudar ejecucion",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1568,
+        976
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "callback",
+        "queryId": "={{ $('🔓 Parse Callback').item.json.callbackQueryId }}",
+        "additionalFields": {
+          "text": "={{ $('🔓 Parse Callback').item.json.approved ? '✅ Aprobado' : '❌ Descartado' }}"
+        }
+      },
+      "id": "435e8c43-b1f8-4878-a14e-6bedc5977f98",
+      "name": "💬 Responder toque",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1792,
+        976
+      ],
+      "webhookId": "2bca44b9-f814-4abd-ae9c-dcd54d82fc08",
+      "credentials": {
+        "telegramApi": {
+          "id": "0OI6UNjhK2UhgSJw",
+          "name": "beBetter Agent Pub"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "8739538908",
+        "text": "={{ '📸 Publicado en Instagram ✅\\n🎬 ' + $('📥 Webhook Trigger').item.json.body.phrase + '\\n🔗 https://www.instagram.com/bebetter.path/reels/' }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "08f75025-0619-45d9-93f3-d5c7270812cb",
+      "name": "📸 IG Notificar (David)",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        5856,
+        224
+      ],
+      "webhookId": "ff13e12d-a1f0-452f-9a4f-269973f0f20f",
+      "credentials": {
+        "telegramApi": {
+          "id": "0OI6UNjhK2UhgSJw",
+          "name": "beBetter Agent Pub"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ $('📥 Webhook Trigger').item.json.body.thumbnailUrl }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "id": "407d6c38-7d3c-449a-8e3a-d724429ddf6e",
+      "name": "⬇️ Download Thumbnail (YT)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2816,
+        352
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://www.googleapis.com/upload/youtube/v3/thumbnails/set?videoId={{ $('▶️ YouTube Upload').item.json.uploadId || $('▶️ YouTube Upload').item.json.id }}&uploadType=media",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "youTubeOAuth2Api",
+        "sendBody": true,
+        "contentType": "binaryData",
+        "inputDataFieldName": "data",
+        "options": {}
+      },
+      "id": "24951ed9-4045-49d8-852a-26303e948724",
+      "name": "🖼️ YouTube Set Thumbnail",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3040,
+        352
+      ],
+      "credentials": {
+        "youTubeOAuth2Api": {
+          "id": "hTJRxZS65ecjS4Zh",
+          "name": "YouTube bebetter.path"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.instagram.com/v21.0/17841425527150540/media",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "access_token",
+              "value": "={{ $('🔑 Leer token IG').all().find(i => i.json.key === 'ig_access_token').json.value }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "media_type",
+              "value": "REELS"
+            },
+            {
+              "name": "video_url",
+              "value": "={{ encodeURI($('📥 Webhook Trigger').item.json.body.videoUrl) }}"
+            },
+            {
+              "name": "caption",
+              "value": "={{ $('📱 Format WhatsApp').item.json.message2 }}"
+            },
+            {
+              "name": "thumb_offset",
+              "value": "5000"
+            },
+            {
+              "name": "share_to_feed",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "a090839f-2f49-4bc4-aab7-1e38d5e94cde",
+      "name": "📸 IG Crear contenedor",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4736,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "amount": 20
+      },
+      "id": "00a416d7-5649-4c1b-a884-64efd122b2a9",
+      "name": "⏳ IG Procesar",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        4960,
+        352
+      ],
+      "webhookId": "7ca76409-c698-4ef1-be10-e6e80a9570aa"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.instagram.com/v21.0/17841425527150540/media_publish",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "access_token",
+              "value": "={{ $('🔑 Leer token IG').all().find(i => i.json.key === 'ig_access_token').json.value }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "creation_id",
+              "value": "={{ $('📸 IG Crear contenedor').item.json.id }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "03294e1e-c529-48fb-a9f3-972de23709ea",
+      "name": "📸 IG Publicar",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5632,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-3.5-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-3.5-flash"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "={{ $('📥 Webhook Trigger').item.json.body.phrase }}"
+            }
+          ]
+        },
+        "simplify": false,
+        "jsonOutput": true,
+        "builtInTools": {},
+        "options": {
+          "systemMessage": "Eres el Curador Jefe de \"BeBetter Path\". Tu objetivo es transformar conceptos en metadatos de YouTube Shorts que proyecten autoridad absoluta y \"Empatía de Trinchera\".\n\nREGLAS DE TONO:\n- Identifica el registro emocional del concepto y adapta el tono. Por defecto: Disciplina Cruda (sentencias secas sobre responsabilidad y esfuerzo). Si el concepto es reflexivo, sereno o esperanzador, modula hacia un registro más pausado y hondo, SIN perder autoridad ni caer en motivación barata.\n- Mantén siempre la Empatía de Trinchera: reconocimiento del peso del camino (Ej: \"Si la soledad te quema...\").\n- PROHIBICIÓN TOTAL: Nunca inicies con \"Sé que\", \"Entiendo que\" o \"Te sientes\". Usa afirmaciones directas.\n- Vocabulario duro (Ley, código, arquetipo, trinchera, metal, forjar, inevitable, deuda) para el registro de disciplina; ajústalo cuando el registro sea más reflexivo.\n\nREGLAS DE FORMATO:\n- Título: Máximo 60 caracteres. Usa la Estructura \"La Ley\" o \"El Arquetipo\". Sin caracteres especiales.\n- Descripción: Un párrafo denso. Debe usar una de las 4 Estructuras Maestras (La Ley, El Sentido, El Código o El Arquetipo).\n- Footer: Firma de marca obligatoria.\n\nResponde ÚNICAMENTE en JSON:\n{\n  \"title\": \"Sentencia de autoridad de máximo impacto\",\n  \"description\": \"[Estructura Maestra aplicada al concepto].\\n\\nEl proceso no se negocia.\\n@TheBeBetterPath ⚔️\\n\\n#TheBeBetterPath #Shorts #Estoicismo #Disciplina #Mentalidad\",\n  \"tags\": \"bebetterpath,estoicismo,disciplina,maestria,shorts,mentalidad,honor,filosofia,autodisciplina\"\n}",
+          "temperature": 0.6
+        }
+      },
+      "id": "17c6e565-5719-4ec2-acc9-dd5483dc06ec",
+      "name": "🎬 Gemini YouTube (nativo)",
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        224,
+        448
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "vfTugh1WYxhGMq5X",
+          "name": "beBetterStudio Gemini"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-3.5-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-3.5-flash"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "={{ $('📥 Webhook Trigger').item.json.body.phrase }}"
+            }
+          ]
+        },
+        "simplify": false,
+        "builtInTools": {},
+        "options": {
+          "systemMessage": "Eres un copywriter experto en contenido de alto rendimiento y estoicismo para la marca \"BeBetter Path\" en Instagram. Tu voz nace de la disciplina y la verdad, nunca de la motivación barata.\n\nANTES DE ESCRIBIR, identifica el registro emocional de la frase y adapta tu tono a ella:\n- Frase cruda, confrontativa o sobre la comodidad → directo, seco y autoritario (tu tono por defecto).\n- Frase reflexiva, serena o filosófica → pausado, íntimo y contemplativo; menos imperativos, más hondura.\n- Frase épica, de superación o esperanza → aspiracional y con fuerza, sin caer en lo cursi.\nEl copy debe sentirse como una EXTENSIÓN de la frase, jamás contradecir su emoción.\n\nSe te dará una frase o concepto. Tu función es generar el copy para la descripción del Reel.\n\nSigue este formato EXACTO:\n\n[Frase corta, máximo 6 palabras, golpe al ego o curiosidad masiva]\n\n[Párrafo 1: El problema. Describe una debilidad común de la sociedad o la trampa de la comodidad, 2-3 líneas]\n\n[Párrafo 2: La verdad. La solución estoica o la realidad cruda que el espectador debe aceptar, 2-3 líneas]\n\n[Párrafo 3: Acción. Un llamado a la disciplina interna y a la ejecución inmediata, 2-3 líneas]\n\n[Parrafo 4: El proceso no se negocia.\n@bebetter.path ⚔️]\n\nREGLAS OBLIGATORIAS:\n- La intensidad la marca el registro de la frase; NO fuerces dureza en frases reflexivas o serenas.\n- NO incluyas hashtags.\n- NO uses lenguaje motivacional barato o \"mágico\".\n- Prohibidas: increíble, asombroso, mágico, extraordinario, dale like, suscríbete.\n- Vocabulario duro (brutal, crudo, inevitable, deuda, disciplina, forjar): SOLO en el registro duro; en registros reflexivos o épicos usa el léxico que pida la emoción.\n- Solo se permite el emoji de la espada (⚔️) al final.\n- Responde ÚNICAMENTE con el copy resultante.",
+          "temperature": 0.8,
+          "topP": 0.9
+        }
+      },
+      "id": "c43c8e2c-6ddc-49e6-bfb0-62a48128dabc",
+      "name": "📱 Gemini Instagram (nativo)",
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        3488,
+        352
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "vfTugh1WYxhGMq5X",
+          "name": "beBetterStudio Gemini"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "combinator": "or",
+          "conditions": [
+            {
+              "id": "cond-a",
+              "leftValue": "={{ ($json.callback_query || $json.callbackQuery || {}).data || '' }}",
+              "rightValue": "a:",
+              "operator": {
+                "type": "string",
+                "operation": "startsWith"
+              }
+            },
+            {
+              "id": "cond-r",
+              "leftValue": "={{ ($json.callback_query || $json.callbackQuery || {}).data || '' }}",
+              "rightValue": "r:",
+              "operator": {
+                "type": "string",
+                "operation": "startsWith"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        672,
+        1072
+      ],
+      "id": "route-callback-3a",
+      "name": "🔀 Route Callback"
+    },
+    {
+      "parameters": {
+        "jsCode": "const j = $json;\nconst cq = j.callback_query || j.callbackQuery || (j.body && j.body.callback_query) || j;\nconst data = String(cq.data || '');\nconst [action, queueId] = data.split(':');\nconst status = action === 'a' ? 'approved' : 'rejected';\nreturn [{ json: { action, queueId, status, callbackQueryId: cq.id } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        1168
+      ],
+      "id": "parse-aprob-3a",
+      "name": "🔓 Parse Aprobacion"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1QwH2iT0t0h9mIhoHRnWO-pVXhNXwhV1mtyuvdV7kkgs",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "1637724194",
+          "mode": "id"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id": "={{ $json.queueId }}",
+            "status": "={{ $json.status }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1120,
+        1168
+      ],
+      "id": "update-status-3a",
+      "name": "📝 Update Status",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "17f89ToWBxB84qVF",
+          "name": "beBetterStudio Sheets"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "callback",
+        "queryId": "={{ $('🔓 Parse Aprobacion').item.json.callbackQueryId }}",
+        "additionalFields": {
+          "text": "={{ $('🔓 Parse Aprobacion').item.json.status === 'approved' ? '✅ Aprobado — entra a la cola' : '❌ Rechazado' }}"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1344,
+        1168
+      ],
+      "id": "answer-aprob-3a",
+      "name": "💬 Responder aprobacion",
+      "webhookId": "59b35154-badc-4e76-9757-3accf285fe78",
+      "credentials": {
+        "telegramApi": {
+          "id": "0OI6UNjhK2UhgSJw",
+          "name": "beBetter Agent Pub"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "is-reply",
+              "leftValue": "={{ $json.message && $json.message.reply_to_message ? true : false }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        448,
+        976
+      ],
+      "id": "es-reply-3b",
+      "name": "🧭 Es reply?"
+    },
+    {
+      "parameters": {
+        "jsCode": "const m = $json.message || {};\nconst replyToId = m.reply_to_message ? m.reply_to_message.message_id : null;\nconst newCaption = String(m.text || '');\nconst chatId = m.chat ? m.chat.id : null;\nreturn [{ json: { replyToId, newCaption, chatId } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        784
+      ],
+      "id": "parse-reply-3b",
+      "name": "✏️ Parse Reply"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1QwH2iT0t0h9mIhoHRnWO-pVXhNXwhV1mtyuvdV7kkgs",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "1637724194",
+          "mode": "id"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "telegramMsgId": "={{ $json.replyToId }}",
+            "captionIG": "={{ $json.newCaption }}"
+          },
+          "matchingColumns": [
+            "telegramMsgId"
+          ],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        896,
+        784
+      ],
+      "id": "update-caption-3b",
+      "name": "📝 Update Caption",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "17f89ToWBxB84qVF",
+          "name": "beBetterStudio Sheets"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('✏️ Parse Reply').item.json.chatId }}",
+        "text": "✏️ Caption actualizado. Sigue pendiente tu ✅ para aprobarlo.",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1120,
+        784
+      ],
+      "id": "confirmar-edit-3b",
+      "name": "💬 Confirmar edicion",
+      "webhookId": "6f07c764-a6a3-4ed2-9ac6-064a2e3c4ba2",
+      "credentials": {
+        "telegramApi": {
+          "id": "0OI6UNjhK2UhgSJw",
+          "name": "beBetter Agent Pub"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "is-preapproved",
+              "leftValue": "={{ $('📥 Webhook Trigger').item.json.body.preApproved === true || $('📥 Webhook Trigger').item.json.body.preApproved === 'true' }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1024,
+        448
+      ],
+      "id": "if-preapproved-e4",
+      "name": "🚦 IF preApproved"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "has-queueid",
+              "leftValue": "={{ !!$('📥 Webhook Trigger').item.json.body.queueId }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        6976,
+        224
+      ],
+      "id": "if-queueid-e4",
+      "name": "🏁 IF tiene queueId"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1QwH2iT0t0h9mIhoHRnWO-pVXhNXwhV1mtyuvdV7kkgs",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "1637724194",
+          "mode": "id"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id": "={{ $('📥 Webhook Trigger').item.json.body.queueId }}",
+            "status": "published",
+            "publishedAt": "={{ $now.toISO() }}",
+            "mediaId": "={{ $('📸 IG Publicar').first().json.id }}",
+            "permalink": ""
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "mediaId",
+              "displayName": "mediaId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "permalink",
+              "displayName": "permalink",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        7200,
+        224
+      ],
+      "id": "marcar-publicado-e4",
+      "name": "📝 Marcar publicado",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "17f89ToWBxB84qVF",
+          "name": "beBetterStudio Sheets"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ 'https://graph.instagram.com/v21.0/' + $('📸 IG Crear contenedor').item.json.id }}",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "fields",
+              "value": "status_code,status"
+            },
+            {
+              "name": "access_token",
+              "value": "={{ $('🔑 Leer token IG').all().find(i => i.json.key === 'ig_access_token').json.value }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5184,
+        272
+      ],
+      "id": "ig-status-e5",
+      "name": "🔎 IG Status"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "is-finished",
+              "leftValue": "={{ $json.status_code }}",
+              "rightValue": "FINISHED",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        5408,
+        272
+      ],
+      "id": "ig-finished-e5",
+      "name": "🔀 IG FINISHED?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "not-error",
+              "leftValue": "={{ $json.status_code }}",
+              "rightValue": "ERROR",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            },
+            {
+              "id": "not-expired",
+              "leftValue": "={{ $json.status_code }}",
+              "rightValue": "EXPIRED",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            },
+            {
+              "id": "under-limit",
+              "leftValue": "={{ $runIndex }}",
+              "rightValue": 8,
+              "operator": {
+                "type": "number",
+                "operation": "lt"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        5632,
+        448
+      ],
+      "id": "ig-retry-e5",
+      "name": "🔁 ¿Reintentar?"
+    },
+    {
+      "parameters": {
+        "chatId": "8739538908",
+        "text": "={{ '⚠️ IG no procesó el video (status_code: ' + $json.status_code + ')\\nMotivo: ' + ($json.status || 's/d') + '\\nVideo: ' + ($('📥 Webhook Trigger').item.json.body.phrase || '') }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        5856,
+        448
+      ],
+      "id": "ig-giveup-e5",
+      "name": "⚠️ IG no listo",
+      "webhookId": "6ad675af-9127-4ebe-b370-427b07feb063",
+      "credentials": {
+        "telegramApi": {
+          "id": "0OI6UNjhK2UhgSJw",
+          "name": "beBetter Agent Pub"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1QwH2iT0t0h9mIhoHRnWO-pVXhNXwhV1mtyuvdV7kkgs",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "491336242",
+          "mode": "id"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "key",
+              "lookupValue": "ig_access_token"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "igtoken-read",
+      "name": "🔑 Leer token IG",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        4512,
+        352
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "17f89ToWBxB84qVF",
+          "name": "beBetterStudio Sheets"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "is-cola",
+              "leftValue": "={{ (($json.message || {}).text || '').trim().toLowerCase() }}",
+              "rightValue": "/cola",
+              "operator": {
+                "type": "string",
+                "operation": "startsWith"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "8bfbaa35-d4f1-494d-9586-702546afa34a",
+      "name": "❓ Es /cola?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        224,
+        1072
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1QwH2iT0t0h9mIhoHRnWO-pVXhNXwhV1mtyuvdV7kkgs",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "1637724194",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "id": "7202e45e-90fc-4112-820f-304eb19960f1",
+      "name": "📥 Leer cola (/cola)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        448,
+        1360
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "17f89ToWBxB84qVF",
+          "name": "beBetterStudio Sheets"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1QwH2iT0t0h9mIhoHRnWO-pVXhNXwhV1mtyuvdV7kkgs",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "491336242",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "id": "b156522a-8467-4cb8-8c9c-a5fab55ac1d5",
+      "name": "📅 Leer cadencia (/cola)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        672,
+        1360
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "17f89ToWBxB84qVF",
+          "name": "beBetterStudio Sheets"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $('📥 Leer cola (/cola)').all().map(i => i.json);\nconst cfgRows = $('📅 Leer cadencia (/cola)').all().map(i => i.json);\nconst cfg = {};\nfor (const r of cfgRows) { if (r.key) cfg[String(r.key).trim()] = String(r.value == null ? '' : r.value).trim(); }\nconst times = (cfg.cadence_times || '').split(',').map(s => s.trim()).filter(Boolean);\nconst tz = cfg.timezone || 'America/Bogota';\n\nconst approved = rows\n  .filter(r => String(r.status || '').trim() === 'approved' && !String(r.publishedAt || '').trim())\n  .sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')));\n\nconst trig = $('Telegram Trigger').first().json;\nconst chatId = (trig.message && trig.message.chat && trig.message.chat.id) || 8739538908;\n\nfunction tzOffsetMinutes(tz, date) {\n  const dtf = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });\n  const p = {}; for (const x of dtf.formatToParts(date)) p[x.type] = x.value;\n  const asUTC = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second);\n  return Math.round((asUTC - date.getTime()) / 60000);\n}\nfunction projectSlots(n, times, tz, now) {\n  const hours = times.map(t => Number(String(t).split(':')[0])).filter(h => Number.isInteger(h) && h >= 0 && h <= 23).sort((a, b) => a - b);\n  if (!hours.length || !n) return [];\n  const off = tzOffsetMinutes(tz, now);\n  const wall = new Date(now.getTime() + off * 60000);\n  const Y = wall.getUTCFullYear(), Mo = wall.getUTCMonth(), D = wall.getUTCDate(), ch = wall.getUTCHours(), cm = wall.getUTCMinutes();\n  const slots = [];\n  for (let day = 0; slots.length < n && day < 90; day++) {\n    for (const h of hours) {\n      if (day === 0 && (h < ch || (h === ch && cm > 0))) continue;\n      slots.push({ dayOffset: day, hour: h, etaMs: Date.UTC(Y, Mo, D + day, h, 0, 0) - off * 60000 });\n      if (slots.length >= n) break;\n    }\n  }\n  return slots;\n}\nfunction label(s, tz) {\n  if (!s) return '—';\n  const t = String(s.hour).padStart(2, '0') + ':00';\n  if (s.dayOffset === 0) return 'Hoy ' + t;\n  if (s.dayOffset === 1) return 'Mañana ' + t;\n  const ds = new Date(s.etaMs).toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', timeZone: tz });\n  return ds + ' ' + t;\n}\n\nconst slots = projectSlots(approved.length, times, tz, new Date());\nlet msg;\nif (!approved.length) {\n  msg = '✅ *Cola de aprobados*\\n\\nNo hay videos aprobados esperando publicación.';\n} else if (!times.length) {\n  msg = '⚠️ Hay ' + approved.length + ' aprobado(s) pero *no hay cadencia configurada* — no se publicarán hasta definir horas en la app.';\n} else {\n  const lines = approved.map((r, i) => {\n    const ph = String(r.phrase || '').replace(/\\s+/g, ' ').slice(0, 45);\n    return (i + 1) + '. \"' + ph + '\" → *' + label(slots[i], tz) + '*';\n  });\n  msg = '📋 *Próximas publicaciones* (' + approved.length + ' en cola)\\n\\n' + lines.join('\\n') + '\\n\\n_Cadencia: ' + times.join(', ') + ' · ' + tz + '_';\n}\nreturn [{ json: { chatId, msg } }];"
+      },
+      "id": "a95fba73-dc39-42aa-8348-e34bca006404",
+      "name": "🧮 Proyectar /cola",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        1360
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.msg }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "2afaaea0-a503-4d47-924f-a1f5a3549894",
+      "name": "📤 Responder /cola",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1120,
+        1360
+      ],
+      "webhookId": "e9f986ec-e4b1-4ac9-a05a-abfc8e614e47",
+      "credentials": {
+        "telegramApi": {
+          "id": "0OI6UNjhK2UhgSJw",
+          "name": "beBetter Agent Pub"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "httpRequestMethod": "POST",
+        "graphApiVersion": "v25.0",
+        "node": "1058087370724713",
+        "edge": "video_reels",
+        "options": {
+          "queryParameters": {
+            "parameter": [
+              {
+                "name": "upload_phase",
+                "value": "start"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.facebookGraphApi",
+      "typeVersion": 1,
+      "position": [
+        6080,
+        224
+      ],
+      "id": "e3edd26d-d308-4411-b317-20cca2eeeab7",
+      "name": "📘 FB·Start",
+      "credentials": {
+        "facebookGraphApi": {
+          "id": "1vlAzOHMeLysGufG",
+          "name": "beBetterPath FB Page"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('📘 FB·Start').item.json.upload_url }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "file_url",
+              "value": "={{ encodeURI($('📥 Webhook Trigger').item.json.body.videoUrl).replace(/;/g,'%3B') }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        6304,
+        224
+      ],
+      "id": "9c8fd2cf-d6b5-4e05-bc8c-c36ba2c4a7ca",
+      "name": "📘 FB·Upload",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "p2qHNN0mTfkKQbpk",
+          "name": "FB Reels Upload (Header)"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "httpRequestMethod": "POST",
+        "graphApiVersion": "v25.0",
+        "node": "1058087370724713",
+        "edge": "video_reels",
+        "options": {
+          "queryParameters": {
+            "parameter": [
+              {
+                "name": "upload_phase",
+                "value": "finish"
+              },
+              {
+                "name": "video_id",
+                "value": "={{ $('📘 FB·Start').item.json.video_id }}"
+              },
+              {
+                "name": "video_state",
+                "value": "PUBLISHED"
+              },
+              {
+                "name": "description",
+                "value": "={{ $('📱 Format WhatsApp').item.json.message2 }}"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.facebookGraphApi",
+      "typeVersion": 1,
+      "position": [
+        6528,
+        224
+      ],
+      "id": "397c8956-31a9-4867-9ba0-59c046a0398e",
+      "name": "📘 FB·Finish",
+      "credentials": {
+        "facebookGraphApi": {
+          "id": "1vlAzOHMeLysGufG",
+          "name": "beBetterPath FB Page"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "chatId": "8739538908",
+        "text": "={{ $('📘 FB·Finish').item.json.post_id ? ('📘 Publicado en Facebook ✅\\n🎬 ' + $('📥 Webhook Trigger').item.json.body.phrase + '\\n🔗 https://www.facebook.com/reel/' + $('📘 FB·Start').item.json.video_id) : ('⚠️ Facebook: ' + JSON.stringify($('📘 FB·Finish').item.json)) }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        6752,
+        224
+      ],
+      "id": "37bb6a40-1ad3-4471-b233-0f66cbbeed38",
+      "name": "📘 FB Notificar (David)",
+      "webhookId": "f31a8a9e-2c26-45f7-9273-fc5c202a9f36",
+      "credentials": {
+        "telegramApi": {
+          "id": "0OI6UNjhK2UhgSJw",
+          "name": "beBetter Agent Pub"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "chatId": "8739538908",
+        "text": "={{ '▶️ Publicado en YouTube ✅\\n🎬 ' + $('📥 Webhook Trigger').item.json.body.phrase + ($('✅ YouTube Status').item.json.videoId ? ('\\n🔗 https://www.youtube.com/watch?v=' + $('✅ YouTube Status').item.json.videoId) : '') }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        3264,
+        544
+      ],
+      "id": "0e3a9e7b-b186-4ee4-b4d4-d3e47c606ad2",
+      "name": "▶️ YT Notificar (David)",
+      "webhookId": "9defbdb3-e860-4cab-8b21-59ca296a9e66",
+      "credentials": {
+        "telegramApi": {
+          "id": "0OI6UNjhK2UhgSJw",
+          "name": "beBetter Agent Pub"
+        }
+      },
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "📥 Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "🎬 Gemini YouTube (nativo)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🎬 Parse YT Meta": {
+      "main": [
+        [
+          {
+            "node": "🧰 Prep Preview",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⬇️ Download Video": {
+      "main": [
+        [
+          {
+            "node": "▶️ YouTube Upload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "▶️ YouTube Upload": {
+      "main": [
+        [
+          {
+            "node": "⬇️ Download Thumbnail (YT)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📱 Format WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Enviar reelName Telegram (David)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🎵 TikTok Direct Post": {
+      "main": [
+        [
+          {
+            "node": "✅ TikTok Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar reelName Telegram (David)": {
+      "main": [
+        [
+          {
+            "node": "Enviar copy Telegram (David)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧰 Prep Preview": {
+      "main": [
+        [
+          {
+            "node": "🚦 IF preApproved",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⬇️ Download Preview": {
+      "main": [
+        [
+          {
+            "node": "🎥 Enviar preview (David)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🎥 Enviar preview (David)": {
+      "main": [
+        [
+          {
+            "node": "🔔 Pedir aprobacion (David)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔔 Pedir aprobacion (David)": {
+      "main": [
+        [
+          {
+            "node": "⏸️ Esperar decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⏸️ Esperar decision": {
+      "main": [
+        [
+          {
+            "node": "IF Aprobado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Aprobado": {
+      "main": [
+        [
+          {
+            "node": "⬇️ Download Video",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "❌ Descartado (David)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "✅ YouTube Status": {
+      "main": [
+        [
+          {
+            "node": "▶️ YT Notificar (David)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "❓ Es /cola?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔓 Parse Callback": {
+      "main": [
+        [
+          {
+            "node": "🔎 Obtener resumeUrl",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔎 Obtener resumeUrl": {
+      "main": [
+        [
+          {
+            "node": "🧩 Extraer resumeUrl",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧩 Extraer resumeUrl": {
+      "main": [
+        [
+          {
+            "node": "▶️ Reanudar ejecucion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "▶️ Reanudar ejecucion": {
+      "main": [
+        [
+          {
+            "node": "💬 Responder toque",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar copy Telegram (David)": {
+      "main": [
+        [
+          {
+            "node": "🔑 Leer token IG",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⬇️ Download Thumbnail (YT)": {
+      "main": [
+        [
+          {
+            "node": "🖼️ YouTube Set Thumbnail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🖼️ YouTube Set Thumbnail": {
+      "main": [
+        [
+          {
+            "node": "✅ YouTube Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📸 IG Crear contenedor": {
+      "main": [
+        [
+          {
+            "node": "⏳ IG Procesar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⏳ IG Procesar": {
+      "main": [
+        [
+          {
+            "node": "🔎 IG Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📸 IG Publicar": {
+      "main": [
+        [
+          {
+            "node": "📸 IG Notificar (David)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🎬 Gemini YouTube (nativo)": {
+      "main": [
+        [
+          {
+            "node": "🎬 Parse YT Meta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📱 Gemini Instagram (nativo)": {
+      "main": [
+        [
+          {
+            "node": "📱 Format WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔀 Route Callback": {
+      "main": [
+        [
+          {
+            "node": "🔓 Parse Aprobacion",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "🔓 Parse Callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔓 Parse Aprobacion": {
+      "main": [
+        [
+          {
+            "node": "📝 Update Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📝 Update Status": {
+      "main": [
+        [
+          {
+            "node": "💬 Responder aprobacion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧭 Es reply?": {
+      "main": [
+        [
+          {
+            "node": "✏️ Parse Reply",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "🔀 Route Callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "✏️ Parse Reply": {
+      "main": [
+        [
+          {
+            "node": "📝 Update Caption",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📝 Update Caption": {
+      "main": [
+        [
+          {
+            "node": "💬 Confirmar edicion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🚦 IF preApproved": {
+      "main": [
+        [
+          {
+            "node": "⬇️ Download Video",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "⬇️ Download Preview",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📸 IG Notificar (David)": {
+      "main": [
+        [
+          {
+            "node": "📘 FB·Start",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🏁 IF tiene queueId": {
+      "main": [
+        [
+          {
+            "node": "📝 Marcar publicado",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "🔎 IG Status": {
+      "main": [
+        [
+          {
+            "node": "🔀 IG FINISHED?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔀 IG FINISHED?": {
+      "main": [
+        [
+          {
+            "node": "📸 IG Publicar",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "🔁 ¿Reintentar?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔁 ¿Reintentar?": {
+      "main": [
+        [
+          {
+            "node": "⏳ IG Procesar",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "⚠️ IG no listo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔑 Leer token IG": {
+      "main": [
+        [
+          {
+            "node": "📸 IG Crear contenedor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "❓ Es /cola?": {
+      "main": [
+        [
+          {
+            "node": "📥 Leer cola (/cola)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "🧭 Es reply?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📥 Leer cola (/cola)": {
+      "main": [
+        [
+          {
+            "node": "📅 Leer cadencia (/cola)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📅 Leer cadencia (/cola)": {
+      "main": [
+        [
+          {
+            "node": "🧮 Proyectar /cola",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧮 Proyectar /cola": {
+      "main": [
+        [
+          {
+            "node": "📤 Responder /cola",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📘 FB·Start": {
+      "main": [
+        [
+          {
+            "node": "📘 FB·Upload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📘 FB·Upload": {
+      "main": [
+        [
+          {
+            "node": "📘 FB·Finish",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📘 FB·Finish": {
+      "main": [
+        [
+          {
+            "node": "📘 FB Notificar (David)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📘 FB Notificar (David)": {
+      "main": [
+        [
+          {
+            "node": "🏁 IF tiene queueId",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "▶️ YT Notificar (David)": {
+      "main": [
+        [
+          {
+            "node": "📱 Gemini Instagram (nativo)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false,
+    "errorWorkflow": "vwafSx9rR5bRzMij",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "timezone": "America/Bogota"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "nodeGroups": [],
+  "pinData": {
+    "📥 Webhook Trigger": [
+      {
+        "json": {
+          "headers": {
+            "host": "n8n.galacticaima.com",
+            "x-real-ip": "138.84.53.43",
+            "x-forwarded-for": "138.84.53.43",
+            "x-forwarded-proto": "https",
+            "connection": "upgrade",
+            "content-length": "517",
+            "accept": "application/json, text/plain, */*",
+            "content-type": "application/json",
+            "x-galactic-auth": "de996a278e1d44a901d38d74b8d4d5f43d45cb3a87ff8782",
+            "user-agent": "axios/1.15.2",
+            "accept-encoding": "gzip, compress, deflate, br"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "videoUrl": "https://pub-d15d8c6363c54c24995cbc730a3ef917.r2.dev/videos/La angustia es el síntoma de querer controlar lo que no depende de ti.mp4",
+            "phrase": "\"La angustia es el síntoma de querer controlar lo que no depende de ti.\"",
+            "filename": "La angustia es el síntoma de querer controlar lo que no depende de ti.mp4",
+            "createdAt": "2026-07-23T20:58:12.814Z",
+            "thumbnailUrl": "https://pub-d15d8c6363c54c24995cbc730a3ef917.r2.dev/thumbnails/La angustia es el síntoma de querer controlar lo que no depende de ti.jpg"
+          },
+          "webhookUrl": "https://n8n.galacticaima.com/webhook/videopublish",
+          "executionMode": "production"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "versionId": "9329324c-7615-439c-bd12-5fd85c1ac2fb",
+  "activeVersionId": "9329324c-7615-439c-bd12-5fd85c1ac2fb",
+  "versionCounter": 111,
+  "triggerCount": 2,
+  "sourceWorkflowId": null,
+  "shared": [
+    {
+      "updatedAt": "2026-05-03T05:55:48.828Z",
+      "createdAt": "2026-05-03T05:55:48.828Z",
+      "role": "workflow:owner",
+      "workflowId": "fRgHVl5PndZVDNa8",
+      "projectId": "vpUMpdyDMT2JiZqP",
+      "project": {
+        "updatedAt": "2025-09-24T07:42:52.122Z",
+        "createdAt": "2025-09-24T07:22:43.995Z",
+        "id": "vpUMpdyDMT2JiZqP",
+        "name": "Galactic AIMA <galacticaiagents@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "f763e8ca-4c88-485c-908d-a1ff6f780504"
+      }
+    }
+  ],
+  "tags": [
+    {
+      "updatedAt": "2026-07-10T23:04:09.638Z",
+      "createdAt": "2026-07-10T23:04:09.638Z",
+      "id": "bfX8bHke6tHXgtQQ",
+      "name": "prod"
+    }
+  ],
+  "activeVersion": {
+    "updatedAt": "2026-07-27T05:19:26.446Z",
+    "createdAt": "2026-07-27T05:19:26.446Z",
+    "versionId": "9329324c-7615-439c-bd12-5fd85c1ac2fb",
+    "workflowId": "fRgHVl5PndZVDNa8",
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "videopublish",
+          "authentication": "headerAuth",
+          "options": {}
+        },
+        "id": "efcfcccc-1e5b-4cfd-8c91-f8d3e3f71063",
+        "name": "📥 Webhook Trigger",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          0,
+          448
+        ],
+        "webhookId": "56022efa-c15a-4a16-879a-bae41034a274",
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "0qjDl3g2KlzN7fDL",
+            "name": "Webhook Header Auth (Galactic publishers)"
+          }
+        },
+        "notes": "PAYLOAD ESPERADO:\n{\n  \"videoUrl\": \"https://...\",\n  \"phrase\": \"La frase del video\",\n  \"filename\": \"nombre.mp4\",\n  \"createdAt\": \"2026-...\"\n}\nResponde HTTP 200 inmediatamente. El procesamiento es asíncrono."
+      },
+      {
+        "parameters": {
+          "jsCode": "const _b = $('📥 Webhook Trigger').item.json.body;\nif (_b.preApproved && _b.ytMeta) {\n  let m = _b.ytMeta;\n  if (typeof m === 'string') { try { m = JSON.parse(m); } catch(e) { m = null; } }\n  if (m && m.title) {\n    let desc = m.description || '';\n    if (!String(desc).includes('#Shorts')) desc = String(desc).trimEnd() + '\\n\\n#Shorts';\n    return [{ json: { ytTitle: m.title, ytDescription: desc, ytTags: m.tags } }];\n  }\n}\nconst raw = $input.item.json.candidates?.[0]?.content?.parts?.[0]?.text || '';\nlet ytMeta;\ntry {\n  const cleaned = raw.trim().replace(/^```json\\s*/i, '').replace(/```\\s*$/, '');\n  ytMeta = JSON.parse(cleaned);\n  if (!ytMeta.title || !ytMeta.description || !ytMeta.tags) throw new Error('Campos incompletos');\n} catch(e) {\n  const phrase = $('📥 Webhook Trigger').item.json.body.phrase || '';\n  ytMeta = {\n    title: phrase.slice(0, 60).replace(/[\\/\\\\:*?\"<>|]/g, '').trim(),\n    description: 'El proceso no se negocia.\\n@bebetter.path ⚔️\\n\\n#Shorts',\n    tags: 'bebetter,motivacion,disciplina,estoicismo,shorts,mindset'\n  };\n}\nif (!ytMeta.description.includes('#Shorts')) {\n  ytMeta.description = ytMeta.description.trimEnd() + '\\n\\n#Shorts';\n}\nreturn [{ json: { ytTitle: ytMeta.title, ytDescription: ytMeta.description, ytTags: ytMeta.tags } }];"
+        },
+        "id": "b8a6ac4a-7c5e-4a73-b242-11aea215e1b0",
+        "name": "🎬 Parse YT Meta",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          576,
+          448
+        ],
+        "notes": "Parsea la respuesta de Gemini para YouTube.\nFallback determinista si la IA falla.\nGarantiza #Shorts en la description."
+      },
+      {
+        "parameters": {
+          "url": "={{ $('📥 Webhook Trigger').item.json.body.videoUrl }}",
+          "options": {
+            "response": {
+              "response": {
+                "responseFormat": "file"
+              }
+            },
+            "timeout": 300000
+          }
+        },
+        "id": "25c590ff-29d3-41a2-897e-56ad5983f634",
+        "name": "⬇️ Download Video",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          2368,
+          352
+        ],
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 2000,
+        "notes": "Descarga el video como binario para YouTube.\nURL viene del Webhook Trigger."
+      },
+      {
+        "parameters": {
+          "resource": "video",
+          "operation": "upload",
+          "title": "={{ $('🎬 Parse YT Meta').item.json.ytTitle }}",
+          "regionCode": "CO",
+          "categoryId": "27",
+          "options": {
+            "description": "={{ $('🎬 Parse YT Meta').item.json.ytDescription }}",
+            "notifySubscribers": true,
+            "privacyStatus": "public",
+            "selfDeclaredMadeForKids": false,
+            "tags": "={{ $('🎬 Parse YT Meta').item.json.ytTags }}"
+          }
+        },
+        "id": "c4f7daf8-9022-4341-b324-35246a4d6601",
+        "name": "▶️ YouTube Upload",
+        "type": "n8n-nodes-base.youTube",
+        "typeVersion": 1,
+        "position": [
+          2592,
+          352
+        ],
+        "credentials": {
+          "youTubeOAuth2Api": {
+            "id": "hTJRxZS65ecjS4Zh",
+            "name": "YouTube bebetter.path"
+          }
+        },
+        "continueOnFail": true,
+        "notes": "✅ Credencial: YouTube API Ciro\nprivacyStatus: private\ncontinueOnFail: TRUE"
+      },
+      {
+        "parameters": {
+          "jsCode": "const item = $input.item;\nconst isError = !!(item.json.error || item.json.status === 'failed');\nreturn [{ json: {\n  platform: 'YouTube',\n  status: isError ? 'ERROR' : 'SUCCESS',\n  videoId: isError ? null : (item.json.uploadId || item.json.id || null),\n  errorDetails: isError ? (item.json.error?.message || JSON.stringify(item.json)) : null,\n  timestamp: new Date().toISOString()\n}}];"
+        },
+        "id": "7f929a77-eead-4660-a957-4bdab318b714",
+        "name": "✅ YouTube Status",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          3264,
+          352
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const IG_HASHTAGS = [\"#BeBetterPath\", \"#Estoicismo\", \"#Disciplina\", \"#Mentalidad\", \"#Motivacion\", \"#Mindset\", \"#Estoico\", \"#DesarrolloPersonal\"];\nconst _b = $('📥 Webhook Trigger').item.json.body;\nif (_b.preApproved && _b.captionIG) {\n  return [{ json: { message1: _b.phrase || '', message2: _b.captionIG } }];\n}\nconst caption = $input.item.json.candidates?.[0]?.content?.parts?.[0]?.text || '';\nconst phrase = $('📥 Webhook Trigger').item.json.body.phrase || '';\nconst captionWithTags = caption.trim() + '\\n\\n' + IG_HASHTAGS.join(' ');\nreturn [{ json: { message1: phrase, message2: captionWithTags } }];"
+        },
+        "id": "fc4b7222-d243-4f9d-af42-4d78cb9469a7",
+        "name": "📱 Format WhatsApp",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          3840,
+          352
+        ],
+        "notes": "Construye el mensaje de WhatsApp:\n- Header con la frase del video\n- Bloque de copy listo para copiar y pegar"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://open.tiktokapis.com/v2/post/publish/video/init/",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Authorization",
+                "value": "Bearer REEMPLAZAR_CON_TIKTOK_ACCESS_TOKEN"
+              }
+            ]
+          },
+          "sendBody": true,
+          "contentType": "raw",
+          "rawContentType": "application/json; charset=UTF-8",
+          "body": "{}",
+          "options": {
+            "timeout": 120000
+          }
+        },
+        "id": "681bed2f-4491-46f7-9fb4-6323aa0512cd",
+        "name": "🎵 TikTok Direct Post",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          0,
+          1584
+        ],
+        "continueOnFail": true,
+        "notes": "🔌 DESCONECTADO — pendiente activar para TikTok."
+      },
+      {
+        "parameters": {
+          "jsCode": "return [{ json: { platform: 'TikTok', status: 'PENDING' } }];"
+        },
+        "id": "9129538b-8b9e-4ab7-8b2e-f91f9cb8e64c",
+        "name": "✅ TikTok Status",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          224,
+          1584
+        ]
+      },
+      {
+        "parameters": {
+          "content": "## 📤 Publisher de contenido — bebetter\n**Webhook:** `/videopublish`. Lo llama **beBetterStudio** (app local de David).\n🔒 Protegido con **Header Auth** `x-galactic-auth` (cred *Webhook Header Auth publishers*, F2).\nPublica a **YouTube**. Usa Gemini (*Gemini Query Key*, restringida por IP, F1).\n📣 Aviso del copy → **Telegram al chat de David** (cambiado 2026-07-10, antes era Gmail).\n⚠️ **PENDIENTE David:** el nodo *'Enviar copy Telegram (David)'* está SIN credencial y con chatId vacío → asignar tu bot Telegram + tu chat_id. (Tiene onError:continue para no romper las publicaciones mientras tanto.)",
+          "height": 180,
+          "width": 440,
+          "color": 5
+        },
+        "id": "note-fRgHVl5PndZVDNa8",
+        "name": "📌 Nota mantenimiento",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          0,
+          -256
+        ]
+      },
+      {
+        "parameters": {
+          "updates": [
+            "callback_query",
+            "message"
+          ],
+          "additionalFields": {}
+        },
+        "type": "n8n-nodes-base.telegramTrigger",
+        "typeVersion": 1.3,
+        "position": [
+          0,
+          1072
+        ],
+        "id": "c5247380-aed9-4b70-ae43-6e3b93654572",
+        "name": "Telegram Trigger",
+        "webhookId": "b208cdaf-effb-4df6-93e1-8c6097b65f4c",
+        "credentials": {
+          "telegramApi": {
+            "id": "0OI6UNjhK2UhgSJw",
+            "name": "beBetter Agent Pub"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "chatId": "8739538908",
+          "text": "={{ \"*Reel:* \" + $('📱 Format WhatsApp').item.json.message1 }}",
+          "additionalFields": {
+            "appendAttribution": false,
+            "parse_mode": "Markdown"
+          }
+        },
+        "id": "tg-david-copy-01",
+        "name": "Enviar reelName Telegram (David)",
+        "type": "n8n-nodes-base.telegram",
+        "typeVersion": 1.2,
+        "position": [
+          4064,
+          352
+        ],
+        "webhookId": "dcc48eaf-90b2-4e32-a5c2-c017e5433a5a",
+        "credentials": {
+          "telegramApi": {
+            "id": "0OI6UNjhK2UhgSJw",
+            "name": "beBetter Agent Pub"
+          }
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "chatId": "8739538908",
+          "text": "={{ $('📱 Format WhatsApp').item.json.message2 }}",
+          "additionalFields": {
+            "appendAttribution": false,
+            "parse_mode": "Markdown"
+          }
+        },
+        "id": "93782d21-af6d-4e15-b7c2-ce24f3eede24",
+        "name": "Enviar copy Telegram (David)",
+        "type": "n8n-nodes-base.telegram",
+        "typeVersion": 1.2,
+        "position": [
+          4288,
+          352
+        ],
+        "webhookId": "dcc48eaf-90b2-4e32-a5c2-c017e5433a5a",
+        "credentials": {
+          "telegramApi": {
+            "id": "0OI6UNjhK2UhgSJw",
+            "name": "beBetter Agent Pub"
+          }
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "const b = $('📥 Webhook Trigger').item.json.body;\nconst meta = $('🎬 Parse YT Meta').item.json;\nconst caption = `🎬 ${meta.ytTitle}\\n\\n${b.phrase || ''}`;\nreturn [{ json: { caption, ytTitle: meta.ytTitle } }];"
+        },
+        "id": "ceacb42b-a94f-4973-a159-b8390a416fd6",
+        "name": "🧰 Prep Preview",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          800,
+          448
+        ]
+      },
+      {
+        "parameters": {
+          "url": "={{ $('📥 Webhook Trigger').item.json.body.videoUrl }}",
+          "options": {
+            "response": {
+              "response": {
+                "responseFormat": "file"
+              }
+            },
+            "timeout": 300000
+          }
+        },
+        "id": "6195a6a5-b9bd-46e1-bc08-94361ee5e738",
+        "name": "⬇️ Download Preview",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1248,
+          512
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "sendVideo",
+          "chatId": "8739538908",
+          "binaryData": true,
+          "additionalFields": {
+            "caption": "={{ $('🧰 Prep Preview').item.json.caption }}"
+          }
+        },
+        "id": "9fa19430-d4da-4a0a-9dc1-608e79d5bddd",
+        "name": "🎥 Enviar preview (David)",
+        "type": "n8n-nodes-base.telegram",
+        "typeVersion": 1.2,
+        "position": [
+          1472,
+          512
+        ],
+        "webhookId": "c015d79c-3b59-4038-bc93-1471f53b1cfe",
+        "credentials": {
+          "telegramApi": {
+            "id": "0OI6UNjhK2UhgSJw",
+            "name": "beBetter Agent Pub"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "chatId": "8739538908",
+          "text": "={{ '¿Publicar en YouTube?\\n\\n🎬 ' + $('🧰 Prep Preview').item.json.ytTitle }}",
+          "replyMarkup": "inlineKeyboard",
+          "inlineKeyboard": {
+            "rows": [
+              {
+                "row": {
+                  "buttons": [
+                    {
+                      "text": "✅ Publicar",
+                      "additionalFields": {
+                        "callback_data": "={{ '1:' + $execution.id }}"
+                      }
+                    },
+                    {
+                      "text": "❌ Descartar",
+                      "additionalFields": {
+                        "callback_data": "={{ '0:' + $execution.id }}"
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          "additionalFields": {}
+        },
+        "id": "9772f47c-45de-4628-93f9-8cc5c4e46a15",
+        "name": "🔔 Pedir aprobacion (David)",
+        "type": "n8n-nodes-base.telegram",
+        "typeVersion": 1.2,
+        "position": [
+          1696,
+          512
+        ],
+        "webhookId": "37c460c0-4244-416b-a6b9-7a9ec3c2e9aa",
+        "credentials": {
+          "telegramApi": {
+            "id": "0OI6UNjhK2UhgSJw",
+            "name": "beBetter Agent Pub"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "resume": "webhook",
+          "options": {}
+        },
+        "id": "9e72a4e5-4e83-47fa-90ec-e719e6d99587",
+        "name": "⏸️ Esperar decision",
+        "type": "n8n-nodes-base.wait",
+        "typeVersion": 1.1,
+        "position": [
+          1920,
+          512
+        ],
+        "webhookId": "7c039005-8f20-4baf-a59f-b5a903cf51f1"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 1
+            },
+            "combinator": "and",
+            "conditions": [
+              {
+                "id": "afcad5ef-ff92-49f4-86cc-44e4c6b9a719",
+                "leftValue": "={{ String($json.body?.approved ?? $json.query?.approved ?? $json.approved) }}",
+                "rightValue": "true",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals"
+                }
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "0d498318-7cad-4027-a1ce-558b024a66cd",
+        "name": "IF Aprobado",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          2144,
+          512
+        ]
+      },
+      {
+        "parameters": {
+          "chatId": "8739538908",
+          "text": "={{ '❌ Descartado: ' + $('🧰 Prep Preview').item.json.ytTitle }}",
+          "additionalFields": {
+            "appendAttribution": false
+          }
+        },
+        "id": "2482b2f4-645c-4a85-9088-4ab4e50b91fb",
+        "name": "❌ Descartado (David)",
+        "type": "n8n-nodes-base.telegram",
+        "typeVersion": 1.2,
+        "position": [
+          2368,
+          560
+        ],
+        "webhookId": "84a1313a-e284-4e14-822d-90e7722cad72",
+        "credentials": {
+          "telegramApi": {
+            "id": "0OI6UNjhK2UhgSJw",
+            "name": "beBetter Agent Pub"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "const j = $json;\nconst cq = j.callback_query || j.callbackQuery || (j.body && j.body.callback_query) || j;\nconst data = String(cq.data || '');\nconst [dec, execId] = data.split(':');\nreturn [{ json: { approved: dec === '1', execId, callbackQueryId: cq.id } }];"
+        },
+        "id": "d0f4dad4-5a08-405f-9472-f06ba5104c77",
+        "name": "🔓 Parse Callback",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          896,
+          976
+        ]
+      },
+      {
+        "parameters": {
+          "url": "={{ 'https://n8n.galacticaima.com/api/v1/executions/' + $json.execId + '?includeData=true' }}",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-N8N-API-KEY",
+                "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJmNzYzZThjYS00Yzg4LTQ4NWMtOTA4ZC1hMWZmNmY3ODA1MDQiLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwianRpIjoiYjhjNzE1NzctZDg1Yy00MmI3LThmZGMtNDI1MWRjZTM0Mzg5IiwiaWF0IjoxNzg0NzgzNTQ2fQ.xipD277ekVbWl9l1lY-t45ny6ocJY5U3DLdJWlF4cOI"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "b290c8d9-fd05-45f5-b8db-41d54fbc76dc",
+        "name": "🔎 Obtener resumeUrl",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1120,
+          976
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const s = JSON.stringify($input.item.json);\nconst m = s.match(/https?:\\/\\/[^\"'\\\\ ]*webhook-waiting\\/\\d+\\?signature=[a-f0-9]+/);\nconst pc = $('🔓 Parse Callback').item.json;\nreturn [{ json: { resumeUrl: m ? m[0] : null, approved: pc.approved, callbackQueryId: pc.callbackQueryId } }];"
+        },
+        "id": "c865fdf2-4791-4741-82c7-0a21dee64564",
+        "name": "🧩 Extraer resumeUrl",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1344,
+          976
+        ]
+      },
+      {
+        "parameters": {
+          "url": "={{ $json.resumeUrl + '&approved=' + ($json.approved ? 'true' : 'false') }}",
+          "options": {}
+        },
+        "id": "1a5eefe2-10e1-4294-9c56-2e22aba4500f",
+        "name": "▶️ Reanudar ejecucion",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1568,
+          976
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "callback",
+          "queryId": "={{ $('🔓 Parse Callback').item.json.callbackQueryId }}",
+          "additionalFields": {
+            "text": "={{ $('🔓 Parse Callback').item.json.approved ? '✅ Aprobado' : '❌ Descartado' }}"
+          }
+        },
+        "id": "435e8c43-b1f8-4878-a14e-6bedc5977f98",
+        "name": "💬 Responder toque",
+        "type": "n8n-nodes-base.telegram",
+        "typeVersion": 1.2,
+        "position": [
+          1792,
+          976
+        ],
+        "webhookId": "2bca44b9-f814-4abd-ae9c-dcd54d82fc08",
+        "credentials": {
+          "telegramApi": {
+            "id": "0OI6UNjhK2UhgSJw",
+            "name": "beBetter Agent Pub"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "chatId": "8739538908",
+          "text": "={{ '📸 Publicado en Instagram ✅\\n🎬 ' + $('📥 Webhook Trigger').item.json.body.phrase + '\\n🔗 https://www.instagram.com/bebetter.path/reels/' }}",
+          "additionalFields": {
+            "appendAttribution": false
+          }
+        },
+        "id": "08f75025-0619-45d9-93f3-d5c7270812cb",
+        "name": "📸 IG Notificar (David)",
+        "type": "n8n-nodes-base.telegram",
+        "typeVersion": 1.2,
+        "position": [
+          5856,
+          224
+        ],
+        "webhookId": "ff13e12d-a1f0-452f-9a4f-269973f0f20f",
+        "credentials": {
+          "telegramApi": {
+            "id": "0OI6UNjhK2UhgSJw",
+            "name": "beBetter Agent Pub"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "url": "={{ $('📥 Webhook Trigger').item.json.body.thumbnailUrl }}",
+          "options": {
+            "response": {
+              "response": {
+                "responseFormat": "file"
+              }
+            },
+            "timeout": 60000
+          }
+        },
+        "id": "407d6c38-7d3c-449a-8e3a-d724429ddf6e",
+        "name": "⬇️ Download Thumbnail (YT)",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          2816,
+          352
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=https://www.googleapis.com/upload/youtube/v3/thumbnails/set?videoId={{ $('▶️ YouTube Upload').item.json.uploadId || $('▶️ YouTube Upload').item.json.id }}&uploadType=media",
+          "authentication": "predefinedCredentialType",
+          "nodeCredentialType": "youTubeOAuth2Api",
+          "sendBody": true,
+          "contentType": "binaryData",
+          "inputDataFieldName": "data",
+          "options": {}
+        },
+        "id": "24951ed9-4045-49d8-852a-26303e948724",
+        "name": "🖼️ YouTube Set Thumbnail",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          3040,
+          352
+        ],
+        "credentials": {
+          "youTubeOAuth2Api": {
+            "id": "hTJRxZS65ecjS4Zh",
+            "name": "YouTube bebetter.path"
+          }
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://graph.instagram.com/v21.0/17841425527150540/media",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "access_token",
+                "value": "={{ $('🔑 Leer token IG').all().find(i => i.json.key === 'ig_access_token').json.value }}"
+              }
+            ]
+          },
+          "sendBody": true,
+          "contentType": "form-urlencoded",
+          "bodyParameters": {
+            "parameters": [
+              {
+                "name": "media_type",
+                "value": "REELS"
+              },
+              {
+                "name": "video_url",
+                "value": "={{ encodeURI($('📥 Webhook Trigger').item.json.body.videoUrl) }}"
+              },
+              {
+                "name": "caption",
+                "value": "={{ $('📱 Format WhatsApp').item.json.message2 }}"
+              },
+              {
+                "name": "thumb_offset",
+                "value": "5000"
+              },
+              {
+                "name": "share_to_feed",
+                "value": "true"
+              }
+            ]
+          },
+          "options": {
+            "timeout": 120000
+          }
+        },
+        "id": "a090839f-2f49-4bc4-aab7-1e38d5e94cde",
+        "name": "📸 IG Crear contenedor",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          4736,
+          352
+        ]
+      },
+      {
+        "parameters": {
+          "amount": 20
+        },
+        "id": "00a416d7-5649-4c1b-a884-64efd122b2a9",
+        "name": "⏳ IG Procesar",
+        "type": "n8n-nodes-base.wait",
+        "typeVersion": 1.1,
+        "position": [
+          4960,
+          352
+        ],
+        "webhookId": "7ca76409-c698-4ef1-be10-e6e80a9570aa"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://graph.instagram.com/v21.0/17841425527150540/media_publish",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "access_token",
+                "value": "={{ $('🔑 Leer token IG').all().find(i => i.json.key === 'ig_access_token').json.value }}"
+              }
+            ]
+          },
+          "sendBody": true,
+          "contentType": "form-urlencoded",
+          "bodyParameters": {
+            "parameters": [
+              {
+                "name": "creation_id",
+                "value": "={{ $('📸 IG Crear contenedor').item.json.id }}"
+              }
+            ]
+          },
+          "options": {
+            "timeout": 120000
+          }
+        },
+        "id": "03294e1e-c529-48fb-a9f3-972de23709ea",
+        "name": "📸 IG Publicar",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          5632,
+          224
+        ]
+      },
+      {
+        "parameters": {
+          "modelId": {
+            "__rl": true,
+            "value": "models/gemini-3.5-flash",
+            "mode": "list",
+            "cachedResultName": "models/gemini-3.5-flash"
+          },
+          "messages": {
+            "values": [
+              {
+                "content": "={{ $('📥 Webhook Trigger').item.json.body.phrase }}"
+              }
+            ]
+          },
+          "simplify": false,
+          "jsonOutput": true,
+          "builtInTools": {},
+          "options": {
+            "systemMessage": "Eres el Curador Jefe de \"BeBetter Path\". Tu objetivo es transformar conceptos en metadatos de YouTube Shorts que proyecten autoridad absoluta y \"Empatía de Trinchera\".\n\nREGLAS DE TONO:\n- Identifica el registro emocional del concepto y adapta el tono. Por defecto: Disciplina Cruda (sentencias secas sobre responsabilidad y esfuerzo). Si el concepto es reflexivo, sereno o esperanzador, modula hacia un registro más pausado y hondo, SIN perder autoridad ni caer en motivación barata.\n- Mantén siempre la Empatía de Trinchera: reconocimiento del peso del camino (Ej: \"Si la soledad te quema...\").\n- PROHIBICIÓN TOTAL: Nunca inicies con \"Sé que\", \"Entiendo que\" o \"Te sientes\". Usa afirmaciones directas.\n- Vocabulario duro (Ley, código, arquetipo, trinchera, metal, forjar, inevitable, deuda) para el registro de disciplina; ajústalo cuando el registro sea más reflexivo.\n\nREGLAS DE FORMATO:\n- Título: Máximo 60 caracteres. Usa la Estructura \"La Ley\" o \"El Arquetipo\". Sin caracteres especiales.\n- Descripción: Un párrafo denso. Debe usar una de las 4 Estructuras Maestras (La Ley, El Sentido, El Código o El Arquetipo).\n- Footer: Firma de marca obligatoria.\n\nResponde ÚNICAMENTE en JSON:\n{\n  \"title\": \"Sentencia de autoridad de máximo impacto\",\n  \"description\": \"[Estructura Maestra aplicada al concepto].\\n\\nEl proceso no se negocia.\\n@TheBeBetterPath ⚔️\\n\\n#TheBeBetterPath #Shorts #Estoicismo #Disciplina #Mentalidad\",\n  \"tags\": \"bebetterpath,estoicismo,disciplina,maestria,shorts,mentalidad,honor,filosofia,autodisciplina\"\n}",
+            "temperature": 0.6
+          }
+        },
+        "id": "17c6e565-5719-4ec2-acc9-dd5483dc06ec",
+        "name": "🎬 Gemini YouTube (nativo)",
+        "type": "@n8n/n8n-nodes-langchain.googleGemini",
+        "typeVersion": 1.2,
+        "position": [
+          224,
+          448
+        ],
+        "credentials": {
+          "googlePalmApi": {
+            "id": "vfTugh1WYxhGMq5X",
+            "name": "beBetterStudio Gemini"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "modelId": {
+            "__rl": true,
+            "value": "models/gemini-3.5-flash",
+            "mode": "list",
+            "cachedResultName": "models/gemini-3.5-flash"
+          },
+          "messages": {
+            "values": [
+              {
+                "content": "={{ $('📥 Webhook Trigger').item.json.body.phrase }}"
+              }
+            ]
+          },
+          "simplify": false,
+          "builtInTools": {},
+          "options": {
+            "systemMessage": "Eres un copywriter experto en contenido de alto rendimiento y estoicismo para la marca \"BeBetter Path\" en Instagram. Tu voz nace de la disciplina y la verdad, nunca de la motivación barata.\n\nANTES DE ESCRIBIR, identifica el registro emocional de la frase y adapta tu tono a ella:\n- Frase cruda, confrontativa o sobre la comodidad → directo, seco y autoritario (tu tono por defecto).\n- Frase reflexiva, serena o filosófica → pausado, íntimo y contemplativo; menos imperativos, más hondura.\n- Frase épica, de superación o esperanza → aspiracional y con fuerza, sin caer en lo cursi.\nEl copy debe sentirse como una EXTENSIÓN de la frase, jamás contradecir su emoción.\n\nSe te dará una frase o concepto. Tu función es generar el copy para la descripción del Reel.\n\nSigue este formato EXACTO:\n\n[Frase corta, máximo 6 palabras, golpe al ego o curiosidad masiva]\n\n[Párrafo 1: El problema. Describe una debilidad común de la sociedad o la trampa de la comodidad, 2-3 líneas]\n\n[Párrafo 2: La verdad. La solución estoica o la realidad cruda que el espectador debe aceptar, 2-3 líneas]\n\n[Párrafo 3: Acción. Un llamado a la disciplina interna y a la ejecución inmediata, 2-3 líneas]\n\n[Parrafo 4: El proceso no se negocia.\n@bebetter.path ⚔️]\n\nREGLAS OBLIGATORIAS:\n- La intensidad la marca el registro de la frase; NO fuerces dureza en frases reflexivas o serenas.\n- NO incluyas hashtags.\n- NO uses lenguaje motivacional barato o \"mágico\".\n- Prohibidas: increíble, asombroso, mágico, extraordinario, dale like, suscríbete.\n- Vocabulario duro (brutal, crudo, inevitable, deuda, disciplina, forjar): SOLO en el registro duro; en registros reflexivos o épicos usa el léxico que pida la emoción.\n- Solo se permite el emoji de la espada (⚔️) al final.\n- Responde ÚNICAMENTE con el copy resultante.",
+            "temperature": 0.8,
+            "topP": 0.9
+          }
+        },
+        "id": "c43c8e2c-6ddc-49e6-bfb0-62a48128dabc",
+        "name": "📱 Gemini Instagram (nativo)",
+        "type": "@n8n/n8n-nodes-langchain.googleGemini",
+        "typeVersion": 1.2,
+        "position": [
+          3488,
+          352
+        ],
+        "credentials": {
+          "googlePalmApi": {
+            "id": "vfTugh1WYxhGMq5X",
+            "name": "beBetterStudio Gemini"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 2
+            },
+            "combinator": "or",
+            "conditions": [
+              {
+                "id": "cond-a",
+                "leftValue": "={{ ($json.callback_query || $json.callbackQuery || {}).data || '' }}",
+                "rightValue": "a:",
+                "operator": {
+                  "type": "string",
+                  "operation": "startsWith"
+                }
+              },
+              {
+                "id": "cond-r",
+                "leftValue": "={{ ($json.callback_query || $json.callbackQuery || {}).data || '' }}",
+                "rightValue": "r:",
+                "operator": {
+                  "type": "string",
+                  "operation": "startsWith"
+                }
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          672,
+          1072
+        ],
+        "id": "route-callback-3a",
+        "name": "🔀 Route Callback"
+      },
+      {
+        "parameters": {
+          "jsCode": "const j = $json;\nconst cq = j.callback_query || j.callbackQuery || (j.body && j.body.callback_query) || j;\nconst data = String(cq.data || '');\nconst [action, queueId] = data.split(':');\nconst status = action === 'a' ? 'approved' : 'rejected';\nreturn [{ json: { action, queueId, status, callbackQueryId: cq.id } }];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          896,
+          1168
+        ],
+        "id": "parse-aprob-3a",
+        "name": "🔓 Parse Aprobacion"
+      },
+      {
+        "parameters": {
+          "operation": "update",
+          "documentId": {
+            "__rl": true,
+            "value": "1QwH2iT0t0h9mIhoHRnWO-pVXhNXwhV1mtyuvdV7kkgs",
+            "mode": "id"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": "1637724194",
+            "mode": "id"
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "id": "={{ $json.queueId }}",
+              "status": "={{ $json.status }}"
+            },
+            "matchingColumns": [
+              "id"
+            ],
+            "schema": [],
+            "attemptToConvertTypes": false,
+            "convertFieldsToString": false
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.5,
+        "position": [
+          1120,
+          1168
+        ],
+        "id": "update-status-3a",
+        "name": "📝 Update Status",
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "17f89ToWBxB84qVF",
+            "name": "beBetterStudio Sheets"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "resource": "callback",
+          "queryId": "={{ $('🔓 Parse Aprobacion').item.json.callbackQueryId }}",
+          "additionalFields": {
+            "text": "={{ $('🔓 Parse Aprobacion').item.json.status === 'approved' ? '✅ Aprobado — entra a la cola' : '❌ Rechazado' }}"
+          }
+        },
+        "type": "n8n-nodes-base.telegram",
+        "typeVersion": 1.2,
+        "position": [
+          1344,
+          1168
+        ],
+        "id": "answer-aprob-3a",
+        "name": "💬 Responder aprobacion",
+        "webhookId": "59b35154-badc-4e76-9757-3accf285fe78",
+        "credentials": {
+          "telegramApi": {
+            "id": "0OI6UNjhK2UhgSJw",
+            "name": "beBetter Agent Pub"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 2
+            },
+            "combinator": "and",
+            "conditions": [
+              {
+                "id": "is-reply",
+                "leftValue": "={{ $json.message && $json.message.reply_to_message ? true : false }}",
+                "rightValue": true,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          448,
+          976
+        ],
+        "id": "es-reply-3b",
+        "name": "🧭 Es reply?"
+      },
+      {
+        "parameters": {
+          "jsCode": "const m = $json.message || {};\nconst replyToId = m.reply_to_message ? m.reply_to_message.message_id : null;\nconst newCaption = String(m.text || '');\nconst chatId = m.chat ? m.chat.id : null;\nreturn [{ json: { replyToId, newCaption, chatId } }];"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          672,
+          784
+        ],
+        "id": "parse-reply-3b",
+        "name": "✏️ Parse Reply"
+      },
+      {
+        "parameters": {
+          "operation": "update",
+          "documentId": {
+            "__rl": true,
+            "value": "1QwH2iT0t0h9mIhoHRnWO-pVXhNXwhV1mtyuvdV7kkgs",
+            "mode": "id"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": "1637724194",
+            "mode": "id"
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "telegramMsgId": "={{ $json.replyToId }}",
+              "captionIG": "={{ $json.newCaption }}"
+            },
+            "matchingColumns": [
+              "telegramMsgId"
+            ],
+            "schema": [],
+            "attemptToConvertTypes": false,
+            "convertFieldsToString": false
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.5,
+        "position": [
+          896,
+          784
+        ],
+        "id": "update-caption-3b",
+        "name": "📝 Update Caption",
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "17f89ToWBxB84qVF",
+            "name": "beBetterStudio Sheets"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "chatId": "={{ $('✏️ Parse Reply').item.json.chatId }}",
+          "text": "✏️ Caption actualizado. Sigue pendiente tu ✅ para aprobarlo.",
+          "additionalFields": {}
+        },
+        "type": "n8n-nodes-base.telegram",
+        "typeVersion": 1.2,
+        "position": [
+          1120,
+          784
+        ],
+        "id": "confirmar-edit-3b",
+        "name": "💬 Confirmar edicion",
+        "webhookId": "6f07c764-a6a3-4ed2-9ac6-064a2e3c4ba2",
+        "credentials": {
+          "telegramApi": {
+            "id": "0OI6UNjhK2UhgSJw",
+            "name": "beBetter Agent Pub"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 2
+            },
+            "combinator": "and",
+            "conditions": [
+              {
+                "id": "is-preapproved",
+                "leftValue": "={{ $('📥 Webhook Trigger').item.json.body.preApproved === true || $('📥 Webhook Trigger').item.json.body.preApproved === 'true' }}",
+                "rightValue": true,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          1024,
+          448
+        ],
+        "id": "if-preapproved-e4",
+        "name": "🚦 IF preApproved"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 1
+            },
+            "conditions": [
+              {
+                "id": "has-queueid",
+                "leftValue": "={{ !!$('📥 Webhook Trigger').item.json.body.queueId }}",
+                "rightValue": true,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          6976,
+          224
+        ],
+        "id": "if-queueid-e4",
+        "name": "🏁 IF tiene queueId"
+      },
+      {
+        "parameters": {
+          "operation": "update",
+          "documentId": {
+            "__rl": true,
+            "value": "1QwH2iT0t0h9mIhoHRnWO-pVXhNXwhV1mtyuvdV7kkgs",
+            "mode": "id"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": "1637724194",
+            "mode": "id"
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "id": "={{ $('📥 Webhook Trigger').item.json.body.queueId }}",
+              "status": "published",
+              "publishedAt": "={{ $now.toISO() }}",
+              "mediaId": "={{ $('📸 IG Publicar').first().json.id }}",
+              "permalink": ""
+            },
+            "matchingColumns": [
+              "id"
+            ],
+            "schema": [
+              {
+                "id": "mediaId",
+                "displayName": "mediaId",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "readOnly": false,
+                "removed": false
+              },
+              {
+                "id": "permalink",
+                "displayName": "permalink",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "readOnly": false,
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": false,
+            "convertFieldsToString": false
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.5,
+        "position": [
+          7200,
+          224
+        ],
+        "id": "marcar-publicado-e4",
+        "name": "📝 Marcar publicado",
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "17f89ToWBxB84qVF",
+            "name": "beBetterStudio Sheets"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "url": "={{ 'https://graph.instagram.com/v21.0/' + $('📸 IG Crear contenedor').item.json.id }}",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "fields",
+                "value": "status_code,status"
+              },
+              {
+                "name": "access_token",
+                "value": "={{ $('🔑 Leer token IG').all().find(i => i.json.key === 'ig_access_token').json.value }}"
+              }
+            ]
+          },
+          "options": {
+            "timeout": 30000
+          }
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          5184,
+          272
+        ],
+        "id": "ig-status-e5",
+        "name": "🔎 IG Status"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 2
+            },
+            "combinator": "and",
+            "conditions": [
+              {
+                "id": "is-finished",
+                "leftValue": "={{ $json.status_code }}",
+                "rightValue": "FINISHED",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals"
+                }
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          5408,
+          272
+        ],
+        "id": "ig-finished-e5",
+        "name": "🔀 IG FINISHED?"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 2
+            },
+            "combinator": "and",
+            "conditions": [
+              {
+                "id": "not-error",
+                "leftValue": "={{ $json.status_code }}",
+                "rightValue": "ERROR",
+                "operator": {
+                  "type": "string",
+                  "operation": "notEquals"
+                }
+              },
+              {
+                "id": "not-expired",
+                "leftValue": "={{ $json.status_code }}",
+                "rightValue": "EXPIRED",
+                "operator": {
+                  "type": "string",
+                  "operation": "notEquals"
+                }
+              },
+              {
+                "id": "under-limit",
+                "leftValue": "={{ $runIndex }}",
+                "rightValue": 8,
+                "operator": {
+                  "type": "number",
+                  "operation": "lt"
+                }
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          5632,
+          448
+        ],
+        "id": "ig-retry-e5",
+        "name": "🔁 ¿Reintentar?"
+      },
+      {
+        "parameters": {
+          "chatId": "8739538908",
+          "text": "={{ '⚠️ IG no procesó el video (status_code: ' + $json.status_code + ')\\nMotivo: ' + ($json.status || 's/d') + '\\nVideo: ' + ($('📥 Webhook Trigger').item.json.body.phrase || '') }}",
+          "additionalFields": {}
+        },
+        "type": "n8n-nodes-base.telegram",
+        "typeVersion": 1.2,
+        "position": [
+          5856,
+          448
+        ],
+        "id": "ig-giveup-e5",
+        "name": "⚠️ IG no listo",
+        "webhookId": "6ad675af-9127-4ebe-b370-427b07feb063",
+        "credentials": {
+          "telegramApi": {
+            "id": "0OI6UNjhK2UhgSJw",
+            "name": "beBetter Agent Pub"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "documentId": {
+            "__rl": true,
+            "value": "1QwH2iT0t0h9mIhoHRnWO-pVXhNXwhV1mtyuvdV7kkgs",
+            "mode": "id"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": "491336242",
+            "mode": "id"
+          },
+          "filtersUI": {
+            "values": [
+              {
+                "lookupColumn": "key",
+                "lookupValue": "ig_access_token"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "igtoken-read",
+        "name": "🔑 Leer token IG",
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.5,
+        "position": [
+          4512,
+          352
+        ],
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "17f89ToWBxB84qVF",
+            "name": "beBetterStudio Sheets"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": false,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 2
+            },
+            "combinator": "and",
+            "conditions": [
+              {
+                "id": "is-cola",
+                "leftValue": "={{ (($json.message || {}).text || '').trim().toLowerCase() }}",
+                "rightValue": "/cola",
+                "operator": {
+                  "type": "string",
+                  "operation": "startsWith"
+                }
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "8bfbaa35-d4f1-494d-9586-702546afa34a",
+        "name": "❓ Es /cola?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          224,
+          1072
+        ]
+      },
+      {
+        "parameters": {
+          "documentId": {
+            "__rl": true,
+            "value": "1QwH2iT0t0h9mIhoHRnWO-pVXhNXwhV1mtyuvdV7kkgs",
+            "mode": "id"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": "1637724194",
+            "mode": "id"
+          },
+          "options": {}
+        },
+        "id": "7202e45e-90fc-4112-820f-304eb19960f1",
+        "name": "📥 Leer cola (/cola)",
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.5,
+        "position": [
+          448,
+          1360
+        ],
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "17f89ToWBxB84qVF",
+            "name": "beBetterStudio Sheets"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "documentId": {
+            "__rl": true,
+            "value": "1QwH2iT0t0h9mIhoHRnWO-pVXhNXwhV1mtyuvdV7kkgs",
+            "mode": "id"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": "491336242",
+            "mode": "id"
+          },
+          "options": {}
+        },
+        "id": "b156522a-8467-4cb8-8c9c-a5fab55ac1d5",
+        "name": "📅 Leer cadencia (/cola)",
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.5,
+        "position": [
+          672,
+          1360
+        ],
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "17f89ToWBxB84qVF",
+            "name": "beBetterStudio Sheets"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "const rows = $('📥 Leer cola (/cola)').all().map(i => i.json);\nconst cfgRows = $('📅 Leer cadencia (/cola)').all().map(i => i.json);\nconst cfg = {};\nfor (const r of cfgRows) { if (r.key) cfg[String(r.key).trim()] = String(r.value == null ? '' : r.value).trim(); }\nconst times = (cfg.cadence_times || '').split(',').map(s => s.trim()).filter(Boolean);\nconst tz = cfg.timezone || 'America/Bogota';\n\nconst approved = rows\n  .filter(r => String(r.status || '').trim() === 'approved' && !String(r.publishedAt || '').trim())\n  .sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')));\n\nconst trig = $('Telegram Trigger').first().json;\nconst chatId = (trig.message && trig.message.chat && trig.message.chat.id) || 8739538908;\n\nfunction tzOffsetMinutes(tz, date) {\n  const dtf = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });\n  const p = {}; for (const x of dtf.formatToParts(date)) p[x.type] = x.value;\n  const asUTC = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second);\n  return Math.round((asUTC - date.getTime()) / 60000);\n}\nfunction projectSlots(n, times, tz, now) {\n  const hours = times.map(t => Number(String(t).split(':')[0])).filter(h => Number.isInteger(h) && h >= 0 && h <= 23).sort((a, b) => a - b);\n  if (!hours.length || !n) return [];\n  const off = tzOffsetMinutes(tz, now);\n  const wall = new Date(now.getTime() + off * 60000);\n  const Y = wall.getUTCFullYear(), Mo = wall.getUTCMonth(), D = wall.getUTCDate(), ch = wall.getUTCHours(), cm = wall.getUTCMinutes();\n  const slots = [];\n  for (let day = 0; slots.length < n && day < 90; day++) {\n    for (const h of hours) {\n      if (day === 0 && (h < ch || (h === ch && cm > 0))) continue;\n      slots.push({ dayOffset: day, hour: h, etaMs: Date.UTC(Y, Mo, D + day, h, 0, 0) - off * 60000 });\n      if (slots.length >= n) break;\n    }\n  }\n  return slots;\n}\nfunction label(s, tz) {\n  if (!s) return '—';\n  const t = String(s.hour).padStart(2, '0') + ':00';\n  if (s.dayOffset === 0) return 'Hoy ' + t;\n  if (s.dayOffset === 1) return 'Mañana ' + t;\n  const ds = new Date(s.etaMs).toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', timeZone: tz });\n  return ds + ' ' + t;\n}\n\nconst slots = projectSlots(approved.length, times, tz, new Date());\nlet msg;\nif (!approved.length) {\n  msg = '✅ *Cola de aprobados*\\n\\nNo hay videos aprobados esperando publicación.';\n} else if (!times.length) {\n  msg = '⚠️ Hay ' + approved.length + ' aprobado(s) pero *no hay cadencia configurada* — no se publicarán hasta definir horas en la app.';\n} else {\n  const lines = approved.map((r, i) => {\n    const ph = String(r.phrase || '').replace(/\\s+/g, ' ').slice(0, 45);\n    return (i + 1) + '. \"' + ph + '\" → *' + label(slots[i], tz) + '*';\n  });\n  msg = '📋 *Próximas publicaciones* (' + approved.length + ' en cola)\\n\\n' + lines.join('\\n') + '\\n\\n_Cadencia: ' + times.join(', ') + ' · ' + tz + '_';\n}\nreturn [{ json: { chatId, msg } }];"
+        },
+        "id": "a95fba73-dc39-42aa-8348-e34bca006404",
+        "name": "🧮 Proyectar /cola",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          896,
+          1360
+        ]
+      },
+      {
+        "parameters": {
+          "chatId": "={{ $json.chatId }}",
+          "text": "={{ $json.msg }}",
+          "additionalFields": {
+            "appendAttribution": false,
+            "parse_mode": "Markdown"
+          }
+        },
+        "id": "2afaaea0-a503-4d47-924f-a1f5a3549894",
+        "name": "📤 Responder /cola",
+        "type": "n8n-nodes-base.telegram",
+        "typeVersion": 1.2,
+        "position": [
+          1120,
+          1360
+        ],
+        "webhookId": "e9f986ec-e4b1-4ac9-a05a-abfc8e614e47",
+        "credentials": {
+          "telegramApi": {
+            "id": "0OI6UNjhK2UhgSJw",
+            "name": "beBetter Agent Pub"
+          }
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "httpRequestMethod": "POST",
+          "graphApiVersion": "v25.0",
+          "node": "1058087370724713",
+          "edge": "video_reels",
+          "options": {
+            "queryParameters": {
+              "parameter": [
+                {
+                  "name": "upload_phase",
+                  "value": "start"
+                }
+              ]
+            }
+          }
+        },
+        "type": "n8n-nodes-base.facebookGraphApi",
+        "typeVersion": 1,
+        "position": [
+          6080,
+          224
+        ],
+        "id": "e3edd26d-d308-4411-b317-20cca2eeeab7",
+        "name": "📘 FB·Start",
+        "credentials": {
+          "facebookGraphApi": {
+            "id": "1vlAzOHMeLysGufG",
+            "name": "beBetterPath FB Page"
+          }
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $('📘 FB·Start').item.json.upload_url }}",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpHeaderAuth",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "file_url",
+                "value": "={{ encodeURI($('📥 Webhook Trigger').item.json.body.videoUrl).replace(/;/g,'%3B') }}"
+              }
+            ]
+          },
+          "options": {
+            "timeout": 120000
+          }
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          6304,
+          224
+        ],
+        "id": "9c8fd2cf-d6b5-4e05-bc8c-c36ba2c4a7ca",
+        "name": "📘 FB·Upload",
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "p2qHNN0mTfkKQbpk",
+            "name": "FB Reels Upload (Header)"
+          }
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "httpRequestMethod": "POST",
+          "graphApiVersion": "v25.0",
+          "node": "1058087370724713",
+          "edge": "video_reels",
+          "options": {
+            "queryParameters": {
+              "parameter": [
+                {
+                  "name": "upload_phase",
+                  "value": "finish"
+                },
+                {
+                  "name": "video_id",
+                  "value": "={{ $('📘 FB·Start').item.json.video_id }}"
+                },
+                {
+                  "name": "video_state",
+                  "value": "PUBLISHED"
+                },
+                {
+                  "name": "description",
+                  "value": "={{ $('📱 Format WhatsApp').item.json.message2 }}"
+                }
+              ]
+            }
+          }
+        },
+        "type": "n8n-nodes-base.facebookGraphApi",
+        "typeVersion": 1,
+        "position": [
+          6528,
+          224
+        ],
+        "id": "397c8956-31a9-4867-9ba0-59c046a0398e",
+        "name": "📘 FB·Finish",
+        "credentials": {
+          "facebookGraphApi": {
+            "id": "1vlAzOHMeLysGufG",
+            "name": "beBetterPath FB Page"
+          }
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "chatId": "8739538908",
+          "text": "={{ $('📘 FB·Finish').item.json.post_id ? ('📘 Publicado en Facebook ✅\\n🎬 ' + $('📥 Webhook Trigger').item.json.body.phrase + '\\n🔗 https://www.facebook.com/reel/' + $('📘 FB·Start').item.json.video_id) : ('⚠️ Facebook: ' + JSON.stringify($('📘 FB·Finish').item.json)) }}",
+          "additionalFields": {
+            "appendAttribution": false
+          }
+        },
+        "type": "n8n-nodes-base.telegram",
+        "typeVersion": 1.2,
+        "position": [
+          6752,
+          224
+        ],
+        "id": "37bb6a40-1ad3-4471-b233-0f66cbbeed38",
+        "name": "📘 FB Notificar (David)",
+        "webhookId": "f31a8a9e-2c26-45f7-9273-fc5c202a9f36",
+        "credentials": {
+          "telegramApi": {
+            "id": "0OI6UNjhK2UhgSJw",
+            "name": "beBetter Agent Pub"
+          }
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "chatId": "8739538908",
+          "text": "={{ '▶️ Publicado en YouTube ✅\\n🎬 ' + $('📥 Webhook Trigger').item.json.body.phrase + ($('✅ YouTube Status').item.json.videoId ? ('\\n🔗 https://www.youtube.com/watch?v=' + $('✅ YouTube Status').item.json.videoId) : '') }}",
+          "additionalFields": {
+            "appendAttribution": false
+          }
+        },
+        "type": "n8n-nodes-base.telegram",
+        "typeVersion": 1.2,
+        "position": [
+          3264,
+          544
+        ],
+        "id": "0e3a9e7b-b186-4ee4-b4d4-d3e47c606ad2",
+        "name": "▶️ YT Notificar (David)",
+        "webhookId": "9defbdb3-e860-4cab-8b21-59ca296a9e66",
+        "credentials": {
+          "telegramApi": {
+            "id": "0OI6UNjhK2UhgSJw",
+            "name": "beBetter Agent Pub"
+          }
+        },
+        "onError": "continueRegularOutput"
+      }
+    ],
+    "connections": {
+      "📥 Webhook Trigger": {
+        "main": [
+          [
+            {
+              "node": "🎬 Gemini YouTube (nativo)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🎬 Parse YT Meta": {
+        "main": [
+          [
+            {
+              "node": "🧰 Prep Preview",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "⬇️ Download Video": {
+        "main": [
+          [
+            {
+              "node": "▶️ YouTube Upload",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "▶️ YouTube Upload": {
+        "main": [
+          [
+            {
+              "node": "⬇️ Download Thumbnail (YT)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "📱 Format WhatsApp": {
+        "main": [
+          [
+            {
+              "node": "Enviar reelName Telegram (David)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🎵 TikTok Direct Post": {
+        "main": [
+          [
+            {
+              "node": "✅ TikTok Status",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Enviar reelName Telegram (David)": {
+        "main": [
+          [
+            {
+              "node": "Enviar copy Telegram (David)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🧰 Prep Preview": {
+        "main": [
+          [
+            {
+              "node": "🚦 IF preApproved",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "⬇️ Download Preview": {
+        "main": [
+          [
+            {
+              "node": "🎥 Enviar preview (David)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🎥 Enviar preview (David)": {
+        "main": [
+          [
+            {
+              "node": "🔔 Pedir aprobacion (David)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🔔 Pedir aprobacion (David)": {
+        "main": [
+          [
+            {
+              "node": "⏸️ Esperar decision",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "⏸️ Esperar decision": {
+        "main": [
+          [
+            {
+              "node": "IF Aprobado",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "IF Aprobado": {
+        "main": [
+          [
+            {
+              "node": "⬇️ Download Video",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "❌ Descartado (David)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "✅ YouTube Status": {
+        "main": [
+          [
+            {
+              "node": "▶️ YT Notificar (David)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Telegram Trigger": {
+        "main": [
+          [
+            {
+              "node": "❓ Es /cola?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🔓 Parse Callback": {
+        "main": [
+          [
+            {
+              "node": "🔎 Obtener resumeUrl",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🔎 Obtener resumeUrl": {
+        "main": [
+          [
+            {
+              "node": "🧩 Extraer resumeUrl",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🧩 Extraer resumeUrl": {
+        "main": [
+          [
+            {
+              "node": "▶️ Reanudar ejecucion",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "▶️ Reanudar ejecucion": {
+        "main": [
+          [
+            {
+              "node": "💬 Responder toque",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Enviar copy Telegram (David)": {
+        "main": [
+          [
+            {
+              "node": "🔑 Leer token IG",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "⬇️ Download Thumbnail (YT)": {
+        "main": [
+          [
+            {
+              "node": "🖼️ YouTube Set Thumbnail",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🖼️ YouTube Set Thumbnail": {
+        "main": [
+          [
+            {
+              "node": "✅ YouTube Status",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "📸 IG Crear contenedor": {
+        "main": [
+          [
+            {
+              "node": "⏳ IG Procesar",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "⏳ IG Procesar": {
+        "main": [
+          [
+            {
+              "node": "🔎 IG Status",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "📸 IG Publicar": {
+        "main": [
+          [
+            {
+              "node": "📸 IG Notificar (David)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🎬 Gemini YouTube (nativo)": {
+        "main": [
+          [
+            {
+              "node": "🎬 Parse YT Meta",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "📱 Gemini Instagram (nativo)": {
+        "main": [
+          [
+            {
+              "node": "📱 Format WhatsApp",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🔀 Route Callback": {
+        "main": [
+          [
+            {
+              "node": "🔓 Parse Aprobacion",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "🔓 Parse Callback",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🔓 Parse Aprobacion": {
+        "main": [
+          [
+            {
+              "node": "📝 Update Status",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "📝 Update Status": {
+        "main": [
+          [
+            {
+              "node": "💬 Responder aprobacion",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🧭 Es reply?": {
+        "main": [
+          [
+            {
+              "node": "✏️ Parse Reply",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "🔀 Route Callback",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "✏️ Parse Reply": {
+        "main": [
+          [
+            {
+              "node": "📝 Update Caption",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "📝 Update Caption": {
+        "main": [
+          [
+            {
+              "node": "💬 Confirmar edicion",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🚦 IF preApproved": {
+        "main": [
+          [
+            {
+              "node": "⬇️ Download Video",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "⬇️ Download Preview",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "📸 IG Notificar (David)": {
+        "main": [
+          [
+            {
+              "node": "📘 FB·Start",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🏁 IF tiene queueId": {
+        "main": [
+          [
+            {
+              "node": "📝 Marcar publicado",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          []
+        ]
+      },
+      "🔎 IG Status": {
+        "main": [
+          [
+            {
+              "node": "🔀 IG FINISHED?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🔀 IG FINISHED?": {
+        "main": [
+          [
+            {
+              "node": "📸 IG Publicar",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "🔁 ¿Reintentar?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🔁 ¿Reintentar?": {
+        "main": [
+          [
+            {
+              "node": "⏳ IG Procesar",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "⚠️ IG no listo",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🔑 Leer token IG": {
+        "main": [
+          [
+            {
+              "node": "📸 IG Crear contenedor",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "❓ Es /cola?": {
+        "main": [
+          [
+            {
+              "node": "📥 Leer cola (/cola)",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "🧭 Es reply?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "📥 Leer cola (/cola)": {
+        "main": [
+          [
+            {
+              "node": "📅 Leer cadencia (/cola)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "📅 Leer cadencia (/cola)": {
+        "main": [
+          [
+            {
+              "node": "🧮 Proyectar /cola",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "🧮 Proyectar /cola": {
+        "main": [
+          [
+            {
+              "node": "📤 Responder /cola",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "📘 FB·Start": {
+        "main": [
+          [
+            {
+              "node": "📘 FB·Upload",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "📘 FB·Upload": {
+        "main": [
+          [
+            {
+              "node": "📘 FB·Finish",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "📘 FB·Finish": {
+        "main": [
+          [
+            {
+              "node": "📘 FB Notificar (David)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "📘 FB Notificar (David)": {
+        "main": [
+          [
+            {
+              "node": "🏁 IF tiene queueId",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "▶️ YT Notificar (David)": {
+        "main": [
+          [
+            {
+              "node": "📱 Gemini Instagram (nativo)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "Galactic AIMA",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "workflowPublishHistory": [
+      {
+        "createdAt": "2026-07-27T05:19:27.457Z",
+        "id": 424,
+        "workflowId": "fRgHVl5PndZVDNa8",
+        "versionId": "9329324c-7615-439c-bd12-5fd85c1ac2fb",
+        "event": "activated",
+        "userId": "f763e8ca-4c88-485c-908d-a1ff6f780504"
+      },
+      {
+        "createdAt": "2026-07-27T05:19:26.815Z",
+        "id": 423,
+        "workflowId": "fRgHVl5PndZVDNa8",
+        "versionId": "9329324c-7615-439c-bd12-5fd85c1ac2fb",
+        "event": "deactivated",
+        "userId": "f763e8ca-4c88-485c-908d-a1ff6f780504"
+      }
+    ]
+  }
+}

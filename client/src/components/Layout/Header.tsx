@@ -1,4 +1,4 @@
-import { Film, Image, GalleryHorizontalEnd, HardDrive, Send, RotateCcw, ChevronDown, ScrollText, Clock, ListPlus, Music } from 'lucide-react'
+import { Film, Image, GalleryHorizontalEnd, HardDrive, Send, RotateCcw, ChevronDown, ScrollText, Clock, ListPlus, Music, BarChart3 } from 'lucide-react'
 import { useRef, useEffect, useState } from 'react'
 import { useVideoStore } from '../../store/videoStore'
 import { ContentMode } from '../../store/videoStore'
@@ -119,6 +119,18 @@ export default function Header({ lastVideoId, lastImageId, isGenerating, toast, 
             )}
           </>
         )}
+
+        {/* Analítica: no va en el toggle de modos porque no es un modo de
+            creación. Se sale de ella pulsando cualquiera de los tres. */}
+        <button
+          onClick={() => setMode('analytics')}
+          className={`p-1.5 transition-colors ${
+            mode === 'analytics' ? 'text-bone-500' : 'text-bone-700 hover:text-bone-500'
+          }`}
+          title="Analítica — qué funcionó y con qué receta"
+        >
+          <BarChart3 size={14} />
+        </button>
 
         <button
           onClick={() => setShowAudio(true)}

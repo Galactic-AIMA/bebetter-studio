@@ -10,6 +10,7 @@ import RightPanel from '../components/Layout/RightPanel'
 import VideoPreview from '../components/Preview/VideoPreview'
 import VideoResultModal from '../components/Preview/VideoResultModal'
 import CarouselStudio from '../components/Carousel/CarouselStudio'
+import AnalyticsPanel from '../components/Analytics/AnalyticsPanel'
 
 type ToastState = { state: 'loading' | 'success' | 'error'; loadingText?: string; successText?: string; message?: string }
 
@@ -123,7 +124,11 @@ export default function Editor() {
       />
 
       <div className="flex flex-1 overflow-hidden bg-carbon-700">
-        {mode === 'carousel' ? (
+        {mode === 'analytics' ? (
+          <main className="flex-1 bg-carbon-900 overflow-hidden">
+            <AnalyticsPanel />
+          </main>
+        ) : mode === 'carousel' ? (
           <main className="flex-1 bg-carbon-900 overflow-hidden">
             <CarouselStudio />
           </main>

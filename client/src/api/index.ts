@@ -325,3 +325,53 @@ export const logsApi = {
     api.get<LogEntry[]>('/logs', { params }).then((r) => r.data),
   clear: () => api.delete('/logs').then((r) => r.data),
 }
+
+// --- Analítica -------------------------------------------------------------
+
+export interface PieceStats {
+  mediaId: string
+  permalink?: string
+  publishedAt: string
+  mediaType?: string
+  recipeStatus: 'full' | 'partial' | 'none'
+  texto?: string
+  moodCategory?: string
+  nivelEnergia?: number
+  imagenOrigen?: string
+  estilo?: string
+  efecto?: string
+  audio?: string
+  reach?: number
+  likes?: number
+  comments?: number
+  saved?: number
+  shares?: number
+  views?: number
+  saveRate?: number
+  shareRate?: number
+  engagementRate?: number
+}
+
+export interface DimensionSummary {
+  dimension: string
+  valor: string
+  n: number
+  reachMedio: number
+  saveRate: number
+  shareRate: number
+  engagementRate: number
+}
+
+export const analyticsApi = {
+  pieces: () => api.get<PieceStats[]>('/analytics/pieces').then((r) => r.data),
+  summary: () =>
+    api
+      .get<{ minN: number; dimensions: DimensionSummary[] }>('/analytics/summary')
+      .then((r) => r.data),
+  collect: () =>
+    api
+      .post<{ total: number; ok: number; fallidas: { mediaId: string; error: string }[] }>(
+        '/analytics/collect'
+      )
+      .then((r) => r.data),
+}

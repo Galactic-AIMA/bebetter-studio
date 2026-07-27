@@ -35,7 +35,7 @@ const DEFAULT_CONFIG: VideoConfig = {
   audioTrack: '',
 }
 
-export type ContentMode = 'video' | 'image' | 'carousel'
+export type ContentMode = 'video' | 'image' | 'carousel' | 'analytics'
 
 interface VideoStore {
   config: VideoConfig
