@@ -81,6 +81,14 @@ export function buildSlidePrompt(slide: SlideInput, hasRef: boolean, fuente?: Ca
     ? `Keep the SAME visual style as the reference image (same charcoal palette, film grain, lighting mood and typography), but depict a DIFFERENT scene — do NOT reuse the reference's subject. New scene: ${scene}. Minimalist, one focal concept, lots of negative space.`
     : `A single symbolic scene: ${scene}. Minimalist, one focal concept, lots of negative space.`
 
+  // El modelo copiaba del image_input elementos de texto que este prompt no pide
+  // (badge de serie, atribución) y además alucinaba su contenido (redibujó
+  // "Ley N°2" como "Ley N°3"). Solo se hereda el ESTILO, nunca las etiquetas.
+  const noLeak =
+    hasRef && !marks.length
+      ? 'Use the reference image ONLY for style. Do NOT copy any label, badge, tag, banner or attribution text from it. This slide must contain NO red label and NO extra text of any kind.'
+      : ''
+
   return [
     'Cinematic vertical 4:5 social media carousel slide, raw stoic aesthetic, dark and moody.',
     'Deep charcoal-black background (#0A0A0A), subtle fog, heavy film grain, volumetric low light, deep shadows.',
@@ -89,8 +97,11 @@ export function buildSlidePrompt(slide: SlideInput, hasRef: boolean, fuente?: Ca
     ...marks,
     'Accent: a deep muted desaturated blood-red (#8B1A1A) on the key word only; subtle warm faded-gold light and highlights as a secondary accent. No blue, no neon.',
     oneHandle,
+    noLeak,
     'The text must be spelled exactly as given, with correct accents, no repeated or broken letters. No emojis, no exclamation marks, no clutter.',
-  ].join(' ')
+  ]
+    .filter(Boolean)
+    .join(' ')
 }
 
 const CAROUSEL_ASPECT: KieAspect = '4:5'
