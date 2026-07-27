@@ -138,6 +138,10 @@ for (const sql of [
   `ALTER TABLE images ADD COLUMN origen TEXT`,
   // Atribución + marca de serie del carrusel ({autor,obra,referencia}) (2026-07-26)
   `ALTER TABLE carousels ADD COLUMN fuente_json TEXT`,
+  // Frase de una publicación cuya pieza no está en la DB (contenido anterior al
+  // historial): sin video_id, pero con la frase ya se tiene media receta —
+  // mood, energía y paleta salen de `phrases` (2026-07-26)
+  `ALTER TABLE publications ADD COLUMN phrase_id TEXT`,
 ]) {
   try { db.exec(sql) } catch (_) { /* columna ya existe */ }
 }

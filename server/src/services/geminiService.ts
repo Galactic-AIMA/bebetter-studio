@@ -73,6 +73,28 @@ const IMAGE_ANALYSIS_SCHEMA = {
   required: ['emocionDominante', 'nivelEnergia', 'paletaColores', 'composicion', 'descripcionMood', 'elementos', 'temas'],
 }
 
+/**
+ * Lee el texto incrustado en una imagen (OCR con Gemini vision).
+ *
+ * Se usa para rescatar la receta de publicaciones antiguas: los reels de bebetter
+ * llevan la frase quemada en el video, así que la miniatura la contiene. Eso
+ * permite recuperar la frase original aunque la pieza nunca estuviera en la DB —
+ * y el caption de Instagram no sirve para eso, porque es una reescritura.
+ */
+export async function extractOverlayText(imageBuffer: Buffer, mimeType = 'image/jpeg'): Promise<string> {
+  const model = getClient().getGenerativeModel({ model: 'gemini-3.5-flash' })
+  const prompt =
+    'Transcribe EXACTAMENTE el texto que aparece escrito sobre esta imagen, respetando tildes y puntuación. ' +
+    'Ignora el handle de la marca (@bebetter.path) y cualquier marca de agua. ' +
+    'Si no hay texto legible, responde exactamente: SIN_TEXTO. No añadas comillas ni explicaciones.'
+
+  const result = await withRetry(() =>
+    model.generateContent([prompt, { inlineData: { mimeType, data: imageBuffer.toString('base64') } }])
+  )
+  const texto = result.response.text().trim()
+  return texto === 'SIN_TEXTO' ? '' : texto
+}
+
 export async function analyzeImageStructured(imagePath: string): Promise<ImageAnalysis> {
   const model = getClient().getGenerativeModel({
     model: 'gemini-3.5-flash',

@@ -23,6 +23,7 @@ import dotenv from 'dotenv'
 
 const APPLY = process.argv.includes('--apply')
 const SEMANTIC = process.argv.includes('--semantic')
+const VISION = process.argv.includes('--vision')
 const limitArg = process.argv.indexOf('--limit')
 const LIMIT = limitArg >= 0 ? Number(process.argv[limitArg + 1]) || 200 : 200
 
@@ -68,6 +69,30 @@ async function main() {
     console.log(`   rescatados por significado: ${rescued.length}\n`)
   }
 
+  // Pase de visión: la frase va quemada en el video, así que la miniatura la
+  // tiene literal. Es el más fiable para este contenido — y el único que puede
+  // rescatar la receta de lo publicado antes de que existiera el historial.
+  const phraseOnly: typeof report.matched = []
+  if (VISION && report.orphanMedia.length) {
+    const axios = (await import('axios')).default
+    const { extractOverlayText } = await import('../src/services/geminiService')
+    const { refineWithVision } = await import('../src/services/publicationsService')
+    const yaUsados = new Set(report.matched.map((m) => m.videoId).filter(Boolean) as string[])
+
+    console.log(`👁  Leyendo la miniatura de ${report.orphanMedia.length} publicaciones…\n`)
+    const res = await refineWithVision(
+      report.orphanMedia,
+      async (url) => Buffer.from((await axios.get(url, { responseType: 'arraybuffer', timeout: 60_000 })).data),
+      (buf) => extractOverlayText(buf),
+      yaUsados
+    )
+    report.matched.push(...res.rescued)
+    phraseOnly.push(...res.phraseOnly)
+    report.orphanMedia = res.stillOrphan
+    console.log(`   vinculadas a un video: ${res.rescued.length}`)
+    console.log(`   frase recuperada sin video (receta parcial): ${res.phraseOnly.length}\n`)
+  }
+
   console.log(`✅ VINCULADAS (${report.matched.length})`)
   for (const m of report.matched) {
     const pieza = m.videoId ? `video ${m.videoId.slice(0, 8)}` : `carrusel ${m.carouselId!.slice(0, 8)}`
@@ -82,12 +107,21 @@ async function main() {
     console.log(`      ↳ ${o.reason}`)
   }
 
+  if (phraseOnly.length) {
+    console.log(`\n🧩 FRASE RECUPERADA, SIN PIEZA EN LA DB (${phraseOnly.length}) — receta parcial: mood, energía y paleta`)
+    for (const p of phraseOnly) {
+      console.log(`   ${fecha(p.media.timestamp)}  ${p.media.permalink ?? ''}`)
+      console.log(`      ↳ ${p.reason}`)
+    }
+  }
+
   console.log(`\n⚠️  MARCADAS COMO PUBLICADAS PERO NO ESTÁN EN IG (${report.unpublishedPieces.length})`)
   for (const p of report.unpublishedPieces) {
     console.log(`   ${fecha(p.publishedAt)}  ${p.kind.padEnd(8)} ${p.id.slice(0, 8)}  "${p.label}"`)
   }
 
   if (APPLY) {
+    report.matched.push(...phraseOnly)
     const n = persistReconcile(report)
     console.log(`\n💾 Guardadas ${n} filas en \`publications\` (los huérfanos quedan sin vincular).`)
   } else {

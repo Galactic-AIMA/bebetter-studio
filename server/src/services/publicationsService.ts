@@ -25,8 +25,10 @@ export interface Publication {
   videoId?: string
   carouselId?: string
   queueId?: string
+  /** Frase de la publicación cuando no hay pieza en la DB (receta parcial) */
+  phraseId?: string
   caption?: string
-  /** Cómo se estableció el vínculo: 'app' | 'sheet' | 'caption' | null (sin vincular) */
+  /** 'app' | 'sheet' | 'caption' | 'semantic' | 'vision' | 'vision-phrase' | null (sin vincular) */
   matchSource?: string
 }
 
@@ -34,15 +36,16 @@ export interface Publication {
 export function recordPublication(p: Publication): void {
   db.prepare(
     `INSERT INTO publications
-       (media_id, platform, permalink, media_type, published_at, video_id, carousel_id, queue_id, caption, match_source)
+       (media_id, platform, permalink, media_type, published_at, video_id, carousel_id, queue_id, phrase_id, caption, match_source)
      VALUES
-       (@mediaId, @platform, @permalink, @mediaType, @publishedAt, @videoId, @carouselId, @queueId, @caption, @matchSource)
+       (@mediaId, @platform, @permalink, @mediaType, @publishedAt, @videoId, @carouselId, @queueId, @phraseId, @caption, @matchSource)
      ON CONFLICT(media_id) DO UPDATE SET
        permalink    = COALESCE(excluded.permalink, permalink),
        media_type   = COALESCE(excluded.media_type, media_type),
        video_id     = COALESCE(excluded.video_id, video_id),
        carousel_id  = COALESCE(excluded.carousel_id, carousel_id),
        queue_id     = COALESCE(excluded.queue_id, queue_id),
+       phrase_id    = COALESCE(excluded.phrase_id, phrase_id),
        caption      = COALESCE(excluded.caption, caption),
        match_source = COALESCE(excluded.match_source, match_source)`
   ).run({
@@ -54,6 +57,7 @@ export function recordPublication(p: Publication): void {
     videoId: p.videoId ?? null,
     carouselId: p.carouselId ?? null,
     queueId: p.queueId ?? null,
+    phraseId: p.phraseId ?? null,
     caption: p.caption ?? null,
     matchSource: p.matchSource ?? null,
   })
@@ -76,6 +80,7 @@ function rowToPublication(r: any): Publication {
     videoId: r.video_id ?? undefined,
     carouselId: r.carousel_id ?? undefined,
     queueId: r.queue_id ?? undefined,
+    phraseId: r.phrase_id ?? undefined,
     caption: r.caption ?? undefined,
     matchSource: r.match_source ?? undefined,
   }
@@ -116,6 +121,8 @@ export interface ReconcileCandidate {
   videoId?: string
   carouselId?: string
   queueId?: string
+  /** Frase identificada aunque no haya pieza en la DB (receta parcial) */
+  phraseId?: string
   matchSource?: string
   /** 0–1; sube con el solapamiento de texto y la cercanía temporal */
   confidence: number
@@ -404,6 +411,110 @@ export async function refineWithEmbeddings(
   return { rescued, stillOrphan }
 }
 
+/**
+ * Tercer pase: leer la frase **en la propia miniatura**.
+ *
+ * Es el más fiable de todos para el contenido de bebetter, porque los reels
+ * llevan la frase quemada en el video: la miniatura contiene el texto original,
+ * no una reescritura. Rescata dos cosas distintas:
+ *
+ *  - Si la frase corresponde a un video de la DB → vínculo completo.
+ *  - Si la frase existe en `phrases` pero no hay video (contenido anterior al
+ *    historial) → se guarda `phrase_id`, que ya da **media receta**: mood,
+ *    energía y paleta salen de la frase, aunque se pierda el estilo de render.
+ *
+ * `fetchImage` se inyecta para no atar el servicio a un cliente HTTP concreto.
+ */
+export async function refineWithVision(
+  orphans: ReconcileCandidate[],
+  fetchImage: (url: string) => Promise<Buffer>,
+  ocr: (buf: Buffer) => Promise<string>,
+  usedVideoIds: Set<string> = new Set()
+): Promise<{ rescued: ReconcileCandidate[]; phraseOnly: ReconcileCandidate[]; stillOrphan: ReconcileCandidate[] }> {
+  const frases = db.prepare(`SELECT id, text FROM phrases`).all() as { id: string; text: string }[]
+
+  const videosByPhrase = new Map<string, { id: string; createdAt: string }[]>()
+  for (const v of db
+    .prepare(`SELECT id, phrase_id, created_at FROM videos WHERE phrase_id IS NOT NULL ORDER BY created_at`)
+    .all() as any[]) {
+    const arr = videosByPhrase.get(v.phrase_id) ?? []
+    arr.push({ id: v.id, createdAt: v.created_at })
+    videosByPhrase.set(v.phrase_id, arr)
+  }
+
+  const rescued: ReconcileCandidate[] = []
+  const phraseOnly: ReconcileCandidate[] = []
+  const stillOrphan: ReconcileCandidate[] = []
+
+  for (const o of orphans) {
+    const url = o.media.thumbnailUrl
+    if (!url) {
+      stillOrphan.push({ ...o, reason: `${o.reason}; sin miniatura para leer` })
+      continue
+    }
+
+    let texto = ''
+    try {
+      texto = await ocr(await fetchImage(url))
+    } catch (err: any) {
+      stillOrphan.push({ ...o, reason: `${o.reason}; no se pudo leer la miniatura (${err.message})` })
+      continue
+    }
+
+    if (!texto) {
+      stillOrphan.push({ ...o, reason: `${o.reason}; la miniatura no tiene texto legible` })
+      continue
+    }
+
+    // Aquí sí comparamos frase literal contra frase literal: el solapamiento
+    // léxico es fiable y no hace falta gastar embeddings.
+    let best: { id: string; text: string; score: number } | undefined
+    for (const f of frases) {
+      const score = textOverlap(texto, f.text)
+      if (!best || score > best.score) best = { id: f.id, text: f.text, score }
+    }
+
+    if (!best || best.score < CONFIDENT) {
+      stillOrphan.push({
+        ...o,
+        confidence: best?.score ?? 0,
+        reason: `leído en la miniatura: "${texto.slice(0, 60)}" — sin frase equivalente en el banco`,
+      })
+      continue
+    }
+
+    const ts = o.media.timestamp ? Date.parse(o.media.timestamp) : NaN
+    const elegido = (videosByPhrase.get(best.id) ?? [])
+      .filter((v) => !usedVideoIds.has(v.id))
+      .filter((v) => Number.isNaN(ts) || Date.parse(v.createdAt) <= ts + 24 * 60 * 60 * 1000)
+      .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0]
+
+    const base = {
+      ...o,
+      phraseId: best.id,
+      confidence: best.score,
+    }
+
+    if (elegido) {
+      usedVideoIds.add(elegido.id)
+      rescued.push({
+        ...base,
+        videoId: elegido.id,
+        matchSource: 'vision',
+        reason: `frase leída en la miniatura ↔ video de la DB (solapamiento ${(best.score * 100).toFixed(0)}%)`,
+      })
+    } else {
+      phraseOnly.push({
+        ...base,
+        matchSource: 'vision-phrase',
+        reason: `frase recuperada de la miniatura ("${best.text.slice(0, 45)}…") pero sin video en la DB — receta parcial`,
+      })
+    }
+  }
+
+  return { rescued, phraseOnly, stillOrphan }
+}
+
 /** Persiste los vínculos de un informe de reconciliación. Devuelve cuántos guardó. */
 export function persistReconcile(report: ReconcileReport, includeOrphans = true): number {
   const filas = [...report.matched, ...(includeOrphans ? report.orphanMedia : [])]
@@ -418,6 +529,7 @@ export function persistReconcile(report: ReconcileReport, includeOrphans = true)
         videoId: c.videoId,
         carouselId: c.carouselId,
         queueId: c.queueId,
+        phraseId: c.phraseId,
         caption: c.media.caption,
         matchSource: c.matchSource,
       })
