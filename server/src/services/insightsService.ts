@@ -231,10 +231,12 @@ export function pieceStats(): PieceStats[] {
       } catch { /* ignorado */ }
     }
 
+    // Si hay config de render y no menciona pista, el vídeo se generó SIN música
+    // (la feature no existía antes del 23-jul-2026). Eso es un dato, no un hueco.
     let audio: string | undefined
     if (f.config_extra) {
       try {
-        audio = JSON.parse(f.config_extra).audioTrack
+        audio = JSON.parse(f.config_extra).audioTrack || 'ninguno'
       } catch { /* ignorado */ }
     }
     // 'banco' por defecto: si la imagen existe y no dice origen, vino del banco
@@ -320,6 +322,7 @@ export function summaryByDimension(stats: PieceStats[] = pieceStats()): Dimensio
     ['mood', (s) => s.moodCategory],
     ['formato', (s) => (s.mediaType === 'CAROUSEL_ALBUM' ? 'carrusel' : 'reel')],
     ['imagen', (s) => s.imagenOrigen],
+    ['audio', (s) => (!s.hasAudio ? undefined : s.audio && s.audio !== 'ninguno' ? 'con música' : 'sin música')],
     ['estilo', (s) => s.estilo],
     ['efecto', (s) => s.efecto],
     ['energia', (s) => rangoEnergia(s.nivelEnergia)],

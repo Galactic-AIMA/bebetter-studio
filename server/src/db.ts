@@ -172,6 +172,12 @@ for (const sql of [
 // tenía la frase. Ahora cada bloque se comprueba por separado y `recipe_status`
 // sale de cuántos hay.
 //
+// `audio` se considera conocido en cuanto hay pieza en la DB: si la config del
+// render está y no menciona pista, es que el vídeo se generó SIN música (el audio
+// de fondo no existió hasta el 23-jul-2026) — verificado con ffprobe sobre un
+// vídeo de junio en R2: un solo stream, h264, sin audio. Eso es un valor real,
+// no un hueco, y además permite comparar "con música" contra "sin música".
+//
 // En carruseles, `audio` y `render` NO APLICAN (no llevan música y el "render" es
 // el prompt de marca, que ya vive en slides_json) → cuentan como cubiertos, para
 // no marcarlos incompletos por algo que nunca van a tener.
@@ -186,28 +192,27 @@ db.exec(`
               OR json_extract(v.config_extra, '$.imageId') IS NOT NULL
               OR p.carousel_id IS NOT NULL
          THEN 1 ELSE 0 END AS has_image,
-    CASE WHEN COALESCE(json_extract(v.config_extra, '$.audioTrack'), '') NOT IN ('', 'auto')
-              OR p.carousel_id IS NOT NULL
+    CASE WHEN p.video_id IS NOT NULL OR p.carousel_id IS NOT NULL
          THEN 1 ELSE 0 END AS has_audio,
     CASE WHEN v.style IS NOT NULL OR v.font IS NOT NULL OR p.carousel_id IS NOT NULL
          THEN 1 ELSE 0 END AS has_render,
     (
       CASE WHEN p.phrase_id IS NOT NULL OR v.phrase_id IS NOT NULL OR p.carousel_id IS NOT NULL THEN 1 ELSE 0 END +
       CASE WHEN p.image_filename IS NOT NULL OR json_extract(v.config_extra, '$.imageId') IS NOT NULL OR p.carousel_id IS NOT NULL THEN 1 ELSE 0 END +
-      CASE WHEN COALESCE(json_extract(v.config_extra, '$.audioTrack'), '') NOT IN ('', 'auto') OR p.carousel_id IS NOT NULL THEN 1 ELSE 0 END +
+      CASE WHEN p.video_id IS NOT NULL OR p.carousel_id IS NOT NULL THEN 1 ELSE 0 END +
       CASE WHEN v.style IS NOT NULL OR v.font IS NOT NULL OR p.carousel_id IS NOT NULL THEN 1 ELSE 0 END
     ) AS recipe_blocks,
     CASE
       WHEN (
         CASE WHEN p.phrase_id IS NOT NULL OR v.phrase_id IS NOT NULL OR p.carousel_id IS NOT NULL THEN 1 ELSE 0 END +
         CASE WHEN p.image_filename IS NOT NULL OR json_extract(v.config_extra, '$.imageId') IS NOT NULL OR p.carousel_id IS NOT NULL THEN 1 ELSE 0 END +
-        CASE WHEN COALESCE(json_extract(v.config_extra, '$.audioTrack'), '') NOT IN ('', 'auto') OR p.carousel_id IS NOT NULL THEN 1 ELSE 0 END +
+        CASE WHEN p.video_id IS NOT NULL OR p.carousel_id IS NOT NULL THEN 1 ELSE 0 END +
         CASE WHEN v.style IS NOT NULL OR v.font IS NOT NULL OR p.carousel_id IS NOT NULL THEN 1 ELSE 0 END
       ) = 4 THEN 'full'
       WHEN (
         CASE WHEN p.phrase_id IS NOT NULL OR v.phrase_id IS NOT NULL OR p.carousel_id IS NOT NULL THEN 1 ELSE 0 END +
         CASE WHEN p.image_filename IS NOT NULL OR json_extract(v.config_extra, '$.imageId') IS NOT NULL OR p.carousel_id IS NOT NULL THEN 1 ELSE 0 END +
-        CASE WHEN COALESCE(json_extract(v.config_extra, '$.audioTrack'), '') NOT IN ('', 'auto') OR p.carousel_id IS NOT NULL THEN 1 ELSE 0 END +
+        CASE WHEN p.video_id IS NOT NULL OR p.carousel_id IS NOT NULL THEN 1 ELSE 0 END +
         CASE WHEN v.style IS NOT NULL OR v.font IS NOT NULL OR p.carousel_id IS NOT NULL THEN 1 ELSE 0 END
       ) > 0 THEN 'partial'
       ELSE 'none'

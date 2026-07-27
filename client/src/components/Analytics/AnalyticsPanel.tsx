@@ -17,6 +17,7 @@ const ETIQUETA_DIMENSION: Record<string, string> = {
   mood: 'Registro emocional',
   formato: 'Formato',
   imagen: 'Origen de la imagen',
+  audio: 'Música de fondo',
   estilo: 'Estilo visual',
   efecto: 'Efecto de texto',
   energia: 'Nivel de energía',
