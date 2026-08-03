@@ -42,8 +42,10 @@ data/bebetter.db-shm
 data/bebetter.db-wal
 data/bebetter.db.bak-*
 
-# Backups de workflows n8n generados por los scripts de mantenimiento
-server/scripts/wf_*_backup_*.json
+# Backups de workflows n8n generados por los scripts de mantenimiento.
+# Cubre las dos formas que generan los scripts: wf_<id>_<motivo>_backup_<ts> y wf_backup_<motivo>_<id>_<ts>.
+# (el patrón antiguo era solo `wf_*_backup_*.json` y dejaba pasar toda la familia `wf_backup_*`)
+server/scripts/wf_*.json
 server/scripts/__pycache__/
 
 # Lockfile
@@ -72,3 +74,38 @@ server/scripts/copy_prompts_backup.txt
 server/scripts/add-carousel-scheduler.py
 server/scripts/fix-igtoken-sheet-schema.py
 server/scripts/add-carousels-to-agent.py
+
+# --- Scripts de un solo uso y datos crudos (2026-08-02) ---
+# Criterio: al repo va lo que se vuelve a ejecutar o lo que no tiene otra copia.
+# Fuera queda lo que ya cumplió su función (mutaciones de n8n ya aplicadas, migraciones
+# ya corridas) y los volcados de APIs, que se regeneran llamando otra vez a la fuente.
+
+# Mutaciones puntuales de n8n, ya aplicadas al workflow en producción
+server/scripts/add-retries.py
+server/scripts/fix-carousel-token-filter.py
+server/scripts/test-carousel-item.py
+
+# Migraciones de un solo uso, ya ejecutadas contra la DB
+server/scripts/fix-media-type.ts
+server/scripts/importar-frases-dostiempos.ts
+server/scripts/analizar-test-registro-propio.ts
+server/scripts/publish-now.ts
+
+# Recolectores y analizadores de Apify (se rehacen desde el scraper; el crédito
+# se renueva por aniversario de cuenta, próxima ventana 2026-08-29)
+server/scripts/apify-*.py
+server/scripts/nicho-percepcion.py
+server/scripts/propio-analisis.py
+
+# Volcados crudos de APIs (~25 MB) y resultados intermedios regenerables
+server/scripts/apify_*.json
+server/scripts/nicho_percepcion*.json
+server/scripts/analisis_test_registro_propio.json
+server/scripts/auditoria_frases_v1_defectuosa_*.json
+
+# EXCEPCIONES — esto NO es un script de un uso y no tiene otra copia versionada
+# (la DB está gitignoreada, así que el repo es el único respaldo):
+#   - frases-reescritas-dostiempos.md : las 20 frases escritas A MANO por David
+#   - auditoria_frases.json           : insumo de la columna `estructura` del banco
+#   - auditar-frases-dostiempos.py    : clasificador, se reusa al reconvertir frases
+!server/scripts/auditoria_frases.json
