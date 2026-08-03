@@ -103,6 +103,18 @@ server/scripts/nicho_percepcion*.json
 server/scripts/analisis_test_registro_propio.json
 server/scripts/auditoria_frases_v1_defectuosa_*.json
 
+# Mapas intermedios de las tandas de reconversión: se regeneran resolviendo por
+# texto contra la DB, y sólo valen para la corrida que los creó.
+server/scripts/_*.json
+
+# Scripts de reconversión ya ejecutados (2026-08-02/03). Lo que hicieron y por qué
+# está en el vault; el resultado está en la DB. Volver a correrlos sobre el banco
+# actual no tendría sentido: buscan textos que ya no existen.
+server/scripts/aplicar-tanda2.ts
+server/scripts/aplicar-tanda3.ts
+server/scripts/aplicar-tanda5.ts
+server/scripts/reparar-vinculo-tanda2.ts
+
 # EXCEPCIONES — esto NO es un script de un uso y no tiene otra copia versionada
 # (la DB está gitignoreada, así que el repo es el único respaldo):
 #   - frases-reescritas-dostiempos.md : las 20 frases escritas A MANO por David
