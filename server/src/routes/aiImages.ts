@@ -19,21 +19,28 @@ const ASPECTS: KieAspect[] = ['9:16', '4:5', '1:1', '16:9', '3:4']
 // Composición según dónde va el texto (textY = posición vertical del texto 0–100).
 // La franja donde caerá la frase debe quedar despejada, y el sujeto en la zona
 // opuesta — si no, el modelo suele meter el foco justo donde va el texto.
+// OJO: no pedir "empty/dark third". Nano Banana lo toma al pie de la letra y pinta
+// un rectángulo plano con borde recto justo en 1/3 de la altura (banda visible,
+// se veía en ia-1785139935021.png: corte duro en y=917 de 2752). Hay que pedir
+// espacio despejado PERO como continuación de la misma escena.
+const NO_BAND =
+  'The image must be ONE single continuous photograph: haze, light falloff, grain and depth flow smoothly across the entire frame. Never paint a flat block of solid color, never a hard horizontal edge, band, border or split — no letterboxing.'
+
 function composition(textY: number): { reserve: string; subject: string } {
   if (textY <= 40) {
     return {
-      reserve: 'the TOP third of the frame must be empty, dark, calm negative space (a caption will be placed there)',
+      reserve: `keep the TOP third free of any detail or object — only open air, haze, soft shadow and out-of-focus depth there, gradually falling off into darkness (a caption will be placed there). ${NO_BAND}`,
       subject: 'Place the main subject in the LOWER two-thirds; nothing important should reach into the top third',
     }
   }
   if (textY >= 60) {
     return {
-      reserve: 'the BOTTOM third of the frame must be empty, dark, calm negative space (a caption will be placed there)',
+      reserve: `keep the BOTTOM third free of any detail or object — only ground haze, soft shadow and out-of-focus depth there, gradually falling off into darkness (a caption will be placed there). ${NO_BAND}`,
       subject: 'Place the main subject in the UPPER two-thirds, clear of the bottom third',
     }
   }
   return {
-    reserve: 'the vertical CENTER band must be relatively empty, dark, calm negative space (a caption will be placed there)',
+    reserve: `keep the vertical CENTER band relatively free of detail — only atmosphere, haze and soft shadow there (a caption will be placed there). ${NO_BAND}`,
     subject: 'Place the main subject off-center (toward the top or to one side), keeping the middle band clear',
   }
 }
@@ -60,7 +67,7 @@ function buildBrandImagePrompt(a: PhraseAnalysis, textY = 25): string {
 
   return [
     'Cinematic vertical 9:16 background image for a motivational reel. Raw stoic aesthetic, dark and moody.',
-    `COMPOSITION (critical): ${subject}. ${reserve}. Leave lots of empty negative space.`,
+    `COMPOSITION (critical): ${subject}. ${reserve} Generous, uncluttered negative space — created by natural depth, fog and shadow, never by flat fill.`,
     'Deep charcoal-black background (#0A0A0A), subtle fog, heavy film grain, volumetric low light, deep shadows.',
     `A single symbolic scene: ${symbol}. Minimalist, one focal concept.`,
     `Atmosphere: ${a.mood || energyDesc}. Feel: ${energyDesc}.`,
