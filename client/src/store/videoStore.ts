@@ -3,16 +3,14 @@ import { VideoConfig, TextConfig, WatermarkConfig, TextEffect, VisualStyle, Hist
 import { PRESETS } from '../presets'
 import { PresetConfig } from '../hooks/usePresets'
 
+// Deriva del preset bebetter para que ambos no vuelvan a divergir: antes los
+// valores estaban duplicados a mano aquí y se desincronizaban al tocar el preset.
+const { label: _bebetterLabel, positionY: bebetterPositionY, ...bebetterText } = PRESETS.bebetter
+
 const DEFAULT_TEXT: TextConfig = {
+  ...bebetterText,
   content: 'Tu frase aquí...',
-  font: 'Inter-Bold',
-  fontSize: 42,
-  color: '#ffffff',
-  position: { x: 50, y: 25 },
-  align: 'center',
-  shadow: true,
-  maxWidth: 60,
-  lineHeight: 1.4,
+  position: { x: 50, y: bebetterPositionY },
   letterSpacing: 0,
   strokeWidth: 0,
   strokeColor: '#000000',

@@ -49,6 +49,7 @@ router.post('/generate', async (req, res) => {
       variant,
       watermark: imgConfig.watermark,
       source: imgConfig.source,
+      wrappedLines: imgConfig.wrappedLines,
     }))
 
     const id = uuidv4()

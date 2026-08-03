@@ -3,6 +3,7 @@ import { CheckSquare, Square, Layers, Upload, Send, Play, ClipboardCheck, Wand2,
 import { phrasesApi, imagesApi, videosApi, imagesOutputApi, batchApi, BatchPair } from '../../api'
 import { Phrase, ImageItem } from '../../types'
 import { useVideoStore } from '../../store/videoStore'
+import { wrapText } from '../../lib/wrapText'
 import VideoResultModal from '../Preview/VideoResultModal'
 
 type BatchMode = 'phrases' | 'images'
@@ -52,22 +53,6 @@ async function queuePatch(id: string): Promise<Partial<BatchResult>> {
   } catch (e: any) {
     return { queueError: e.response?.data?.error || e.message }
   }
-}
-
-function computeLines(text: string, fontSize: number, font: string, maxPx: number): string[] {
-  const canvas = document.createElement('canvas')
-  const ctx = canvas.getContext('2d')!
-  ctx.font = `${fontSize}px ${font.replace(/-/g, ' ')}, Arial, sans-serif`
-  const words = text.split(' ')
-  const lines: string[] = []
-  let current = ''
-  for (const word of words) {
-    const test = current ? `${current} ${word}` : word
-    if (ctx.measureText(test).width > maxPx && current) { lines.push(current); current = word }
-    else current = test
-  }
-  if (current) lines.push(current)
-  return lines
 }
 
 export default function BatchGenerator() {
@@ -238,8 +223,13 @@ export default function BatchGenerator() {
         }
 
         if (mode === 'video') {
-          const maxPx = (itemConfig.text.maxWidth / 100) * itemConfig.resolution.width
-          const wrappedLines = computeLines(phrase.text, itemConfig.text.fontSize, itemConfig.text.font, maxPx)
+          const wrappedLines = wrapText({
+            text: phrase.text,
+            font: itemConfig.text.font,
+            fontSize: itemConfig.text.fontSize,
+            maxWidth: itemConfig.text.maxWidth,
+            resolutionWidth: itemConfig.resolution.width,
+          })
           const video = await videosApi.generate({ ...itemConfig, wrappedLines }, phrase.id)
           generatedId = video.id
           result.id = video.id

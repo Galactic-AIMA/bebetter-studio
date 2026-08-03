@@ -40,6 +40,7 @@ export interface Phrase {
   usageCount?: number
   moodKeywords?: string[]
   createdAt?: string
+  archived?: boolean  // retirada de la rotación, sin borrar (ver db.ts)
 }
 
 export interface ImageItem {

@@ -184,6 +184,8 @@ export interface ImageGenerateConfig {
   resolution: { width: number; height: number }
   watermark?: WatermarkConfig
   source?: string
+  /** Líneas envueltas con measureText, con la división por tiempos ya aplicada. */
+  wrappedLines?: string[]
 }
 
 export const imagesOutputApi = {

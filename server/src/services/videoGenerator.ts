@@ -33,6 +33,62 @@ const FONT_FALLBACKS: Record<string, string> = {
   'RobotoCondensed-Bold':     `${WINDOWS_FONTS}/arialbd.ttf`,
 }
 
+// ---------------------------------------------------------------------------
+// Degradado de carbón detrás del texto ("scrim")
+//
+// El hueso #E8E4DC pierde contraste sobre las imágenes claras del banco, así que
+// se interpone un velo de carbón entre la imagen y el texto: opaco arriba y
+// transparente hacia abajo. La geometría deriva de text.position.y para que el
+// degradado acompañe al texto si se baja.
+//
+// Implementado con drawbox escalonado (t=fill) en vez de un PNG de gradiente
+// como input extra: no añade inputs (el watermark de imagen ya usa
+// complexFilter y un input más complicaría el grafo y el mapeo de audio),
+// funciona igual en video y en imagen y es una simple cadena de filtros. Con 32
+// bandas el salto de alpha es ~0.014, por debajo del umbral de banding visible
+// sobre contenido fotográfico.
+//
+// Estos valores deben coincidir con client/src/lib/textScrim.ts (DEFAULT_SCRIM).
+export interface ScrimConfig {
+  color: string
+  opacity: number
+  /** Extensión del degradado por debajo del centro del texto, en % de altura. */
+  spanBelowText: number
+}
+
+export const SCRIM: ScrimConfig = {
+  color: process.env.SCRIM_COLOR ?? '#0A0A0A',
+  opacity: Number(process.env.SCRIM_OPACITY ?? 0.45),
+  spanBelowText: Number(process.env.SCRIM_SPAN_BELOW_TEXT ?? 25),
+}
+
+const SCRIM_BANDS = 32
+
+export function buildScrimFilter(
+  height: number,
+  textPositionY: number,
+  scrim: ScrimConfig = SCRIM
+): string {
+  if (!Number.isFinite(scrim.opacity) || scrim.opacity <= 0) return ''
+  const endPct = Math.min(100, Math.max(1, textPositionY + scrim.spanBelowText))
+  const endY = Math.round((endPct / 100) * height)
+  if (endY <= 0) return ''
+
+  const color = scrim.color.replace('#', '0x')
+  const bandH = endY / SCRIM_BANDS
+  const boxes: string[] = []
+  for (let i = 0; i < SCRIM_BANDS; i++) {
+    const alpha = scrim.opacity * (1 - (i + 0.5) / SCRIM_BANDS)
+    if (alpha < 0.004) continue
+    const y0 = Math.round(i * bandH)
+    const y1 = Math.round((i + 1) * bandH)
+    if (y1 <= y0) continue
+    boxes.push(`drawbox=x=0:y=${y0}:w=iw:h=${y1 - y0}:color=${color}@${alpha.toFixed(4)}:t=fill`)
+  }
+  return boxes.join(',')
+}
+// ---------------------------------------------------------------------------
+
 function estimateTextWidth(text: string, fontSize: number): number {
   return text.length * fontSize * 0.55
 }
@@ -166,10 +222,13 @@ export async function generateVideo(
     ? `:borderw=${text.strokeWidth}:bordercolor=${(text.strokeColor ?? '#000000').replace('#', '0x')}`
     : ''
 
-  const drawTextFilters = lines.map((line, i) => {
+  // Las líneas vacías son el respiro entre bloques de tiempo: consumen su slot
+  // vertical (el índice `i` sigue contando) pero no generan drawtext.
+  const drawTextFilters = lines.flatMap((line, i) => {
+    if (!line.trim()) return []
     const baseY = startY + i * lineH
     const { yExpr, extraOpts } = effectOpts(effect, baseY)
-    return (
+    return [
       `drawtext=text='${escapeLine(line)}':` +
       `fontfile='${fontPath}':` +
       `fontsize=${text.fontSize}:` +
@@ -177,8 +236,8 @@ export async function generateVideo(
       `x=${xExpr}:y=${yExpr}` +
       shadowOpts +
       strokeOpts +
-      extraOpts
-    )
+      extraOpts,
+    ]
   })
 
   if (cfg.source) {
@@ -207,12 +266,18 @@ export async function generateVideo(
 
   const grainFilter = cfg.grain ? `,noise=alls=8:allf=t` : ''
 
-  const vfilter =
-    `scale=${width}:${height}:force_original_aspect_ratio=increase,` +
-    `crop=${width}:${height}` +
-    fadeOut +
-    grainFilter +
-    `,${drawTextFilters.join(',')}`
+  // Orden: scale → crop → scrim → [fade] → [grano] → drawtext×N.
+  // El scrim va justo tras el crop para quedar bajo el texto.
+  const scrimFilter = buildScrimFilter(height, text.position.y)
+
+  const vfilter = [
+    `scale=${width}:${height}:force_original_aspect_ratio=increase`,
+    `crop=${width}:${height}`,
+    scrimFilter,
+    fadeOut.replace(/^,/, ''),
+    grainFilter.replace(/^,/, ''),
+    drawTextFilters.join(','),
+  ].filter(Boolean).join(',')
 
   const outputOptions = [
     '-c:v libx264',

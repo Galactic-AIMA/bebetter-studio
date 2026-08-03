@@ -57,6 +57,9 @@ export const GenerateImageSchema = z.object({
     resolution: ResolutionSchema,
     watermark: WatermarkConfigSchema.optional(),
     source: z.string().optional(),
+    // Líneas ya envueltas por el cliente con measureText, igual que en vídeo.
+    // Traen la división por tiempos (línea vacía = respiro entre bloques).
+    wrappedLines: z.array(z.string()).optional(),
   }),
   phraseId: z.string().optional(),
   variant: z.enum(['combined', 'hook', 'punchline']).optional(),

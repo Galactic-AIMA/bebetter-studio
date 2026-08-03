@@ -1,6 +1,8 @@
 import { useRef, useEffect } from 'react'
 import { VideoConfig, WatermarkConfig } from '../../types'
 import { buildFontMap, fontToCSS, parseFontKey } from '../../config/fonts'
+import { wrapText } from '../../lib/wrapText'
+import { drawTextScrim } from '../../lib/textScrim'
 
 interface Props {
   config: VideoConfig
@@ -58,6 +60,8 @@ export default function VideoPreview({ config }: Props) {
         ctx.fillStyle = '#1a1a2e'
         ctx.fillRect(0, 0, W, H)
       }
+      // Degradado de carbón entre la imagen y el texto (mismo perfil que el render).
+      drawTextScrim(ctx, W, H, config.text.position.y)
       drawText(ctx, config, W, H)
       if (wmEnabled && wmType === 'text') {
         drawTextWatermark(ctx, config.watermark!, W, H)
@@ -103,7 +107,6 @@ function drawText(
       `${text.letterSpacing ?? 0}px`
   }
 
-  const maxPx = (text.maxWidth / 100) * W
   const x =
     text.align === 'center'
       ? W / 2
@@ -119,20 +122,14 @@ function drawText(
     ctx.shadowOffsetY = 2
   }
 
-  const words = text.content.split(' ')
-  const lines: string[] = []
-  let current = ''
-
-  for (const word of words) {
-    const test = current ? `${current} ${word}` : word
-    if (ctx.measureText(test).width > maxPx && current) {
-      lines.push(current)
-      current = word
-    } else {
-      current = test
-    }
-  }
-  if (current) lines.push(current)
+  const lines = wrapText({
+    text: text.content,
+    font: text.font,
+    fontSize,
+    maxWidth: text.maxWidth,
+    resolutionWidth: W,
+    ctx,
+  })
 
   const lineH = fontSize * text.lineHeight
   const totalH = lines.length * lineH

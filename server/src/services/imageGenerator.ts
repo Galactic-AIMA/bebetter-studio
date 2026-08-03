@@ -3,6 +3,7 @@ import path from 'path'
 import fs from 'fs'
 import { TextConfig, ImageVariant, WatermarkConfig, WatermarkPosition } from '../types'
 import { config } from '../config'
+import { buildScrimFilter } from './videoGenerator'
 
 function wmXExpr(position: WatermarkPosition, isText = false): string {
   if (position === 'left') return '20'
@@ -29,6 +30,8 @@ export interface ImageGenerateOptions {
   variant?: ImageVariant
   watermark?: WatermarkConfig
   source?: string
+  /** Líneas ya envueltas por el cliente (incluyen la división por tiempos). */
+  wrappedLines?: string[]
 }
 
 const WINDOWS_FONTS = 'C:/Windows/Fonts'
@@ -109,7 +112,10 @@ function buildDrawTextFilters(
       ? `w-tw-${width - Math.round((textCfg.position.x / 100) * width)}`
       : `${Math.round((textCfg.position.x / 100) * width)}`
 
-  return lines.map((line, i) => {
+  // flatMap: una línea vacía (el respiro entre tiempos) no emite drawtext, pero
+  // conserva su slot vertical porque el índice `i` sigue avanzando.
+  return lines.flatMap((line, i) => {
+    if (!line) return []
     const y = startY + i * lineH
     return (
       `drawtext=text='${escapeLine(line)}':` +
@@ -127,7 +133,8 @@ function buildVideoFilter(
   textCfg: TextConfig,
   resolution: { width: number; height: number },
   variant: ImageVariant,
-  source?: string
+  source?: string,
+  wrappedLines?: string[]
 ): string {
   const { width, height } = resolution
   const maxW = Math.round((textCfg.maxWidth / 100) * width)
@@ -136,6 +143,9 @@ function buildVideoFilter(
   const hasDelimiter = content.includes('//')
 
   let drawTextFilters: string[] = []
+  // Ancla vertical (% de altura) del bloque de texto más bajo: define hasta dónde
+  // baja el degradado de carbón. Por defecto, la posición del texto.
+  let scrimAnchorY = textCfg.position.y
 
   if (hasDelimiter && variant === 'combined') {
     const [hookText, punchlineText = ''] = content.split('//').map((p) => p.trim())
@@ -143,11 +153,13 @@ function buildVideoFilter(
     const hookLines = wrapText(hookText, textCfg.fontSize, maxW)
     const hookStartY = Math.max(10, Math.round(0.35 * height) - Math.round((hookLines.length * lineH) / 2))
     drawTextFilters = buildDrawTextFilters(hookLines, textCfg, hookStartY, width)
+    scrimAnchorY = 35
 
     if (punchlineText) {
       const punchLines = wrapText(punchlineText, textCfg.fontSize, maxW)
       const punchStartY = Math.max(10, Math.round(0.70 * height) - Math.round((punchLines.length * lineH) / 2))
       drawTextFilters = [...drawTextFilters, ...buildDrawTextFilters(punchLines, textCfg, punchStartY, width)]
+      scrimAnchorY = 70
     }
   } else {
     let displayText = content
@@ -155,7 +167,12 @@ function buildVideoFilter(
       const parts = content.split('//').map((p) => p.trim())
       displayText = variant === 'punchline' ? (parts[1] || parts[0]) : parts[0]
     }
-    const lines = wrapText(displayText, textCfg.fontSize, maxW)
+    // Sin `//`, las líneas del cliente son las buenas: vienen de measureText y
+    // ya traen la división por tiempos. Con `//` no sirven (envuelven el texto
+    // entero, no la parte que toca mostrar) → se recalcula en local.
+    const lines = (!hasDelimiter && wrappedLines?.length)
+      ? wrappedLines
+      : wrapText(displayText, textCfg.fontSize, maxW)
     const centerY = Math.round((textCfg.position.y / 100) * height)
     const startY = Math.max(10, centerY - Math.round((lines.length * lineH) / 2))
     drawTextFilters = buildDrawTextFilters(lines, textCfg, startY, width)
@@ -177,11 +194,15 @@ function buildVideoFilter(
     }
   }
 
-  return (
-    `scale=${width}:${height}:force_original_aspect_ratio=increase,` +
-    `crop=${width}:${height}` +
-    `,${drawTextFilters.join(',')}`
-  )
+  // scale → crop → degradado de carbón → drawtext×N (mismo orden que el video).
+  const scrimFilter = buildScrimFilter(height, scrimAnchorY)
+
+  return [
+    `scale=${width}:${height}:force_original_aspect_ratio=increase`,
+    `crop=${width}:${height}`,
+    scrimFilter,
+    drawTextFilters.join(','),
+  ].filter(Boolean).join(',')
 }
 
 export async function generateImage(opts: ImageGenerateOptions): Promise<ImageGenerateResult> {
@@ -193,7 +214,7 @@ export async function generateImage(opts: ImageGenerateOptions): Promise<ImageGe
   const filename = `${opts.outputName}${suffix}.jpg`
   const outputPath = path.join(outputDir, filename)
 
-  const vfilter = buildVideoFilter(opts.text, opts.resolution, variant, opts.source)
+  const vfilter = buildVideoFilter(opts.text, opts.resolution, variant, opts.source, opts.wrappedLines)
 
   const wm = opts.watermark
   const wmEnabled = wm?.enabled ?? false

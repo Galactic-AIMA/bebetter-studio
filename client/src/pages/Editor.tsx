@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Play } from 'lucide-react'
 import { useVideoStore } from '../store/videoStore'
 import { videosApi, imagesOutputApi } from '../api'
-import { fontToCSS } from '../config/fonts'
+import { wrapText } from '../lib/wrapText'
 import { VideoRecord, ImageRecord, ImageVariant } from '../types'
 import Header from '../components/Layout/Header'
 import LeftPanel from '../components/Layout/LeftPanel'
@@ -26,21 +26,14 @@ export default function Editor() {
   const hasDelimiter = config.text.content.includes('//')
 
   const computeWrappedLines = (): string[] => {
-    const canvas = document.createElement('canvas')
-    const ctx = canvas.getContext('2d')!
     const { text, resolution } = config
-    ctx.font = fontToCSS(text.font, text.fontSize)
-    const maxPx = (text.maxWidth / 100) * resolution.width
-    const words = text.content.split(' ')
-    const lines: string[] = []
-    let current = ''
-    for (const word of words) {
-      const test = current ? `${current} ${word}` : word
-      if (ctx.measureText(test).width > maxPx && current) { lines.push(current); current = word }
-      else current = test
-    }
-    if (current) lines.push(current)
-    return lines
+    return wrapText({
+      text: text.content,
+      font: text.font,
+      fontSize: text.fontSize,
+      maxWidth: text.maxWidth,
+      resolutionWidth: resolution.width,
+    })
   }
 
   const generate = async () => {
@@ -54,7 +47,9 @@ export default function Editor() {
         setLastVideo(video)
         setLastImage(null)
       } else {
-        const imgConfig = { imageId: config.imageId, imagePath: config.imagePath, text: config.text, resolution: config.resolution, watermark: config.watermark, source: config.source || undefined }
+        // Sin `//` el servidor usa estas líneas (con la división por tiempos);
+        // con `//` mantiene su propio layout de hook/punchline a 35% y 70%.
+        const imgConfig = { imageId: config.imageId, imagePath: config.imagePath, text: config.text, resolution: config.resolution, watermark: config.watermark, source: config.source || undefined, wrappedLines: hasDelimiter ? undefined : computeWrappedLines() }
         const variant = hasDelimiter ? imageVariant : 'combined'
         const image = await imagesOutputApi.generate(imgConfig, selectedPhraseId ?? undefined, variant)
         setLastImage(image)
