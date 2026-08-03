@@ -1,6 +1,7 @@
 import axios from 'axios'
 import db from '../db'
 import { readConfigMap } from './sheetsService'
+import { syncPublicationsFromSheet } from './publicationsService'
 import { logInfo, logError } from './logService'
 
 /**
@@ -85,12 +86,34 @@ export async function fetchMediaInsights(
   return {}
 }
 
+/**
+ * Fecha del snapshot en hora LOCAL, no UTC.
+ *
+ * `toISOString()` da UTC: en UTC-5 el día cambiaba a las 19:00 hora local, así
+ * que un collect por la noche y el cron de la madrugada siguiente caían en la
+ * misma fecha y se pisaban (el ON CONFLICT los fusiona) — un punto perdido de la
+ * serie, y fechas que no coinciden con el día en que se miró.
+ */
+export function fechaLocal(d = new Date()): string {
+  const mes = String(d.getMonth() + 1).padStart(2, '0')
+  const dia = String(d.getDate()).padStart(2, '0')
+  return `${d.getFullYear()}-${mes}-${dia}`
+}
+
 export function saveSnapshot(mediaId: string, metrics: Record<string, number>, capturedAt?: string): void {
   db.prepare(
     `INSERT INTO media_insights (media_id, captured_at, metrics_json)
      VALUES (?, ?, ?)
      ON CONFLICT(media_id, captured_at) DO UPDATE SET metrics_json = excluded.metrics_json`
-  ).run(mediaId, capturedAt ?? new Date().toISOString().slice(0, 10), JSON.stringify(metrics))
+  ).run(mediaId, capturedAt ?? fechaLocal(), JSON.stringify(metrics))
+}
+
+/** ¿Ya hay snapshot de hoy? Lo usa el arranque para no repetir el del cron. */
+export function haySnapshotDeHoy(): boolean {
+  const r = db
+    .prepare(`SELECT 1 FROM media_insights WHERE captured_at = ? LIMIT 1`)
+    .get(fechaLocal())
+  return !!r
 }
 
 export interface CollectResult {
@@ -107,6 +130,18 @@ export interface CollectResult {
  */
 export async function collectInsights(soloRecientes = false): Promise<CollectResult> {
   const token = await getToken()
+
+  // Primero traer lo que n8n haya publicado desde el último collect. Va AQUI y no
+  // en los dos call sites (cron y POST /collect) a proposito: una publicacion que
+  // no esté en `publications` no se consulta nunca —no es que tarde, es que no
+  // existe para el recolector— y ese eslabón ya estuvo desconectado una vez.
+  // Best-effort: si el Sheet falla, se recogen igual las que ya están.
+  try {
+    const nuevas = await syncPublicationsFromSheet()
+    if (nuevas) logInfo('insights', `Sheet: ${nuevas} publicaciones nuevas de n8n`)
+  } catch (err: any) {
+    logError('insights', 'No se pudo sincronizar con el Sheet', err.message)
+  }
 
   const desde = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString()
   const filas = db

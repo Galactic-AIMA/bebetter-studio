@@ -113,6 +113,12 @@ export async function syncPublicationsFromSheet(): Promise<number> {
     recordPublication({
       mediaId: r.mediaId,
       platform: 'instagram',
+      // Sin `mediaType` la fila entra con NULL y el recolector de insights cae al
+      // set de métricas de IMAGE (`insightsService.fetchMediaInsights`), que no
+      // pide `reels_skip_rate` ni `ig_reels_avg_watch_time`. Resultado: piezas de
+      // vídeo sin las dos métricas que más importan para un reel. La cola de
+      // vídeos publica siempre como reel, así que el tipo se conoce aquí.
+      mediaType: 'REELS',
       permalink: r.permalink,
       publishedAt: r.publishedAt ?? r.createdAt,
       videoId: videosByUrl.get(r.videoUrl),

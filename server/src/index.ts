@@ -19,7 +19,7 @@ import batchRouter from './routes/batch'
 import aiImagesRouter from './routes/aiImages'
 import carouselsRouter from './routes/carousels'
 import analyticsRouter from './routes/analytics'
-import { collectInsights } from './services/insightsService'
+import { collectInsights, haySnapshotDeHoy } from './services/insightsService'
 import { syncBoardImages } from './services/pinterestService'
 import { runCleanup } from './services/cleanupService'
 import { logInfo } from './services/logService'
@@ -77,6 +77,19 @@ app.listen(config.port, () => {
     }
   })
   console.log('Insights: activo (snapshot diario 4:30)')
+
+  // Red de seguridad del cron: n8n publica con el PC apagado, pero el recolector
+  // vive aquí — si la máquina no estaba encendida a las 4:30, ese día no habría
+  // snapshot y el punto se perdería. Al arrancar se recoge lo que falte del día.
+  // Condicionado a que no haya snapshot de hoy: si no, cada reinicio del server
+  // repetiría ~60 llamadas a la Graph API sin añadir nada a la serie.
+  if (!haySnapshotDeHoy()) {
+    collectInsights(true)
+      .then((r) => console.log(`Insights: snapshot de arranque, ${r.ok}/${r.total} publicaciones`))
+      .catch((err) => console.error('Insights (arranque): fallo al recoger —', err.message))
+  } else {
+    console.log('Insights: ya hay snapshot de hoy, no se repite al arrancar')
+  }
 
   // gallery-dl retirado (2026-07-26): duplicaba imágenes que la Pinterest API ya
   // baja. La sincronización queda solo por la Pinterest API v5 (abajo).
