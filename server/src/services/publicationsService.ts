@@ -101,9 +101,17 @@ export async function syncPublicationsFromSheet(): Promise<number> {
     readCarouselQueueRows().catch(() => []),
   ])
 
-  const videosByUrl = new Map<string, string>()
-  for (const v of db.prepare(`SELECT id, s3_url FROM videos WHERE s3_url IS NOT NULL`).all() as any[]) {
-    videosByUrl.set(v.s3_url, v.id)
+  // Se arrastra también `phrase_id`: la publicación tiene que quedar vinculada a la
+  // FRASE, no sólo al vídeo. Sin esto `publications.phrase_id` queda NULL en todo lo
+  // que sale por la cola, y el único vínculo frase↔publicación acaba siendo el que
+  // dejó el backfill por OCR (match_source 'vision'). Consecuencia medida el
+  // 2026-08-02: 41 de 80 publicaciones sin frase y el 37% de las frases activas con
+  // `usage_count` divergiendo de sus publicaciones reales — sin ningún aviso.
+  // Mismo patrón que el bug de `mediaType` documentado abajo: un campo que existe,
+  // que se conoce justo aquí, y que no se pasaba.
+  const videosByUrl = new Map<string, { id: string; phraseId: string | null }>()
+  for (const v of db.prepare(`SELECT id, s3_url, phrase_id FROM videos WHERE s3_url IS NOT NULL`).all() as any[]) {
+    videosByUrl.set(v.s3_url, { id: v.id, phraseId: v.phrase_id ?? null })
   }
 
   let n = 0
@@ -121,7 +129,8 @@ export async function syncPublicationsFromSheet(): Promise<number> {
       mediaType: 'REELS',
       permalink: r.permalink,
       publishedAt: r.publishedAt ?? r.createdAt,
-      videoId: videosByUrl.get(r.videoUrl),
+      videoId: videosByUrl.get(r.videoUrl)?.id,
+      phraseId: videosByUrl.get(r.videoUrl)?.phraseId ?? undefined,
       queueId: r.id,
       caption: r.captionIG,
       matchSource: 'sheet',
