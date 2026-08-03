@@ -73,7 +73,8 @@ function vec(b: Buffer): Float32Array {
 export function planBatch(driver: BatchDriver, count: number, allowRepeat: boolean): PlannedPair[] {
   const phrases = db.prepare(
     `SELECT id, text, author, usage_count, embedding, nivel_energia, paleta, mood_category
-     FROM phrases WHERE embedding IS NOT NULL ORDER BY usage_count ASC, created_at DESC`
+     FROM phrases WHERE embedding IS NOT NULL AND archived = 0
+     ORDER BY usage_count ASC, created_at DESC`
   ).all() as PhraseRow[]
   const images = db.prepare(
     `SELECT filename, usage_count, embedding, analysis_json

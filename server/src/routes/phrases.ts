@@ -11,9 +11,13 @@ import db from '../db'
 
 const router = Router()
 
-// GET /api/phrases
-router.get('/', (_req, res) => {
-  const rows = db.prepare(`SELECT * FROM phrases ORDER BY sort_order ASC, created_at DESC`).all() as any[]
+// GET /api/phrases   —  ?includeArchived=1 para ver también las retiradas
+router.get('/', (req, res) => {
+  const incluirArchivadas = req.query.includeArchived === '1'
+  const rows = db.prepare(
+    `SELECT * FROM phrases ${incluirArchivadas ? '' : 'WHERE archived = 0'}
+     ORDER BY sort_order ASC, created_at DESC`
+  ).all() as any[]
   const phrases = rows.map((p) => ({
     id: p.id,
     text: p.text,
@@ -23,6 +27,7 @@ router.get('/', (_req, res) => {
     moodKeywords: p.mood_keywords ? JSON.parse(p.mood_keywords) : undefined,
     analyzedAt: p.analyzed_at ?? undefined,
     createdAt: p.created_at ?? undefined,
+    archived: p.archived === 1 || undefined,
   }))
   res.json(phrases)
 })
@@ -31,9 +36,9 @@ router.get('/', (_req, res) => {
 router.get('/random', (_req, res) => {
   // Preferir frases ya vectorizadas para que el matching de imágenes funcione
   const analyzed = db.prepare(
-    `SELECT * FROM phrases WHERE embedding IS NOT NULL ORDER BY RANDOM() LIMIT 1`
+    `SELECT * FROM phrases WHERE embedding IS NOT NULL AND archived = 0 ORDER BY RANDOM() LIMIT 1`
   ).get() as any
-  const row = analyzed ?? db.prepare(`SELECT * FROM phrases ORDER BY RANDOM() LIMIT 1`).get() as any
+  const row = analyzed ?? db.prepare(`SELECT * FROM phrases WHERE archived = 0 ORDER BY RANDOM() LIMIT 1`).get() as any
 
   if (!row) return res.status(404).json({ error: 'No phrases found' })
 
@@ -145,7 +150,7 @@ router.post('/recommend', async (req, res) => {
   try { imgAnalysis = imgRow.analysis_json ? JSON.parse(imgRow.analysis_json) : null } catch (_) { /* ignore */ }
 
   const phrases = db.prepare(
-    `SELECT id, embedding, nivel_energia, paleta FROM phrases WHERE embedding IS NOT NULL`
+    `SELECT id, embedding, nivel_energia, paleta FROM phrases WHERE embedding IS NOT NULL AND archived = 0`
   ).all() as any[]
 
   const scores = phrases

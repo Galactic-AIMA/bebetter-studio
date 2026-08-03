@@ -160,6 +160,12 @@ for (const sql of [
   // poder revisar o rehacer la identificación con otro umbral (2026-07-27).
   `ALTER TABLE publications ADD COLUMN image_filename TEXT`,
   `ALTER TABLE publications ADD COLUMN image_match_score REAL`,
+  // Frase retirada de la rotación SIN borrarla (2026-07-29). Se usó al reescribir
+  // 20 frases en dos tiempos: la original tiene publicaciones con insights colgando
+  // (`publications.phrase_id`), así que borrarla o sobrescribirla rompería la
+  // analítica y el few-shot por reach real. Archivada = fuera del listado, /random,
+  // /recommend y el batchPlanner; intacta para todo lo histórico.
+  `ALTER TABLE phrases ADD COLUMN archived INTEGER NOT NULL DEFAULT 0`,
 ]) {
   try { db.exec(sql) } catch (_) { /* columna ya existe */ }
 }
