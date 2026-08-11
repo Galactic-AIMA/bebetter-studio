@@ -5,7 +5,7 @@ import path from 'path'
 import { execFile } from 'child_process'
 import { config } from '../config'
 import { getAllAudioMeta, upsertAudioMeta } from '../services/audioMetadata'
-import { analyzeAudioStructured, MOOD_CATEGORIES } from '../services/geminiService'
+import { analyzeAudioStructured, MOOD_CATEGORIES, TEXTURE_CATEGORIES } from '../services/geminiService'
 import { pickAudioForPhrase } from '../services/audioMatching'
 
 const router = Router()
@@ -17,6 +17,7 @@ export interface AudioTrack {
   name: string      // nombre legible sin extensión (ej. "cinematic hopeful")
   energia?: number | null
   moodCategory?: string | null
+  textura?: string | null
   descripcion?: string | null
   analyzed?: boolean
 }
@@ -41,8 +42,10 @@ router.get('/', (_req, res) => {
       name: path.basename(filename, path.extname(filename)).replace(/[-_]/g, ' '),
       energia: m?.energia ?? null,
       moodCategory: m?.moodCategory ?? null,
+      textura: m?.textura ?? null,
       descripcion: m?.descripcion ?? null,
-      analyzed: !!(m && m.energia !== null && m.moodCategory),
+      // Sin textura la pista suena igual pero deja de rotar: cuenta como pendiente.
+      analyzed: !!(m && m.energia !== null && m.moodCategory && m.textura),
     }
   })
   res.json(tracks)
@@ -60,6 +63,7 @@ router.get('/pick', (req, res) => {
       filename: pick.filename,
       name: path.basename(pick.filename, path.extname(pick.filename)).replace(/[-_]/g, ' '),
       moodCategory: pick.moodCategory,
+      textura: pick.textura,
       energia: pick.energia,
       score: pick.score,
     },
@@ -122,17 +126,21 @@ router.post('/analyze', async (req, res) => {
   res.json({ proposals, errors })
 })
 
-// PUT /api/audio/:filename/tags  { energia, moodCategory, descripcion } — confirma/edita
+// PUT /api/audio/:filename/tags  { energia, moodCategory, textura?, descripcion } — confirma/edita
 router.put('/:filename/tags', (req, res) => {
   const safe = path.basename(req.params.filename)
   const energia = Math.max(0, Math.min(10, Math.round(Number(req.body?.energia))))
   const moodCategory = String(req.body?.moodCategory || '')
   const descripcion = String(req.body?.descripcion || '')
+  const textura = req.body?.textura ? String(req.body.textura) : undefined
   if (!Number.isFinite(energia)) return res.status(400).json({ error: 'energia inválida' })
   if (!MOOD_CATEGORIES.includes(moodCategory as any)) {
     return res.status(400).json({ error: `moodCategory debe ser uno de: ${MOOD_CATEGORIES.join(', ')}` })
   }
-  upsertAudioMeta(safe, energia, moodCategory, descripcion)
+  if (textura && !TEXTURE_CATEGORIES.includes(textura as any)) {
+    return res.status(400).json({ error: `textura debe ser una de: ${TEXTURE_CATEGORIES.join(', ')}` })
+  }
+  upsertAudioMeta(safe, energia, moodCategory, descripcion, textura)
   res.json({ success: true })
 })
 

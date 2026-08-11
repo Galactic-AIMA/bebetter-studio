@@ -7,6 +7,7 @@ interface Props {
 }
 
 // Taxonomía de mood compartida con el backend (slugs sin acento + etiqueta bonita).
+// Ya NO decide qué pista suena en cada reel: es dato informativo (ver TEXTURAS).
 const MOODS = [
   { slug: 'reflexivo', label: 'Reflexivo / íntimo' },
   { slug: 'melancolico', label: 'Melancólico' },
@@ -16,9 +17,19 @@ const MOODS = [
   { slug: 'tenso', label: 'Tenso / oscuro' },
 ]
 
+// Familia sonora: CÓMO suena, no qué evoca. Es lo que reparte las pistas entre los
+// reels, así que conviene juzgarla oyendo (botón ▶) y no por el nombre del archivo.
+const TEXTURAS = [
+  { slug: 'acustico', label: 'Acústico — guitarra, instrumento real' },
+  { slug: 'etereo', label: 'Etéreo — sintes lentos, arpegios, pads' },
+  { slug: 'pulsante', label: 'Pulsante — latido rítmico, hipnótico' },
+  { slug: 'orquestal', label: 'Orquestal — metales, cuerdas, fanfarria' },
+]
+
 interface Draft {
   energia: number
   moodCategory: string
+  textura: string
   descripcion: string
 }
 
@@ -56,6 +67,7 @@ export default function AudioTagsPanel({ onClose }: Props) {
             next[t.filename] = {
               energia: t.energia ?? 5,
               moodCategory: t.moodCategory ?? 'motivador',
+              textura: t.textura ?? 'etereo',
               descripcion: t.descripcion ?? '',
             }
           }
@@ -79,7 +91,13 @@ export default function AudioTagsPanel({ onClose }: Props) {
       setDrafts((prev) => {
         const next = { ...prev }
         for (const p of proposals) {
-          next[p.filename] = { energia: p.energia, moodCategory: p.moodCategory, descripcion: p.descripcion }
+          next[p.filename] = {
+            energia: p.energia,
+            moodCategory: p.moodCategory,
+            // La IA propone; si no devuelve textura se conserva la que hubiera.
+            textura: p.textura ?? next[p.filename]?.textura ?? 'etereo',
+            descripcion: p.descripcion,
+          }
         }
         return next
       })
@@ -102,12 +120,12 @@ export default function AudioTagsPanel({ onClose }: Props) {
     setSaving(filename)
     setError(null)
     try {
-      await audioApi.saveTags(filename, d.energia, d.moodCategory, d.descripcion)
+      await audioApi.saveTags(filename, d.energia, d.moodCategory, d.descripcion, d.textura)
       setSavedOk((s) => ({ ...s, [filename]: true }))
       setTracks((ts) =>
         ts.map((t) =>
           t.filename === filename
-            ? { ...t, energia: d.energia, moodCategory: d.moodCategory, descripcion: d.descripcion, analyzed: true }
+            ? { ...t, energia: d.energia, moodCategory: d.moodCategory, textura: d.textura, descripcion: d.descripcion, analyzed: true }
             : t
         )
       )
@@ -129,7 +147,7 @@ export default function AudioTagsPanel({ onClose }: Props) {
         {/* Header */}
         <div className="flex items-center gap-2.5 px-4 py-3 border-b border-carbon-700 shrink-0">
           <Music size={15} className="text-gold-500" />
-          <h2 className="text-sm font-semibold tracking-wide text-bone-500">Audio — energía y mood</h2>
+          <h2 className="text-sm font-semibold tracking-wide text-bone-500">Audio — energía y textura</h2>
           <button
             onClick={analyzeUntagged}
             disabled={analyzing || loading || untagged === 0}
@@ -185,11 +203,23 @@ export default function AudioTagsPanel({ onClose }: Props) {
                       />
                       <span className="tabular-nums text-bone-500 w-4">{d.energia}</span>
                     </label>
-                    {/* Mood */}
+                    {/* Textura — decide el reparto de pistas entre reels */}
+                    <select
+                      value={d.textura}
+                      onChange={(e) => patch(t.filename, { textura: e.target.value })}
+                      title="Familia sonora: es lo que evita que dos reels seguidos suenen igual"
+                      className="bg-carbon-900 border border-carbon-600 rounded-lg px-2 py-1 text-[11px] text-bone-500 focus:border-gold-500 outline-none"
+                    >
+                      {TEXTURAS.map((x) => (
+                        <option key={x.slug} value={x.slug}>{x.label}</option>
+                      ))}
+                    </select>
+                    {/* Mood — informativo desde 2026-08-03, ya no elige la pista */}
                     <select
                       value={d.moodCategory}
                       onChange={(e) => patch(t.filename, { moodCategory: e.target.value })}
-                      className="bg-carbon-900 border border-carbon-600 rounded-lg px-2 py-1 text-[11px] text-bone-500 focus:border-gold-500 outline-none"
+                      title="Dato informativo: ya no interviene en qué pista se elige"
+                      className="bg-carbon-900 border border-carbon-600 rounded-lg px-2 py-1 text-[11px] text-bone-700 focus:border-gold-500 outline-none"
                     >
                       {MOODS.map((m) => (
                         <option key={m.slug} value={m.slug}>{m.label}</option>

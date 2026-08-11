@@ -166,6 +166,13 @@ for (const sql of [
   // analítica y el few-shot por reach real. Archivada = fuera del listado, /random,
   // /recommend y el batchPlanner; intacta para todo lo histórico.
   `ALTER TABLE phrases ADD COLUMN archived INTEGER NOT NULL DEFAULT 0`,
+  // Familia sonora de la pista: acustico | etereo | pulsante | orquestal (2026-08-03).
+  // Es el eje que da VARIEDAD audible al emparejar. El `mood_category` no servía para
+  // eso: colapsaba el pool a 2 pistas y estaba mal construido en los dos lados (el de
+  // las frases sale de un análisis pensado para elegir IMAGEN, y en las pistas Gemini
+  // llegó a contradecir su propia descripción). El mood se conserva como dato
+  // informativo; quien manda ahora es energía (compatibilidad) + textura (variedad).
+  `ALTER TABLE audio_tracks ADD COLUMN textura TEXT`,
 ]) {
   try { db.exec(sql) } catch (_) { /* columna ya existe */ }
 }

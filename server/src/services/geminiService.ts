@@ -269,9 +269,19 @@ export const MOOD_CATEGORIES = [
 ] as const
 export type MoodCategory = (typeof MOOD_CATEGORIES)[number]
 
+// Familia sonora de la pista (2026-08-03). Describe CÓMO suena (instrumentación y
+// textura), no qué sentimiento evoca. Es lo que de verdad distingue una pista de
+// otra y por tanto lo que da variedad audible: dos pistas del mismo mood pueden no
+// parecerse en nada, y de hecho las 4 familias cruzan los 6 moods.
+export const TEXTURE_CATEGORIES = [
+  'acustico', 'etereo', 'pulsante', 'orquestal',
+] as const
+export type TextureCategory = (typeof TEXTURE_CATEGORIES)[number]
+
 export interface AudioAnalysis {
   energia: number // 0–10 (misma escala que phrase.nivel_energia)
   moodCategory: MoodCategory
+  textura: TextureCategory
   descripcion: string // 1-2 frases
 }
 
@@ -287,12 +297,17 @@ const AUDIO_ANALYSIS_SCHEMA = {
       description:
         'Mood dominante. UNO de exactamente estos slugs: reflexivo (calmado, introspectivo), melancolico (triste, nostálgico), esperanzador (luminoso, positivo), motivador (impulso, decisión), epico (grandioso, heroico, triunfal), tenso (oscuro, dramático, inquietante).',
     },
+    textura: {
+      type: SchemaType.STRING,
+      description:
+        'Familia sonora por su INSTRUMENTACIÓN, no por el sentimiento. UNO de exactamente estos slugs: acustico (guitarra o instrumentos reales, cercanía), etereo (sintetizadores lentos, arpegios, pads, eco espacial), pulsante (pulso o latido rítmico marcado, hipnótico), orquestal (metales, cuerdas, fanfarria, percusión grande).',
+    },
     descripcion: {
       type: SchemaType.STRING,
       description: '1-2 frases en español describiendo la atmósfera de la pista (instrumentación, ritmo, sensación).',
     },
   },
-  required: ['energia', 'moodCategory', 'descripcion'],
+  required: ['energia', 'moodCategory', 'textura', 'descripcion'],
 }
 
 const AUDIO_MIME: Record<string, string> = {
@@ -317,15 +332,21 @@ export async function analyzeAudioStructured(
     },
   })
   const mimeType = AUDIO_MIME[ext.toLowerCase().replace('.', '')] ?? 'audio/mpeg'
-  const prompt = `Analiza esta pista musical instrumental (para fondo de un Reel motivacional). Devuelve su energía (0-10), su mood dominante (uno de los slugs indicados) y una descripción breve. Es música sin voz; juzga por ritmo, instrumentación y atmósfera.`
+  const prompt = `Analiza esta pista musical instrumental (para fondo de un Reel motivacional). Devuelve su energía (0-10), su mood dominante, su textura (familia sonora por instrumentación) y una descripción breve. Es música sin voz; juzga por ritmo, instrumentación y atmósfera.
+
+La textura y la descripción deben coincidir: si describes guitarra acústica, la textura es "acustico"; si describes metales o cuerdas de orquesta, es "orquestal". No las contradigas.`
 
   const result = await withRetry(() =>
     model.generateContent([prompt, { inlineData: { mimeType, data: audioBuffer.toString('base64') } }])
   )
   const parsed = JSON.parse(result.response.text()) as AudioAnalysis
-  // Normaliza: energía a [0,10]; mood a un slug conocido (fallback 'motivador').
+  // Normaliza: energía a [0,10]; mood y textura a un slug conocido. La propuesta es
+  // SIEMPRE revisable a mano en el panel 🎵 antes de persistirse (`/analyze` no
+  // escribe): con estas etiquetas Gemini ya se contradijo a sí mismo una vez,
+  // marcando como "tenso" una pista que su propia descripción llamaba cálida.
   parsed.energia = Math.max(0, Math.min(10, Math.round(Number(parsed.energia) || 0)))
   if (!MOOD_CATEGORIES.includes(parsed.moodCategory)) parsed.moodCategory = 'motivador'
+  if (!TEXTURE_CATEGORIES.includes(parsed.textura)) parsed.textura = 'etereo'
   return parsed
 }
 

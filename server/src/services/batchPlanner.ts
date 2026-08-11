@@ -1,16 +1,17 @@
 import db from '../db'
 import { cosine, rerankScore } from '../utils/matching'
 import { ImageAnalysis } from './geminiService'
-import { getAllAudioMeta } from './audioMetadata'
-import { bestAudio } from './audioMatching'
+import { getAllAudioMeta, getRecentAudio } from './audioMetadata'
+import { bestAudio, noteChosen, RotationState } from './audioMatching'
 
 /**
  * Planificador del batch "por cantidad" (rediseño 2026-07-25).
  * - Etapa 1 (rotación): toma las `count` menos usadas del driver. SIN matching.
  * - Etapa 2 (compatibilidad): empareja por score (el uso solo desempata dentro
  *   de ε); asignación global greedy, imágenes únicas salvo `allowRepeat`.
- * - Audio: a cada par le asigna la pista que mejor encaja con el mood de la frase
- *   (misma lógica que el auto-pick individual). Todo editable en el preview.
+ * - Audio: a cada par le asigna una pista que encaje en energía con la frase y que
+ *   no repita lo último que sonó (misma lógica que el auto-pick individual). Todo
+ *   editable en el preview.
  */
 
 export type BatchDriver = 'phrases' | 'images'
@@ -24,6 +25,7 @@ export interface PlannedPair {
   score: number
   audioTrack?: string     // filename de la pista (o ausente si no hay etiquetadas)
   audioMood?: string
+  audioTextura?: string   // familia sonora — es lo que hace que el lote no suene igual
   audioEnergia?: number
 }
 
@@ -129,19 +131,31 @@ export function planBatch(driver: BatchDriver, count: number, allowRepeat: boole
     if (pairsByDriver.size === targetCount) break
   }
 
-  // Audio: cargar metadata una sola vez para todo el lote.
+  // Audio: cargar metadata una sola vez para todo el lote, pero llevando la cuenta
+  // de lo ya asignado AQUÍ. El usage_count de la DB solo sube al publicar/encolar,
+  // así que sin este estado las N frases del lote verían contadores idénticos y
+  // saldrían todas con la misma pista. Se siembra con lo que sonó en los últimos
+  // reels para que el primero del lote tampoco repita.
   const audioMeta = [...getAllAudioMeta().values()]
+  const reciente = getRecentAudio(3)
+  const rotation: RotationState = {
+    extraUsage: new Map<string, number>(),
+    recentTextures: reciente.textures,
+    recentTracks: reciente.tracks,
+  }
 
   const out: PlannedPair[] = []
   for (const [, c] of pairsByDriver) {
     const p = pList[c.pIdx]
     const img = iList[c.iIdx]
-    const audio = bestAudio(audioMeta, p.nivel_energia, p.mood_category)
+    const audio = bestAudio(audioMeta, p.nivel_energia, p.mood_category, rotation)
+    if (audio) noteChosen(rotation, audio)
     out.push({
       phraseId: p.id, phraseText: p.text, author: p.author,
       imageId: img.filename, imageUrl: imageUrl(img.filename), score: c.score,
       audioTrack: audio?.filename,
       audioMood: audio?.moodCategory ?? undefined,
+      audioTextura: audio?.textura ?? undefined,
       audioEnergia: audio?.energia,
     })
   }

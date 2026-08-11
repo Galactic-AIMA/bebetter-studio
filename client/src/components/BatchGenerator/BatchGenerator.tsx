@@ -485,7 +485,7 @@ export default function BatchGenerator() {
                         {pp.score > 0 && <span title="Compatibilidad">◈ {pp.score.toFixed(2)}</span>}
                         {pp.audioTrack ? (
                           <span className="flex items-center gap-0.5" title={pp.audioTrack}>
-                            <Music size={9} /> {pp.audioMood ?? '—'}{typeof pp.audioEnergia === 'number' ? ` E${pp.audioEnergia}` : ''}
+                            <Music size={9} /> {pp.audioTextura ?? pp.audioMood ?? '—'}{typeof pp.audioEnergia === 'number' ? ` E${pp.audioEnergia}` : ''}
                           </span>
                         ) : (
                           <span className="flex items-center gap-0.5 text-bone-700/60"><Music size={9} /> sin audio</span>

@@ -204,6 +204,7 @@ export interface AudioTrack {
   name: string
   energia?: number | null
   moodCategory?: string | null
+  textura?: string | null
   descripcion?: string | null
   analyzed?: boolean
 }
@@ -212,6 +213,7 @@ export interface AudioProposal {
   filename: string
   energia: number
   moodCategory: string
+  textura?: string
   descripcion: string
 }
 
@@ -219,6 +221,7 @@ export interface AutoPick {
   filename: string
   name: string
   moodCategory: string | null
+  textura?: string | null
   energia: number
   score: number
 }
@@ -232,9 +235,9 @@ export const audioApi = {
     api
       .post<{ proposals: AudioProposal[]; errors: string[] }>('/audio/analyze', { filenames })
       .then((r) => r.data),
-  saveTags: (filename: string, energia: number, moodCategory: string, descripcion: string) =>
+  saveTags: (filename: string, energia: number, moodCategory: string, descripcion: string, textura?: string) =>
     api
-      .put(`/audio/${encodeURIComponent(filename)}/tags`, { energia, moodCategory, descripcion })
+      .put(`/audio/${encodeURIComponent(filename)}/tags`, { energia, moodCategory, descripcion, textura })
       .then((r) => r.data),
 }
 
@@ -297,6 +300,7 @@ export interface BatchPair {
   score: number
   audioTrack?: string
   audioMood?: string
+  audioTextura?: string
   audioEnergia?: number
 }
 

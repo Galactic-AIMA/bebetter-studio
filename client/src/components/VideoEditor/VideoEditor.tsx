@@ -462,15 +462,19 @@ export default function VideoEditor() {
         <SectionPanel label="Audio de fondo" isOpen={open.has('audio')} onToggle={() => toggle('audio')}>
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center gap-1.5">
+              {/* min-w-0: sin él, una opción larga fija el ancho mínimo del select
+                  y desborda el panel derecho con scroll horizontal. */}
               <select
-                className="flex-1 bg-carbon-700 border border-carbon-600 rounded-lg p-2 text-xs text-bone-500"
+                className="flex-1 min-w-0 bg-carbon-700 border border-carbon-600 rounded-lg p-2 text-xs text-bone-500"
                 value={audioTrack ?? ''}
                 onChange={(e) => setConfig({ audioTrack: e.target.value })}
               >
                 <option value="">Sin audio</option>
-                <option value="auto">Auto (por mood)</option>
+                <option value="auto">Auto (rotando)</option>
                 {audioTracks.map((t) => (
-                  <option key={t.filename} value={t.filename}>{t.name}</option>
+                  <option key={t.filename} value={t.filename}>
+                    {t.textura ? `${t.textura} · e${t.energia} · …${t.filename.slice(-10, -4)}` : t.name}
+                  </option>
                 ))}
               </select>
               <button
@@ -498,8 +502,8 @@ export default function VideoEditor() {
               ) : autoPickLoading ? (
                 <p className="text-[10px] text-bone-700">Buscando la mejor pista…</p>
               ) : autoPick ? (
-                <p className="text-[10px] text-gold-500">
-                  Elegida: <span className="font-medium">{autoPick.name}</span> · {autoPick.moodCategory ?? 'sin mood'} · energía {autoPick.energia} — escúchala con ▶ antes de generar.
+                <p className="text-[10px] text-gold-500 break-words">
+                  Elegida: <span className="font-medium">{autoPick.textura ?? 'sin textura'}</span> · energía {autoPick.energia} — escúchala con ▶ antes de generar.
                 </p>
               ) : (
                 <p className="text-[10px] text-bone-700">
