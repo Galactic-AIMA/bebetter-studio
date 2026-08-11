@@ -121,3 +121,10 @@ server/scripts/reparar-vinculo-tanda2.ts
 #   - auditoria_frases.json           : insumo de la columna `estructura` del banco
 #   - auditar-frases-dostiempos.py    : clasificador, se reusa al reconvertir frases
 !server/scripts/auditoria_frases.json
+
+# --- Diagramas de arquitectura (2026-08-11) ---
+# Mismo criterio: al repo va la fuente, no el resultado regenerable. El `.json` es la
+# especificación (~7 KB cada una) y el `.html` es el render autocontenido (~630 KB, lleva
+# dentro el runtime del visor). Se rehacen con:
+#   node <skills>/archify/bin/archify.mjs deliver <tipo> <spec>.json <salida>.html --quality showcase
+docs/diagramas/*.html

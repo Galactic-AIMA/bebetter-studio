@@ -1,0 +1,307 @@
+{
+  "schema_version": 1,
+  "diagram_type": "dataflow",
+  "meta": {
+    "title": "beBetter Studio — Como se elige lo que va en cada reel",
+    "subtitle": "De los bancos al emparejamiento semantico y de ahi a las metricas que deciden que se escribe despues",
+    "output": "pipeline-datos.html",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1560,
+      900
+    ],
+    "views": [
+      {
+        "id": "vectorizacion",
+        "label": "Vectorizacion",
+        "focus": [
+          "frases",
+          "imagenes",
+          "an_frase",
+          "an_imagen",
+          "vec_frase",
+          "vec_imagen"
+        ],
+        "note": "Frase e imagen se vectorizan con el mismo documento derivado del analisis."
+      },
+      {
+        "id": "emparejar",
+        "label": "Emparejamiento",
+        "focus": [
+          "vec_frase",
+          "vec_imagen",
+          "match",
+          "pieza"
+        ],
+        "note": "El vector embebe lo concreto: simbolo y metafora, no atmosfera."
+      },
+      {
+        "id": "audio",
+        "label": "Audio",
+        "focus": [
+          "audio",
+          "an_audio",
+          "crit_audio",
+          "rotacion"
+        ],
+        "note": "Energia manda compatibilidad y textura manda variedad. El mood quedo como dato informativo."
+      },
+      {
+        "id": "medicion",
+        "label": "Medicion",
+        "focus": [
+          "pieza",
+          "insights",
+          "frases"
+        ],
+        "note": "Lo medido vuelve al banco como criterio de escritura, no como cola de trabajo."
+      }
+    ]
+  },
+  "stages": [
+    {
+      "label": "Bancos"
+    },
+    {
+      "label": "Analisis con Gemini"
+    },
+    {
+      "label": "Criterios derivados"
+    },
+    {
+      "label": "Emparejamiento"
+    },
+    {
+      "label": "Pieza y medicion"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "frases",
+      "type": "database",
+      "label": "Frases",
+      "sublabel": "SQLite, activas",
+      "stage": 0,
+      "row": 0,
+      "tag": "norma dos tiempos"
+    },
+    {
+      "id": "imagenes",
+      "type": "database",
+      "label": "Imagenes",
+      "sublabel": "Pinterest y KIE",
+      "stage": 0,
+      "row": 2
+    },
+    {
+      "id": "audio",
+      "type": "database",
+      "label": "Audio",
+      "sublabel": "recortes de 10 s",
+      "stage": 0,
+      "row": 4
+    },
+    {
+      "id": "an_frase",
+      "type": "cloud",
+      "label": "analyzePhrase",
+      "sublabel": "metaforas visuales",
+      "stage": 1,
+      "row": 0,
+      "tag": "de aqui sale el mood"
+    },
+    {
+      "id": "an_imagen",
+      "type": "cloud",
+      "label": "analyzeImage",
+      "sublabel": "elementos y temas",
+      "stage": 1,
+      "row": 2
+    },
+    {
+      "id": "an_audio",
+      "type": "cloud",
+      "label": "analyzeAudio",
+      "sublabel": "energia y textura",
+      "stage": 1,
+      "row": 4
+    },
+    {
+      "id": "vec_frase",
+      "type": "database",
+      "label": "Vector frase",
+      "sublabel": "3072 dims",
+      "stage": 2,
+      "row": 0
+    },
+    {
+      "id": "vec_imagen",
+      "type": "database",
+      "label": "Vector imagen",
+      "sublabel": "3072 dims",
+      "stage": 2,
+      "row": 2
+    },
+    {
+      "id": "crit_audio",
+      "type": "database",
+      "label": "Energia",
+      "sublabel": "y familia sonora",
+      "stage": 2,
+      "row": 4
+    },
+    {
+      "id": "match",
+      "type": "backend",
+      "label": "Matching",
+      "sublabel": "coseno + re-rank",
+      "stage": 3,
+      "row": 1,
+      "tag": "simbolo, no atmosfera"
+    },
+    {
+      "id": "rotacion",
+      "type": "backend",
+      "label": "Rotacion",
+      "sublabel": "banda y variedad",
+      "stage": 3,
+      "row": 4,
+      "tag": "ni una de las 3 ultimas"
+    },
+    {
+      "id": "pieza",
+      "type": "backend",
+      "label": "Reel",
+      "sublabel": "frase, fondo y pista",
+      "stage": 4,
+      "row": 1
+    },
+    {
+      "id": "insights",
+      "type": "database",
+      "label": "media_insights",
+      "sublabel": "skip y watch time",
+      "stage": 4,
+      "row": 4
+    }
+  ],
+  "flows": [
+    {
+      "id": "f1",
+      "from": "frases",
+      "to": "an_frase",
+      "label": "texto",
+      "variant": "emphasis"
+    },
+    {
+      "id": "f2",
+      "from": "imagenes",
+      "to": "an_imagen",
+      "label": "archivo"
+    },
+    {
+      "id": "f3",
+      "from": "audio",
+      "to": "an_audio",
+      "label": "pista"
+    },
+    {
+      "id": "f4",
+      "from": "an_frase",
+      "to": "vec_frase",
+      "label": "documento",
+      "variant": "emphasis"
+    },
+    {
+      "id": "f5",
+      "from": "an_imagen",
+      "to": "vec_imagen",
+      "label": "documento"
+    },
+    {
+      "id": "f6",
+      "from": "an_audio",
+      "to": "crit_audio",
+      "label": "etiquetas"
+    },
+    {
+      "id": "f7",
+      "from": "vec_frase",
+      "to": "match",
+      "label": "consulta",
+      "variant": "emphasis"
+    },
+    {
+      "id": "f8",
+      "from": "vec_imagen",
+      "to": "match",
+      "label": "candidatas"
+    },
+    {
+      "id": "f9",
+      "from": "crit_audio",
+      "to": "rotacion",
+      "label": "pool"
+    },
+    {
+      "id": "f10",
+      "from": "match",
+      "to": "pieza",
+      "label": "mejor fondo",
+      "variant": "emphasis",
+      "route": "straight"
+    },
+    {
+      "id": "f11",
+      "from": "rotacion",
+      "to": "pieza",
+      "label": "pista elegida"
+    },
+    {
+      "id": "f12",
+      "from": "pieza",
+      "to": "insights",
+      "label": "publicado",
+      "variant": "dashed"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "violet",
+      "title": "Por que empareja bien",
+      "items": [
+        "El vector embebe lo concreto (elementos, temas, metaforas), no el clima emocional",
+        "Se re-rankea despues por energia y paleta",
+        "Verificado a mano: «esclavo de la opinion» cae en la marioneta con hilos"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Los limites conocidos",
+      "items": [
+        "Los embeddings NO detectan frases redundantes: vectorizan la imagen, no el mensaje",
+        "El mood de las frases sale de un prompt visual, asi que duplica la energia",
+        "Gemini describe bien pero etiqueta mal con vocabulario cerrado"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Como rota el audio",
+      "items": [
+        "La energia da compatibilidad con una banda de mas o menos 2",
+        "La familia sonora da variedad y cruza todos los moods",
+        "Regla dura: ninguna de las tres ultimas pistas mientras haya alternativa",
+        "La rotacion solo avanza cuando se genera, porque lee el historial de videos"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Que devuelve la medicion",
+      "items": [
+        "skip rate y watch time son las senales limpias; el alcance varia dos ordenes de magnitud",
+        "El rendimiento es guia de estilo para escribir, no cola de trabajo",
+        "Reescribir una frase ya publicada no produce ningun reel"
+      ]
+    }
+  ]
+}

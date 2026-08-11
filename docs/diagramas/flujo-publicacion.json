@@ -1,0 +1,334 @@
+{
+  "schema_version": 1,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "beBetter Studio — De la frase al reel publicado",
+    "subtitle": "Creacion en el PC, gate humano en Telegram, publicacion programada con n8n y vuelta de la analitica",
+    "output": "flujo-publicacion.html",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "creacion",
+        "label": "Creacion de la pieza",
+        "focus": [
+          "elegir",
+          "generar",
+          "encolar"
+        ],
+        "note": "Esto exige el PC encendido: FFmpeg y SQLite viven ahi."
+      },
+      {
+        "id": "gate",
+        "label": "Gate humano",
+        "focus": [
+          "encolar",
+          "aviso",
+          "aprobar",
+          "approved"
+        ],
+        "note": "David aprueba desde el movil. Encolar no es publicar."
+      },
+      {
+        "id": "drenaje",
+        "label": "Drenaje de la cola",
+        "focus": [
+          "approved",
+          "sched",
+          "publicado"
+        ],
+        "note": "El cron corre cada hora y solo actua si toca franja."
+      },
+      {
+        "id": "medicion",
+        "label": "Medicion y fallos",
+        "focus": [
+          "publicado",
+          "insights",
+          "atencion"
+        ],
+        "note": "Lo que sale bien se mide; lo que falla tres veces pide atencion."
+      }
+    ]
+  },
+  "lanes": [
+    {
+      "id": "david",
+      "label": "David (editor y movil)"
+    },
+    {
+      "id": "app",
+      "label": "beBetter Studio (PC local)"
+    },
+    {
+      "id": "cola",
+      "label": "Google Sheet «Cola»"
+    },
+    {
+      "id": "n8n",
+      "label": "n8n (nube, sin PC)"
+    },
+    {
+      "id": "redes",
+      "label": "Instagram · Facebook · YouTube"
+    },
+    {
+      "id": "fallos",
+      "label": "Fallos",
+      "variant": "exception"
+    }
+  ],
+  "phases": [
+    {
+      "id": "crear",
+      "label": "Crear la pieza",
+      "fromCol": 0,
+      "toCol": 1
+    },
+    {
+      "id": "aprobar_fase",
+      "label": "Aprobar",
+      "fromCol": 2,
+      "toCol": 3,
+      "variant": "emphasis"
+    },
+    {
+      "id": "publicar_fase",
+      "label": "Publicar y medir",
+      "fromCol": 4,
+      "toCol": 5,
+      "variant": "dashed"
+    }
+  ],
+  "mainPath": [
+    "elegir",
+    "generar",
+    "encolar",
+    "aviso",
+    "aprobar",
+    "approved",
+    "sched",
+    "publicado"
+  ],
+  "nodes": [
+    {
+      "id": "elegir",
+      "lane": "david",
+      "col": 0,
+      "type": "frontend",
+      "label": "Elige frase",
+      "sublabel": "banco en dos tiempos"
+    },
+    {
+      "id": "generar",
+      "lane": "app",
+      "col": 1,
+      "type": "backend",
+      "label": "Genera reel",
+      "sublabel": "empareja + FFmpeg",
+      "tag": "48 kHz o IG lo rechaza"
+    },
+    {
+      "id": "encolar",
+      "lane": "cola",
+      "col": 2,
+      "type": "database",
+      "label": "Fila pending",
+      "sublabel": "copies + fila nueva"
+    },
+    {
+      "id": "aviso",
+      "lane": "n8n",
+      "col": 3,
+      "type": "messagebus",
+      "label": "[Aprob] avisa",
+      "sublabel": "paquete a Telegram"
+    },
+    {
+      "id": "aprobar",
+      "lane": "david",
+      "col": 3,
+      "type": "security",
+      "label": "Aprueba",
+      "sublabel": "boton en el movil",
+      "tag": "gate humano"
+    },
+    {
+      "id": "approved",
+      "lane": "cola",
+      "col": 4,
+      "type": "database",
+      "label": "approved",
+      "sublabel": "listo para su franja"
+    },
+    {
+      "id": "sched",
+      "lane": "n8n",
+      "col": 5,
+      "type": "messagebus",
+      "label": "n8n publica",
+      "sublabel": "[Sched] y [Pub]",
+      "tag": "cron horario + gate"
+    },
+    {
+      "id": "publicado",
+      "lane": "redes",
+      "col": 5,
+      "type": "external",
+      "label": "Publicado",
+      "sublabel": "media_id guardado"
+    },
+    {
+      "id": "insights",
+      "lane": "app",
+      "col": 5,
+      "type": "backend",
+      "label": "Insights 4:30",
+      "sublabel": "Graph API → insights"
+    },
+    {
+      "id": "atencion",
+      "lane": "fallos",
+      "col": 4,
+      "type": "security",
+      "label": "Atencion",
+      "sublabel": "tras 3 intentos"
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "from": "elegir",
+      "to": "generar",
+      "role": "main",
+      "variant": "emphasis",
+      "route": "drop",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "e2",
+      "from": "generar",
+      "to": "encolar",
+      "label": "POST /queue",
+      "role": "main",
+      "variant": "emphasis",
+      "route": "drop",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelDy": 16
+    },
+    {
+      "id": "e3",
+      "from": "encolar",
+      "to": "aviso",
+      "label": "pinga webhook",
+      "role": "main",
+      "route": "drop",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "e4",
+      "from": "aviso",
+      "to": "aprobar",
+      "label": "revisa en el movil",
+      "role": "branch",
+      "route": "up-channel",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "id": "e5",
+      "from": "aprobar",
+      "to": "approved",
+      "label": "callback",
+      "role": "main",
+      "variant": "security",
+      "route": "drop",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "e6",
+      "from": "approved",
+      "to": "sched",
+      "label": "su franja",
+      "role": "main",
+      "route": "drop",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "e7",
+      "from": "sched",
+      "to": "publicado",
+      "label": "YouTube, IG y FB",
+      "role": "main",
+      "variant": "emphasis",
+      "route": "drop",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelDy": 16
+    },
+    {
+      "id": "e8",
+      "from": "approved",
+      "to": "atencion",
+      "label": "3 intentos",
+      "role": "error",
+      "variant": "security",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "route": "drop"
+    },
+    {
+      "id": "e9",
+      "from": "publicado",
+      "to": "insights",
+      "label": "cada madrugada",
+      "role": "return",
+      "variant": "dashed",
+      "route": "outside-right",
+      "fromSide": "right",
+      "toSide": "right"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Lo que exige el PC encendido",
+      "items": [
+        "Emparejar, renderizar con FFmpeg y escribir en SQLite",
+        "El cron de insights: si el PC estuvo apagado, se recoge al arrancar",
+        "Publicar no lo exige, eso ya vive en n8n"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "La cola no es un calendario",
+      "items": [
+        "El Sheet no guarda una hora futura por pieza",
+        "La hora emerge de la posicion en la cola mas la cadencia",
+        "El cron corre cada hora y solo actua si toca franja"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Donde se ha roto",
+      "items": [
+        "Tres intentos fallidos dejan la fila en needs-attention con aviso",
+        "El audio a 96 kHz hacia que Instagram rechazara el reel",
+        "Un Sheets read despues de un fan-out multiplica los items del flujo"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Que se mide",
+      "items": [
+        "skip rate y watch time deciden, no el alcance",
+        "publications vincula cada media_id con frase, imagen y audio",
+        "Los carruseles tienen cola y cadencia propias, en [SchedCarrusel]"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "beBetter Studio — Mapa del sistema",
+    "subtitle": "App local de creacion de Reels y Carruseles + publicacion automatica con n8n (estado 2026-08-11)",
+    "output": "arquitectura.html",
+    "quality_profile": "showcase",
+    "viewBox": [2020, 1220],
+    "views": [
+      {
+        "id": "ruta-principal",
+        "label": "Ruta principal",
+        "focus": ["david", "client", "api", "render", "r2"],
+        "note": "Del editor al MP4 renderizado y subido con URL publica."
+      },
+      {
+        "id": "capa-ia",
+        "label": "Capa de IA",
+        "focus": ["api", "gemini", "kie", "db"],
+        "note": "Analisis, embeddings y generacion de imagenes que alimentan el matching."
+      },
+      {
+        "id": "publicacion",
+        "label": "Publicacion automatica",
+        "focus": ["r2", "sheet", "n8n", "meta"],
+        "note": "La cola vive en el Sheet y n8n la drena con el PC apagado."
+      },
+      {
+        "id": "estado-local",
+        "label": "Lo que corre en el PC",
+        "focus": ["client", "api", "render", "db"],
+        "note": "Editor, API, FFmpeg y SQLite: si el PC esta apagado, aqui no se genera nada."
+      }
+    ]
+  },
+  "components": [
+    { "id": "gemini", "type": "cloud", "label": "Gemini API", "sublabel": "3.5-flash + embedding-001", "tag": "capa gratuita + de pago", "pos": [715, 20], "size": [190, 66] },
+    { "id": "kie", "type": "external", "label": "KIE Nano Banana Pro", "sublabel": "imagenes IA y slides", "pos": [1080, 20], "size": [190, 66] },
+    { "id": "david", "type": "external", "label": "David", "sublabel": "edita y aprueba", "pos": [40, 420], "size": [160, 66] },
+    { "id": "client", "type": "frontend", "label": "beBetter Studio UI", "sublabel": "React 18 + Vite :5173", "tag": "Zustand + preview canvas", "pos": [350, 420], "size": [190, 66] },
+    { "id": "api", "type": "backend", "label": "API Express", "sublabel": "Node + TypeScript :3001", "tag": "15 routers + 2 crons", "pos": [690, 420], "size": [240, 66] },
+    { "id": "render", "type": "backend", "label": "Render FFmpeg", "sublabel": "videoGenerator / imageGenerator", "tag": "1080x1920 H.264 48 kHz", "pos": [1080, 420], "size": [190, 66] },
+    { "id": "r2", "type": "cloud", "label": "Cloudflare R2", "sublabel": "AWS S3 SDK v3", "tag": "URL publica para Meta", "pos": [1420, 420], "size": [190, 66] },
+    { "id": "db", "type": "database", "label": "SQLite", "sublabel": "data/bebetter.db", "tag": "10 tablas + vectores", "pos": [350, 740], "size": [190, 66] },
+    { "id": "sheet", "type": "cloud", "label": "Google Sheet «Cola»", "sublabel": "cola, cadencia, token IG", "pos": [715, 1060], "size": [190, 66] },
+    { "id": "n8n", "type": "messagebus", "label": "n8n", "sublabel": "n8n.galacticaima.com", "tag": "5 workflows activos", "pos": [1080, 1060], "size": [190, 66] },
+    { "id": "meta", "type": "external", "label": "IG · Facebook · YouTube", "sublabel": "Graph API v21", "pos": [1420, 1060], "size": [190, 66] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "Maquina local de David (requiere PC encendido)", "wraps": ["client", "api", "render", "db"] },
+    { "kind": "region", "label": "Automatizacion en la nube (corre con el PC apagado)", "wraps": ["sheet", "n8n", "meta"] }
+  ],
+  "connections": [
+    { "id": "david-usa-app", "from": "david", "to": "client", "label": "usa el editor", "variant": "emphasis" },
+    { "id": "ui-api", "from": "client", "to": "api", "label": "REST /api/*", "variant": "emphasis", "labelDx": 50 },
+    { "id": "api-render", "from": "api", "to": "render", "label": "genera reel", "variant": "emphasis", "labelDy": 62 },
+    { "id": "render-r2", "from": "render", "to": "r2", "label": "sube MP4", "variant": "emphasis" },
+    { "id": "api-db", "from": "api", "to": "db", "label": "frases e imagenes" },
+    { "id": "api-gemini", "from": "api", "to": "gemini", "label": "analisis IA" },
+    { "id": "api-kie", "from": "api", "to": "kie", "label": "genera imagen" },
+    { "id": "api-sheet", "from": "api", "to": "sheet", "label": "encola aprobado", "labelDy": 200 },
+    { "id": "sheet-n8n", "from": "sheet", "to": "n8n", "label": "cola + cadencia" },
+    { "id": "r2-n8n", "from": "r2", "to": "n8n", "label": "URL del media", "variant": "dashed", "labelDy": 300 },
+    { "id": "n8n-meta", "from": "n8n", "to": "meta", "label": "publica", "variant": "emphasis", "labelDy": 24 }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "App local",
+      "items": [
+        "Editor React con preview canvas 9:16 en tiempo real",
+        "El cliente calcula los wrappedLines y el servidor los respeta",
+        "Express expone 15 routers y sirve /output como estatico",
+        "SQLite (better-sqlite3) sustituyo a los JSON del MVP"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Inteligencia",
+      "items": [
+        "Gemini 3.5-flash en dos capas: gratuita para lotes, de pago para contenido propio",
+        "gemini-embedding-001 (3072d) para el matching conceptual frase-imagen",
+        "KIE / Nano Banana Pro genera imagenes de banco y slides de carrusel",
+        "El banco tambien se nutre de Pinterest API v5, que sincroniza al arrancar"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Publicacion",
+      "items": [
+        "R2 da la URL publica que Meta exige para ingerir el media",
+        "La cola y la cadencia viven en un Google Sheet, no en la app",
+        "n8n drena la cola en cada franja y publica en IG, Facebook y YouTube",
+        "El gate de aprobacion es Telegram: David valida desde el movil"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Analitica",
+      "items": [
+        "Un cron a las 4:30 pide los insights a la Graph API y los guarda en media_insights",
+        "publications cruza cada publicacion con la frase, la imagen y el audio que la formaron",
+        "Cleanup cada 6 horas de los archivos de mas de 24 h"
+      ]
+    }
+  ]
+}
