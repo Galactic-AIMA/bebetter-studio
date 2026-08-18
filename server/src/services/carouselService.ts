@@ -1,6 +1,8 @@
+import fs from 'fs'
 import path from 'path'
 import { config } from '../config'
 import { generateImage, downloadImage, KieAspect } from './kieService'
+import { generateImage as generateImageVertex } from './vertexImageService'
 import { SlideRole, CarouselFuente } from './geminiService'
 
 // Generación de slides de carrusel con KIE (Nano Banana Pro).
@@ -124,7 +126,14 @@ export interface GeneratedSlide {
   n: number
   localPath: string
   publicUrl: string // URL local (para el UI)
-  kieUrl: string // URL del resultado en KIE (sirve de referencia para las siguientes)
+  /**
+   * Referencia visual para las slides siguientes. **Qué contiene depende del
+   * backend**: con KIE es la URL hospedada del resultado; con Vertex es la
+   * **ruta local**, porque Vertex devuelve la imagen en base64 y no hospeda nada.
+   * Se guarda en `carousels.cover_kie_url` (el nombre de la columna se conserva
+   * para no forzar una migración de esquema antes del paso a Postgres).
+   */
+  refImagen: string
 }
 
 // Genera UNA slide con KIE y la descarga a disco.
@@ -132,25 +141,44 @@ export interface GeneratedSlide {
 export async function generateSlideImage(
   carouselId: string,
   slide: SlideInput,
-  refKieUrl?: string,
+  refImagen?: string,
   fuente?: CarouselFuente
 ): Promise<GeneratedSlide> {
-  const prompt = buildSlidePrompt(slide, !!refKieUrl, fuente)
+  const prompt = buildSlidePrompt(slide, !!refImagen, fuente)
+  const localPath = path.join(carouselDir(carouselId), slideFilename(slide.n))
+
+  // Vertex: síncrono y devuelve base64 → se escribe a disco y la referencia de las
+  // siguientes slides es esta misma ruta local.
+  if (config.imageBackend === 'vertex') {
+    const { buffer } = await generateImageVertex({
+      prompt,
+      aspectRatio: CAROUSEL_ASPECT,
+      imageInput: refImagen,
+    })
+    fs.mkdirSync(path.dirname(localPath), { recursive: true })
+    fs.writeFileSync(localPath, buffer)
+    return {
+      n: slide.n,
+      localPath,
+      publicUrl: slidePublicUrl(carouselId, slide.n),
+      refImagen: localPath,
+    }
+  }
+
+  // KIE: asíncrono, devuelve URL hospedada que sirve de referencia tal cual.
   const kieUrl = await generateImage({
     prompt,
     aspectRatio: CAROUSEL_ASPECT,
     resolution: '2K',
     outputFormat: 'png',
-    imageInput: refKieUrl,
+    imageInput: refImagen,
   })
-
-  const localPath = path.join(carouselDir(carouselId), slideFilename(slide.n))
   await downloadImage(kieUrl, localPath)
 
   return {
     n: slide.n,
     localPath,
     publicUrl: slidePublicUrl(carouselId, slide.n),
-    kieUrl,
+    refImagen: kieUrl,
   }
 }

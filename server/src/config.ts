@@ -43,11 +43,48 @@ export const config = {
     // —frases, guiones, copies—: en la capa gratuita Google entrena con los datos.
     apiKeyFree: process.env.GOOGLE_API_KEY_FREE || '',
     sheetId: process.env.GOOGLE_SHEET_ID || '',  // Sheet "Cola bebetter" (Fase 4) — lo crea scripts/setup-queue-sheet.ts
+
+    // Vertex AI — ensayo de créditos Google (alta 2026-08-17, corte 2026-11-15).
+    // Misma familia de modelos que AI Studio, pero autenticada por service account
+    // (IAM) en vez de por clave con candado de IP: una mudanza de servidor ya no la
+    // rompe. Y Vertex NO entrena con los datos, así que sirve para contenido propio.
+    //
+    // Verificado el 2026-08-17 con scripts/vertex-comparar-embeddings.ts:
+    // `gemini-embedding-001` devuelve vectores BIT A BIT IDÉNTICOS por las dos
+    // puertas (coseno 1.000000000, Δmax 0) ⇒ los embeddings ya guardados siguen
+    // siendo válidos y NO hay que re-vectorizar el banco.
+    //
+    // Con `project` o `credentials` vacíos se cae a AI Studio: es el interruptor
+    // de vuelta atrás, sin tocar código.
+    //
+    // ⚠️ `location`: us-central1 sirve la familia 2.5 y los embeddings (es donde se
+    // validó lo de arriba). Los modelos 3.x —incluido gemini-3-pro-image— solo
+    // responden en `global`. Si algún día se migran las funciones de texto, van con
+    // su propia location.
+    vertex: {
+      project: process.env.VERTEX_PROJECT || '',
+      location: process.env.VERTEX_LOCATION || 'us-central1',
+      credentials: process.env.VERTEX_CREDENTIALS || '',
+      // Modelos de imagen. Solo responden en `global`, NO en us-central1.
+      //   gemini-3-pro-image     = Nano Banana Pro (el mismo que sirve KIE)
+      //   gemini-2.5-flash-image = más rápido y barato, calidad menor
+      imageLocation: process.env.VERTEX_IMAGE_LOCATION || 'global',
+      imageModel: process.env.VERTEX_IMAGE_MODEL || 'gemini-3-pro-image',
+      // Los modelos de texto 3.x tampoco están en us-central1: solo en `global`.
+      // Los embeddings sí (y ahí es donde se validó que los vectores coinciden),
+      // por eso son dos `location` distintas y no una.
+      textLocation: process.env.VERTEX_TEXT_LOCATION || 'global',
+    },
   },
 
   kie: {
     apiKey: process.env.KIE_API_KEY || '',  // KIE AI (Nano Banana Pro) — generación de imágenes IA para el banco
   },
+
+  // Qué backend genera las imágenes IA: 'kie' (revendedor, cobra por imagen sin
+  // tope) o 'vertex' (directo, con cargo a los créditos del ensayo). Cambiar esta
+  // variable es todo el rollback — `kieService` se queda intacto.
+  imageBackend: (process.env.IMAGE_BACKEND || 'kie') as 'kie' | 'vertex',
 
   pinterest: {
     appId: process.env.PINTEREST_APP_ID || '',

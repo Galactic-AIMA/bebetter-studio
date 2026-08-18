@@ -170,7 +170,7 @@ router.post('/:id/slides/:n', async (req, res) => {
       id: carousel.id,
       slides: JSON.stringify(updated),
       status: allDone ? 'done' : 'partial',
-      ...(isCover ? { cover: generated.kieUrl } : {}),
+      ...(isCover ? { cover: generated.refImagen } : {}),
     })
 
     logInfo('carousel', `Slide ${n} generada (${carousel.tema})`)

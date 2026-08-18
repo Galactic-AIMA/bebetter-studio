@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import fs from 'fs'
 import path from 'path'
 import { config } from '../config'
 import db from '../db'
@@ -10,6 +11,7 @@ import {
   PhraseAnalysis,
 } from '../services/geminiService'
 import { generateImage, downloadImage, KieAspect } from '../services/kieService'
+import { generateImage as generateImageVertex } from '../services/vertexImageService'
 import { invalidateImageCache } from './imageTags'
 
 const router = Router()
@@ -116,13 +118,22 @@ router.post('/generate', async (req, res) => {
   const aspect: KieAspect = ASPECTS.includes(aspectRatio) ? aspectRatio : '9:16'
 
   try {
-    // 1. Generar en KIE (async con polling)
-    const resultUrl = await generateImage({ prompt, aspectRatio: aspect, resolution: '2K', outputFormat: 'png' })
-
-    // 2. Descargar al banco de imágenes
+    // 1-2. Generar y dejar la imagen en el banco.
+    // El backend lo decide IMAGE_BACKEND: 'vertex' (directo, con cargo a los
+    // créditos del ensayo) o 'kie' (revendedor). Cambiar la variable es todo el
+    // rollback: kieService sigue intacto.
     const filename = `ia-${Date.now()}.png`
     const outPath = path.join(config.paths.images, filename)
-    await downloadImage(resultUrl, outPath)
+
+    if (config.imageBackend === 'vertex') {
+      // Vertex es síncrono y devuelve la imagen en base64: no hay URL que descargar.
+      const { buffer } = await generateImageVertex({ prompt, aspectRatio: aspect })
+      fs.mkdirSync(path.dirname(outPath), { recursive: true })
+      fs.writeFileSync(outPath, buffer)
+    } else {
+      const resultUrl = await generateImage({ prompt, aspectRatio: aspect, resolution: '2K', outputFormat: 'png' })
+      await downloadImage(resultUrl, outPath)
+    }
 
     // 3. Analizar + vectorizar (mismo pipeline que el banco) para que entre al matching
     let tags: string[] = []
