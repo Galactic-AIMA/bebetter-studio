@@ -47,6 +47,7 @@ data/bebetter.db.bak-*
 # (el patrón antiguo era solo `wf_*_backup_*.json` y dejaba pasar toda la familia `wf_backup_*`)
 server/scripts/wf_*.json
 server/scripts/__pycache__/
+scripts/__pycache__/
 
 # Lockfile
 package-lock.json

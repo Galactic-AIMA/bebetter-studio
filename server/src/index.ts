@@ -19,6 +19,7 @@ import batchRouter from './routes/batch'
 import aiImagesRouter from './routes/aiImages'
 import carouselsRouter from './routes/carousels'
 import analyticsRouter from './routes/analytics'
+import devWrapRouter from './routes/devWrap'
 import { collectInsights, haySnapshotDeHoy } from './services/insightsService'
 import { syncBoardImages } from './services/pinterestService'
 import { runCleanup } from './services/cleanupService'
@@ -31,6 +32,15 @@ app.use(express.json())
 
 // Servir videos generados como archivos estáticos (URL pública directa para n8n/Meta)
 app.use('/output', express.static(path.resolve(config.paths.output)))
+
+// Las tipografías salen de aquí, no del CDN de Google: el navegador tiene que
+// medir el MISMO TTF que pinta FFmpeg o el corte de línea del preview y el del
+// vídeo no pueden coincidir. De paso, la app deja de depender de una red externa
+// para renderizar bien —que es condición para el contenedor.
+app.use('/api/fonts', express.static(path.resolve(config.paths.fonts), {
+  maxAge: '30d',
+  setHeaders: (res) => res.setHeader('Access-Control-Allow-Origin', '*'),
+}))
 
 app.use('/api/videos', videosRouter)
 app.use('/api/images', imagesRouter)
@@ -47,6 +57,12 @@ app.use('/api/batch', batchRouter)
 app.use('/api/ai-images', aiImagesRouter)
 app.use('/api/carousels', carouselsRouter)
 app.use('/api/analytics', analyticsRouter)
+
+// Verificación del wrap servidor↔navegador (Fase 0.1). Fuera de producción:
+// escribe en disco y solo sirve para comprobar que los dos cortan igual.
+if (process.env.NODE_ENV !== 'production') {
+  app.use('/api/dev', devWrapRouter)
+}
 
 app.get('/api/watermark', (req, res) => {
   const wmPath = config.watermark.path

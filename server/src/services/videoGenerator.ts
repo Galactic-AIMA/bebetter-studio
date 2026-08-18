@@ -3,6 +3,7 @@ import path from 'path'
 import fs from 'fs'
 import { VideoConfig, WatermarkPosition, TextEffect } from '../types'
 import { config } from '../config'
+import { resolveFontFile, resolveItalicFontFile, toFFmpegPath, wrapTextServer, watermarkFontFile } from '../text/fontMeasure'
 
 function wmXExpr(position: WatermarkPosition, isText = false): string {
   if (position === 'left') return '20'
@@ -18,19 +19,6 @@ export interface GenerateResult {
   filename: string
   localPath: string
   publicUrl: string
-}
-
-const WINDOWS_FONTS = 'C:/Windows/Fonts'
-
-const FONT_FALLBACKS: Record<string, string> = {
-  'Montserrat-Bold':          `${WINDOWS_FONTS}/arialbd.ttf`,
-  'Montserrat-Regular':       `${WINDOWS_FONTS}/arial.ttf`,
-  'PlayfairDisplay-Bold':     `${WINDOWS_FONTS}/georgiab.ttf`,
-  'PlayfairDisplay-Regular':  `${WINDOWS_FONTS}/georgia.ttf`,
-  'Lato-Regular':             `${WINDOWS_FONTS}/calibri.ttf`,
-  'Lato-Bold':                `${WINDOWS_FONTS}/calibrib.ttf`,
-  'Oswald-Bold':              `${WINDOWS_FONTS}/arialbd.ttf`,
-  'RobotoCondensed-Bold':     `${WINDOWS_FONTS}/arialbd.ttf`,
 }
 
 // ---------------------------------------------------------------------------
@@ -89,42 +77,13 @@ export function buildScrimFilter(
 }
 // ---------------------------------------------------------------------------
 
-function estimateTextWidth(text: string, fontSize: number): number {
-  return text.length * fontSize * 0.55
-}
-
-function wrapText(text: string, fontSize: number, maxPx: number): string[] {
-  const words = text.split(' ')
-  const lines: string[] = []
-  let current = ''
-
-  for (const word of words) {
-    const test = current ? `${current} ${word}` : word
-    if (estimateTextWidth(test, fontSize) > maxPx && current) {
-      lines.push(current)
-      current = word
-    } else {
-      current = test
-    }
-  }
-  if (current) lines.push(current)
-  return lines
-}
-
 function resolveFontPath(fontName: string): string {
-  const customFont = path.join(config.paths.fonts, `${fontName}.ttf`)
-  const resolved = fs.existsSync(customFont)
-    ? customFont
-    : (FONT_FALLBACKS[fontName] || `${WINDOWS_FONTS}/arial.ttf`)
-  return resolved.replace(/\\/g, '/').replace(/^([A-Z]):/, '$1\\:')
+  return toFFmpegPath(resolveFontFile(fontName))
 }
 
 function resolveItalicFontPath(fontName: string): string | null {
-  const familyKey = fontName.split('-')[0]
-  const italicKey = `${familyKey}-Italic`
-  const customFont = path.join(config.paths.fonts, `${italicKey}.ttf`)
-  if (fs.existsSync(customFont)) return customFont.replace(/\\/g, '/').replace(/^([A-Z]):/, '$1\\:')
-  return null
+  const italic = resolveItalicFontFile(fontName)
+  return italic ? toFFmpegPath(italic) : null
 }
 
 // Resuelve la pista de audio de fondo dentro de data/audio. Devuelve null si
@@ -200,11 +159,18 @@ export async function generateVideo(
   const fontPath = resolveFontPath(text.font)
   const lineH = Math.round(text.fontSize * text.lineHeight)
 
-  // Usar las lineas pre-calculadas por el cliente (con canvas.measureText real).
-  // Si no vienen, calcular con la estimacion local como fallback.
+  // Si el cliente manda sus líneas (flujo del editor), se respetan. Si no vienen
+  // —lote sin navegador, bot, worker—, se calculan aquí midiendo con el mismo TTF
+  // que pinta FFmpeg, con la división por tiempos incluida.
   const lines = (cfg.wrappedLines && cfg.wrappedLines.length > 0)
     ? cfg.wrappedLines
-    : wrapText(text.content, text.fontSize, maxW)
+    : wrapTextServer({
+        text: text.content,
+        font: text.font,
+        fontSize: text.fontSize,
+        maxWidth: text.maxWidth,
+        resolutionWidth: width,
+      })
   const totalH = lines.length * lineH
   const startY = Math.max(10, centerY - Math.round(totalH / 2))
 
@@ -308,7 +274,7 @@ export async function generateVideo(
     if (wmEnabled && wmType === 'text') {
       const wmText = escapeLine(wm!.text ?? '@bebetter.path')
       const opacity = (wm!.opacity ?? 0.35).toFixed(2)
-      const fontPath = `${WINDOWS_FONTS}/arial.ttf`.replace(/^([A-Z]):/, '$1\\:')
+      const fontPath = toFFmpegPath(watermarkFontFile())
       const wmFilter = `drawtext=text='${wmText}':fontfile='${fontPath}':fontsize=22:fontcolor=white@${opacity}:x=${wmXExpr(wmPos, true)}:y=${wmYExpr(wmY)}`
       cmd.videoFilters(vfilter + `,${wmFilter}`)
     } else if (wmEnabled && wmType === 'image') {

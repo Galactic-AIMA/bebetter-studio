@@ -1,4 +1,194 @@
-@import url('https://fonts.googleapis.com/css2?family=Anton&family=IBM+Plex+Sans:ital,wght@0,100;0,400;0,700;1,400&family=Inter:ital,wght@0,100;0,400;0,500;0,600;0,700;1,400&family=Lato:ital,wght@0,100;0,400;0,700;1,400&family=Montserrat:ital,wght@0,100;0,400;0,700;1,400&family=Oswald:wght@300;400;700&family=Playfair+Display:ital,wght@0,200;0,400;0,700;1,400&family=Roboto+Condensed:ital,wght@0,100;0,400;0,700;1,400&display=swap');
+/* Tipografías servidas por la propia app (`GET /api/fonts`), no por el CDN de
+   Google. Es el mismo archivo TTF que pinta FFmpeg: si el navegador midiera una
+   versión distinta de la fuente —como pasaba hasta el 2026-08-18, con la Inter
+   del CDN frente a la «Inter 28pt» del disco— el corte de línea del preview y el
+   del vídeo no podrían coincidir nunca, y el servidor no podría calcularlo solo.
+   `font-display: block` porque aquí lo que importa es medir bien, no pintar antes.
+   Las fuentes las genera `scripts/download-fonts.py`. */
+
+@font-face {
+  font-family: 'Playfair Display';
+  src: url('/api/fonts/PlayfairDisplay-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Playfair Display';
+  src: url('/api/fonts/PlayfairDisplay-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Playfair Display';
+  src: url('/api/fonts/PlayfairDisplay-Italic.ttf') format('truetype');
+  font-weight: 400;
+  font-style: italic;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Lato';
+  src: url('/api/fonts/Lato-Thin.ttf') format('truetype');
+  font-weight: 100;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Lato';
+  src: url('/api/fonts/Lato-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Lato';
+  src: url('/api/fonts/Lato-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Lato';
+  src: url('/api/fonts/Lato-Italic.ttf') format('truetype');
+  font-weight: 400;
+  font-style: italic;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Oswald';
+  src: url('/api/fonts/Oswald-Thin.ttf') format('truetype');
+  font-weight: 300;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Oswald';
+  src: url('/api/fonts/Oswald-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Oswald';
+  src: url('/api/fonts/Oswald-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Roboto Condensed';
+  src: url('/api/fonts/RobotoCondensed-Thin.ttf') format('truetype');
+  font-weight: 100;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Roboto Condensed';
+  src: url('/api/fonts/RobotoCondensed-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Roboto Condensed';
+  src: url('/api/fonts/RobotoCondensed-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Roboto Condensed';
+  src: url('/api/fonts/RobotoCondensed-Italic.ttf') format('truetype');
+  font-weight: 400;
+  font-style: italic;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Inter';
+  src: url('/api/fonts/Inter-Thin.ttf') format('truetype');
+  font-weight: 100;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Inter';
+  src: url('/api/fonts/Inter-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Inter';
+  src: url('/api/fonts/Inter-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Inter';
+  src: url('/api/fonts/Inter-Italic.ttf') format('truetype');
+  font-weight: 400;
+  font-style: italic;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'IBM Plex Sans';
+  src: url('/api/fonts/IBMPlexSans-Thin.ttf') format('truetype');
+  font-weight: 100;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'IBM Plex Sans';
+  src: url('/api/fonts/IBMPlexSans-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'IBM Plex Sans';
+  src: url('/api/fonts/IBMPlexSans-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'IBM Plex Sans';
+  src: url('/api/fonts/IBMPlexSans-Italic.ttf') format('truetype');
+  font-weight: 400;
+  font-style: italic;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Anton';
+  src: url('/api/fonts/Anton-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
 
 @tailwind base;
 @tailwind components;

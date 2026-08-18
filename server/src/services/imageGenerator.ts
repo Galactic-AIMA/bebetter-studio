@@ -4,6 +4,8 @@ import fs from 'fs'
 import { TextConfig, ImageVariant, WatermarkConfig, WatermarkPosition } from '../types'
 import { config } from '../config'
 import { buildScrimFilter } from './videoGenerator'
+import { resolveFontFile, resolveItalicFontFile, toFFmpegPath, measurerFor, watermarkFontFile } from '../text/fontMeasure'
+import { wrapWith } from '../text/wrap'
 
 function wmXExpr(position: WatermarkPosition, isText = false): string {
   if (position === 'left') return '20'
@@ -34,54 +36,22 @@ export interface ImageGenerateOptions {
   wrappedLines?: string[]
 }
 
-const WINDOWS_FONTS = 'C:/Windows/Fonts'
-
-const FONT_FALLBACKS: Record<string, string> = {
-  'Montserrat-Bold':          `${WINDOWS_FONTS}/arialbd.ttf`,
-  'Montserrat-Regular':       `${WINDOWS_FONTS}/arial.ttf`,
-  'PlayfairDisplay-Bold':     `${WINDOWS_FONTS}/georgiab.ttf`,
-  'PlayfairDisplay-Regular':  `${WINDOWS_FONTS}/georgia.ttf`,
-  'Lato-Regular':             `${WINDOWS_FONTS}/calibri.ttf`,
-  'Lato-Bold':                `${WINDOWS_FONTS}/calibrib.ttf`,
-  'Oswald-Bold':              `${WINDOWS_FONTS}/arialbd.ttf`,
-  'RobotoCondensed-Bold':     `${WINDOWS_FONTS}/arialbd.ttf`,
-}
-
-function estimateTextWidth(text: string, fontSize: number): number {
-  return text.length * fontSize * 0.55
-}
-
-function wrapText(text: string, fontSize: number, maxPx: number): string[] {
-  const words = text.split(' ')
-  const lines: string[] = []
-  let current = ''
-  for (const word of words) {
-    const test = current ? `${current} ${word}` : word
-    if (estimateTextWidth(test, fontSize) > maxPx && current) {
-      lines.push(current)
-      current = word
-    } else {
-      current = test
-    }
-  }
-  if (current) lines.push(current)
-  return lines
+/**
+ * Envuelve midiendo con el TTF real (mismo algoritmo y mismo medidor que el
+ * vídeo). `splitBlocks` queda en manos de quien llama: las mitades de un `//`
+ * ya son bloques por sí mismas y no se vuelven a partir.
+ */
+function wrapImageText(text: string, font: string, fontSize: number, maxPx: number, splitBlocks: boolean): string[] {
+  return wrapWith(measurerFor(font, fontSize), { text, maxPx, splitBlocks })
 }
 
 function resolveFontPath(fontName: string): string {
-  const customFont = path.join(config.paths.fonts, `${fontName}.ttf`)
-  const resolved = fs.existsSync(customFont)
-    ? customFont
-    : (FONT_FALLBACKS[fontName] || `${WINDOWS_FONTS}/arial.ttf`)
-  return resolved.replace(/\\/g, '/').replace(/^([A-Z]):/, '$1\\:')
+  return toFFmpegPath(resolveFontFile(fontName))
 }
 
 function resolveItalicFontPath(fontName: string): string | null {
-  const familyKey = fontName.split('-')[0]
-  const italicKey = `${familyKey}-Italic`
-  const customFont = path.join(config.paths.fonts, `${italicKey}.ttf`)
-  if (fs.existsSync(customFont)) return customFont.replace(/\\/g, '/').replace(/^([A-Z]):/, '$1\\:')
-  return null
+  const italic = resolveItalicFontFile(fontName)
+  return italic ? toFFmpegPath(italic) : null
 }
 
 function escapeLine(text: string): string {
@@ -150,13 +120,13 @@ function buildVideoFilter(
   if (hasDelimiter && variant === 'combined') {
     const [hookText, punchlineText = ''] = content.split('//').map((p) => p.trim())
 
-    const hookLines = wrapText(hookText, textCfg.fontSize, maxW)
+    const hookLines = wrapImageText(hookText, textCfg.font, textCfg.fontSize, maxW, false)
     const hookStartY = Math.max(10, Math.round(0.35 * height) - Math.round((hookLines.length * lineH) / 2))
     drawTextFilters = buildDrawTextFilters(hookLines, textCfg, hookStartY, width)
     scrimAnchorY = 35
 
     if (punchlineText) {
-      const punchLines = wrapText(punchlineText, textCfg.fontSize, maxW)
+      const punchLines = wrapImageText(punchlineText, textCfg.font, textCfg.fontSize, maxW, false)
       const punchStartY = Math.max(10, Math.round(0.70 * height) - Math.round((punchLines.length * lineH) / 2))
       drawTextFilters = [...drawTextFilters, ...buildDrawTextFilters(punchLines, textCfg, punchStartY, width)]
       scrimAnchorY = 70
@@ -169,10 +139,11 @@ function buildVideoFilter(
     }
     // Sin `//`, las líneas del cliente son las buenas: vienen de measureText y
     // ya traen la división por tiempos. Con `//` no sirven (envuelven el texto
-    // entero, no la parte que toca mostrar) → se recalcula en local.
+    // entero, no la parte que toca mostrar) → se recalcula en local, y ahí la
+    // mitad mostrada ya es un bloque: no se vuelve a partir por tiempos.
     const lines = (!hasDelimiter && wrappedLines?.length)
       ? wrappedLines
-      : wrapText(displayText, textCfg.fontSize, maxW)
+      : wrapImageText(displayText, textCfg.font, textCfg.fontSize, maxW, !hasDelimiter)
     const centerY = Math.round((textCfg.position.y / 100) * height)
     const startY = Math.max(10, centerY - Math.round((lines.length * lineH) / 2))
     drawTextFilters = buildDrawTextFilters(lines, textCfg, startY, width)
@@ -228,7 +199,7 @@ export async function generateImage(opts: ImageGenerateOptions): Promise<ImageGe
     if (wmEnabled && wmType === 'text') {
       const wmText = (wm!.text ?? '@bebetter.path').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/:/g, '\\:')
       const opacity = (wm!.opacity ?? 0.35).toFixed(2)
-      const fontPath = `${WINDOWS_FONTS}/arial.ttf`.replace(/^([A-Z]):/, '$1\\:')
+      const fontPath = toFFmpegPath(watermarkFontFile())
       const wmFilter = `drawtext=text='${wmText}':fontfile='${fontPath}':fontsize=22:fontcolor=white@${opacity}:x=${wmXExpr(wmPos, true)}:y=${wmYExpr(wmY)}`
       cmd.videoFilters(vfilter + `,${wmFilter}`)
     } else if (wmEnabled && wmType === 'image') {
