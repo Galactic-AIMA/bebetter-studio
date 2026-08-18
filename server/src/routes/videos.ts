@@ -17,6 +17,7 @@ import { GenerateVideoSchema } from '../schemas'
 import { rowToVideoRecord } from '../utils/recordMappers'
 import { logInfo, logError } from '../services/logService'
 import db from '../db'
+import { reconciliarRechazos } from '../services/queueReconcile'
 
 const router = Router()
 
@@ -254,7 +255,12 @@ router.post('/:id/queue', async (req, res) => {
     // Encolar ES aprobar: es el momento en que se decide sacar la pieza, y por eso
     // es aquí donde se generan los copies y sube el contador. Una pieza de lote no
     // llega hasta que alguien la aprueba, así que un rechazo no quema la frase.
-    db.prepare(`UPDATE videos SET estado = 'aprobado' WHERE id = ?`).run(row.id)
+    //
+    // Se guarda el `queue_id` porque es el único hilo que une esta pieza con lo
+    // que David decida DESPUÉS en Telegram: si allí la descarta, n8n escribe
+    // `rejected` en esa fila y `reconciliarRechazos()` devuelve el uso.
+    db.prepare(`UPDATE videos SET estado = 'aprobado', queue_id = ? WHERE id = ?`)
+      .run(queueRow.id, row.id)
     bumpUsageForVideo(row) // cuenta el uso al encolar (decisión de sacarlo)
     logInfo('publish', `Enviado a aprobación: ${row.filename}`)
     res.json({ success: true, queueId: queueRow.id })
@@ -290,6 +296,17 @@ router.post('/:id/reject', (req, res) => {
   const motivo = typeof req.body?.motivo === 'string' ? req.body.motivo : 'sin motivo'
   logInfo('publish', `Rechazado ${row.filename} (${motivo}) — la frase sigue sin usar`)
   res.json({ success: true })
+})
+
+// POST /api/videos/reconciliar — devuelve el uso de lo descartado en Telegram.
+// Lo llama también el cron cada 6 h; el endpoint existe para poder forzarlo.
+router.post('/reconciliar', async (_req, res) => {
+  try {
+    res.json(await reconciliarRechazos())
+  } catch (err: any) {
+    logError('publish', 'Error reconciliando rechazos', err.message)
+    res.status(500).json({ error: err.message })
+  }
 })
 
 // DELETE /api/videos/:id — eliminar video

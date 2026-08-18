@@ -215,6 +215,14 @@ for (const sql of [
   // ni dejar el mensaje de Telegram sin el caption que hay que aprobar. Y de paso
   // los copies solo se pagan por lo aprobado: 30 llamadas menos por lote.
   `ALTER TABLE videos ADD COLUMN estado TEXT`,
+  // Id de la fila de la cola (Google Sheet) que generó este vídeo al encolarse.
+  // Es el único hilo que une la pieza con lo que decide David EN TELEGRAM: n8n
+  // escribe ahí `approved` o `rejected` (nodo `Parse Aprobacion` de `[Pub]`), y
+  // sin este id la app no tiene forma de saber cuál de sus vídeos fue rechazado.
+  // Hace falta porque el contador sube al encolar: si luego se descarta por
+  // Telegram, la frase queda marcada como usada sin haberse publicado nunca.
+  // Ver `reconciliarRechazos()` en services/queueReconcile.ts.
+  `ALTER TABLE videos ADD COLUMN queue_id TEXT`,
 ]) {
   try { db.exec(sql) } catch (_) { /* columna ya existe */ }
 }

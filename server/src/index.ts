@@ -23,6 +23,7 @@ import devWrapRouter from './routes/devWrap'
 import { collectInsights, haySnapshotDeHoy } from './services/insightsService'
 import { syncBoardImages } from './services/pinterestService'
 import { runCleanup } from './services/cleanupService'
+import { reconciliarRechazosSeguro } from './services/queueReconcile'
 import { logInfo } from './services/logService'
 
 const app = express()
@@ -80,6 +81,14 @@ app.listen(config.port, () => {
 
   cron.schedule('0 */6 * * *', () => { runCleanup() })
   console.log('Cleanup: activo (cada 6 horas, archivos >24h)')
+
+  // Devuelve a la rotación las frases de piezas descartadas en Telegram. Va por
+  // sondeo y no por aviso porque n8n (EC2) no puede alcanzar esta app (local).
+  // Se corre al arrancar además de cada 2 h: el PC no está siempre encendido, y
+  // los rechazos se acumulan mientras tanto.
+  reconciliarRechazosSeguro()
+  cron.schedule('15 */2 * * *', () => { reconciliarRechazosSeguro() })
+  console.log('Reconciliación de rechazos: activa (al arrancar y cada 2 horas)')
 
   // Snapshot diario de insights. De madrugada porque no compite con nada y la
   // granularidad de la serie es el día. Best-effort: si el token o la red fallan,

@@ -110,11 +110,20 @@ export function getRecentAudio(n: number): { tracks: string[]; textures: string[
 }
 
 /** +1 al usage_count (best-effort; crea la fila si no existía). */
-export function bumpAudioUsage(filename: string): void {
+/**
+ * Suma (o resta, con `delta = -1`) uso a una pista.
+ *
+ * El `delta` negativo lo usa `reconciliarRechazos()` para devolver el uso de una
+ * pieza descartada en Telegram. Con suelo en 0: la rotación de audio se alimenta
+ * de este contador y un negativo la dejaría eligiendo siempre la misma pista.
+ */
+export function bumpAudioUsage(filename: string, delta = 1): void {
   const exists = db.prepare(`SELECT 1 FROM audio_tracks WHERE filename = ?`).get(filename)
   if (exists) {
-    db.prepare(`UPDATE audio_tracks SET usage_count = usage_count + 1 WHERE filename = ?`).run(filename)
-  } else {
-    db.prepare(`INSERT INTO audio_tracks (filename, usage_count) VALUES (?, 1)`).run(filename)
+    db.prepare(
+      `UPDATE audio_tracks SET usage_count = MAX(0, usage_count + ?) WHERE filename = ?`
+    ).run(delta, filename)
+  } else if (delta > 0) {
+    db.prepare(`INSERT INTO audio_tracks (filename, usage_count) VALUES (?, ?)`).run(filename, delta)
   }
 }
