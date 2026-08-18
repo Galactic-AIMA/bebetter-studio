@@ -56,7 +56,15 @@ export interface VideoRecord {
   viral?: boolean
   createdAt: string
   config: VideoConfig
+  /**
+   * Estado de revisión. `undefined` = flujo manual de siempre (se genera y se
+   * decide en el momento). Las piezas de un lote nacen 'pendiente_revision' y
+   * NO gastan frase ni copies hasta que se aprueban. Ver `db.ts`.
+   */
+  estado?: EstadoRevision
 }
+
+export type EstadoRevision = 'pendiente_revision' | 'aprobado' | 'rechazado'
 
 export interface Phrase {
   id: string

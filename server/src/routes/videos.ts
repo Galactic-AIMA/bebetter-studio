@@ -78,7 +78,7 @@ router.post('/generate', async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0].message, details: parsed.error.issues })
 
   try {
-    const { config: vidConfig, phraseId } = parsed.data
+    const { config: vidConfig, phraseId, paraRevision } = parsed.data
 
     // Auto-pick de audio por mood si no se eligió pista (o se eligió "auto").
     if ((!vidConfig.audioTrack || vidConfig.audioTrack === 'auto') && phraseId) {
@@ -108,10 +108,10 @@ router.post('/generate', async (req, res) => {
     db.prepare(`
       INSERT INTO videos
         (id, filename, title, description, tags, local_path, public_url,
-         phrase_id, viral, font, effect, resolution, config_extra, created_at)
+         phrase_id, viral, font, effect, resolution, config_extra, created_at, estado)
       VALUES
         (@id, @filename, @title, @description, @tags, @local_path, @public_url,
-         @phrase_id, 0, @font, @effect, @resolution, @config_extra, @created_at)
+         @phrase_id, 0, @font, @effect, @resolution, @config_extra, @created_at, @estado)
     `).run({
       id,
       filename,
@@ -126,6 +126,9 @@ router.post('/generate', async (req, res) => {
       resolution:   `${vidConfig.resolution.width}x${vidConfig.resolution.height}`,
       config_extra: JSON.stringify(vidConfig),
       created_at:   createdAt,
+      // Una pieza de lote entra a la cola de revisión; una del editor no tiene
+      // estado, igual que siempre: se decide en el momento.
+      estado:       paraRevision ? 'pendiente_revision' : null,
     })
 
     const record = rowToVideoRecord(
@@ -248,6 +251,10 @@ router.post('/:id/queue', async (req, res) => {
       captionIG: copies.captionIG,
     })
 
+    // Encolar ES aprobar: es el momento en que se decide sacar la pieza, y por eso
+    // es aquí donde se generan los copies y sube el contador. Una pieza de lote no
+    // llega hasta que alguien la aprueba, así que un rechazo no quema la frase.
+    db.prepare(`UPDATE videos SET estado = 'aprobado' WHERE id = ?`).run(row.id)
     bumpUsageForVideo(row) // cuenta el uso al encolar (decisión de sacarlo)
     logInfo('publish', `Enviado a aprobación: ${row.filename}`)
     res.json({ success: true, queueId: queueRow.id })
@@ -255,6 +262,34 @@ router.post('/:id/queue', async (req, res) => {
     logError('publish', `Error enviando a aprobación (${req.params.id})`, err.message)
     res.status(500).json({ error: err.message })
   }
+})
+
+// GET /api/videos/pendientes — la cola de revisión: lo que produjo un lote y
+// todavía no ha mirado nadie. Ni ha gastado frase ni ha costado copies.
+router.get('/pendientes', (_req, res) => {
+  const rows = db.prepare(
+    `SELECT * FROM videos WHERE estado = 'pendiente_revision' ORDER BY created_at ASC`
+  ).all() as any[]
+  res.json(rows.map(rowToVideoRecord))
+})
+
+// POST /api/videos/:id/reject — descartar una pieza pendiente.
+//
+// No toca ningún contador, que es justamente el punto: la frase vuelve a la
+// rotación intacta. `motivo` se guarda en el log para poder mirar después por qué
+// se cae lo que se cae; los dos botones del diseño (otra imagen / frase mala) y
+// sus consecuencias son de la Fase 5, aquí solo se marca el estado.
+router.post('/:id/reject', (req, res) => {
+  const row = db.prepare(`SELECT * FROM videos WHERE id = ?`).get(req.params.id) as any
+  if (!row) return res.status(404).json({ error: 'Video not found' })
+  if (row.estado === 'aprobado') {
+    return res.status(409).json({ error: 'Ya estaba aprobado: rechazarlo no revertiría el contador ni la fila de la cola' })
+  }
+
+  db.prepare(`UPDATE videos SET estado = 'rechazado' WHERE id = ?`).run(row.id)
+  const motivo = typeof req.body?.motivo === 'string' ? req.body.motivo : 'sin motivo'
+  logInfo('publish', `Rechazado ${row.filename} (${motivo}) — la frase sigue sin usar`)
+  res.json({ success: true })
 })
 
 // DELETE /api/videos/:id — eliminar video

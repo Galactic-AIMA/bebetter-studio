@@ -89,6 +89,12 @@ export interface VideoRecord {
   viral?: boolean
   createdAt: string
   config: VideoConfig
+  /**
+   * Estado de revisión. `undefined` = pieza del editor, se decide en el momento.
+   * Las de un lote nacen 'pendiente_revision' y no gastan frase ni copies hasta
+   * aprobarlas — encolar es lo que aprueba. La pantalla de revisión es la Fase 5.
+   */
+  estado?: 'pendiente_revision' | 'aprobado' | 'rechazado'
 }
 
 export type TransitionType = 'fade' | 'fadeBlack' | 'none'

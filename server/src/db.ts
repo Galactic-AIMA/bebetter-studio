@@ -193,6 +193,28 @@ for (const sql of [
   //   consuma esas, se colaría lo que no cumple.
   `ALTER TABLE phrases ADD COLUMN estructura TEXT`,
   `ALTER TABLE phrases ADD COLUMN persona TEXT`,
+  // Estado de revisión de un vídeo (2026-08-18). NULL = flujo manual de siempre:
+  // se genera en el editor y se decide en el momento, sin cola intermedia.
+  //
+  //   'pendiente_revision' → lo produjo un lote y NADIE lo ha mirado aún
+  //   'aprobado'           → encolado para publicar (encolar ES aprobar)
+  //   'rechazado'          → descartado; no gasta frase ni copies
+  //
+  // Existe por un fallo concreto que el lote automático habría destapado: el
+  // contador de uso sube al ENCOLAR (`bumpUsageForVideo`), lo cual es correcto
+  // cuando encolar es una decisión de David, pero un lote de 30 encolando solo
+  // dejaría 30 frases marcadas como usadas ANTES de que opine — y al rechazar 10,
+  // esas 10 caerían al fondo de la rotación sin haberse publicado nunca, porque
+  // `batchPlanner` ordena por `usage_count ASC` y nada lo revierte. Sería la
+  // cuarta vez que un contador miente (usage_count el 02-ago, publications el 03).
+  //
+  // La salida elegida (2026-08-18) no mueve el contador: hace que **el lote no
+  // encole**. Las piezas nacen en 'pendiente_revision' y solo al aprobarlas se
+  // llama a `/queue`, que es quien genera los copies y cuenta el uso. Así se
+  // conserva el criterio original —contar cuando decides sacarlo— sin tocar n8n
+  // ni dejar el mensaje de Telegram sin el caption que hay que aprobar. Y de paso
+  // los copies solo se pagan por lo aprobado: 30 llamadas menos por lote.
+  `ALTER TABLE videos ADD COLUMN estado TEXT`,
 ]) {
   try { db.exec(sql) } catch (_) { /* columna ya existe */ }
 }
