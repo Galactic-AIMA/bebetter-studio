@@ -1,3 +1,4 @@
+import type { VisualStyle } from '@shared/presets'
 export interface TextConfig {
   content: string
   font: string
@@ -98,10 +99,9 @@ export interface VideoRecord {
 }
 
 export type TransitionType = 'fade' | 'fadeBlack' | 'none'
-export type TextAlign = 'left' | 'center' | 'right'
+export type { TextAlign, VisualStyle } from '@shared/presets'
 export type TextEffect = 'none' | 'fadeIn' | 'slideUp' | 'glowPulse'
 export type WatermarkPosition = 'left' | 'center' | 'right'
-export type VisualStyle = 'bebetter' | 'serene' | 'raw' | 'minimal' | 'cinematic' | 'bold'
 
 export interface WatermarkConfig {
   enabled: boolean
