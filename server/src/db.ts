@@ -173,6 +173,26 @@ for (const sql of [
   // llegó a contradecir su propia descripción). El mood se conserva como dato
   // informativo; quien manda ahora es energía (compatibilidad) + textura (variedad).
   `ALTER TABLE audio_tracks ADD COLUMN textura TEXT`,
+  // Las dos columnas de NORMA de marca (2026-08-18). Hasta ahora el filtro de
+  // norma era David mirando la pantalla; en automático hace falta que esté en la
+  // base, o el bot propondría frases que no se publicarían nunca.
+  //
+  // `estructura`: 'dos_tiempos' | 'un_golpe' | null.
+  //   Norma desde el 2026-08-02: una frase que no esté en dos tiempos NO se publica.
+  //   ⚠️ Es una propiedad SEMÁNTICA: partir por el punto no la detecta (ese fue el
+  //   error de Gemini, que confundía dos oraciones con dos tiempos y falló en 21 de
+  //   139). Se puebla desde `scripts/clasificacion-estructura-manual.json`, que son
+  //   las 139 clasificadas A MANO. No se reclasifica: se carga.
+  //   Y es columna aparte de `archived` a propósito: colapsarlas impediría
+  //   distinguir "retirada" de "pendiente de reconvertir".
+  //
+  // `persona`: 'segunda' | 'tercera' | null.
+  //   Norma desde el 2026-08-02: se publica en tercera persona. Este dato NO existía
+  //   en ninguna parte. Hoy está tapado por casualidad —las nunca usadas salieron de
+  //   las tandas de reconversión, así que ya están en 3.ª—, pero en cuanto el bot
+  //   consuma esas, se colaría lo que no cumple.
+  `ALTER TABLE phrases ADD COLUMN estructura TEXT`,
+  `ALTER TABLE phrases ADD COLUMN persona TEXT`,
 ]) {
   try { db.exec(sql) } catch (_) { /* columna ya existe */ }
 }

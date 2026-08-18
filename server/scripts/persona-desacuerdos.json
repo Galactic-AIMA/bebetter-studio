@@ -1,0 +1,34 @@
+[
+  {
+    "id": "e9b80a0d-6d56-4b04-b13f-d57b4cc80e94",
+    "texto": "Deja que el proceso respire. Si presionas el resultado por ansiedad, terminas matando el proyecto.",
+    "heuristica": "tercera",
+    "marcaHeuristica": "",
+    "llm": "segunda",
+    "marcaLlm": "Deja"
+  },
+  {
+    "id": "6a2bf57c-23fc-47b0-95e6-017d18630799",
+    "texto": "\"El miedo es la madre del suceso; materializa el desastre que intentas evitar.\"",
+    "heuristica": "tercera",
+    "marcaHeuristica": "",
+    "llm": "segunda",
+    "marcaLlm": "intentas"
+  },
+  {
+    "id": "159f93b4-ebba-4d1b-9ec4-13ac87232a8a",
+    "texto": "\"Si enfrentas resistencia, es para que aprendas a mover las piezas.\"",
+    "heuristica": "tercera",
+    "marcaHeuristica": "",
+    "llm": "segunda",
+    "marcaLlm": "enfrentas"
+  },
+  {
+    "id": "8a53e835-42f3-4aa7-b38b-b5b083df70ea",
+    "texto": "Se nota cuando alguien trabaja solo por dinero. No lo ves en su cuenta, lo ves en lo que entrega.",
+    "heuristica": "tercera",
+    "marcaHeuristica": "",
+    "llm": "segunda",
+    "marcaLlm": "ves"
+  }
+]

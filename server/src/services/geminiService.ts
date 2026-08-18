@@ -212,6 +212,69 @@ const PHRASE_ANALYSIS_SCHEMA = {
   required: ['temas', 'metaforasVisuales', 'nivelEnergia', 'paletaIdeal', 'mood', 'moodCategory'],
 }
 
+// ── Persona gramatical (norma de marca desde el 2026-08-02) ───────────────────
+
+export type PersonaGramatical = 'segunda' | 'tercera'
+
+export interface PersonaClasificada {
+  persona: PersonaGramatical
+  /** La palabra concreta que lo delata. Sirve para auditar sin releer la frase. */
+  marca: string
+}
+
+const PERSONA_SCHEMA = {
+  type: SchemaType.ARRAY,
+  items: {
+    type: SchemaType.OBJECT,
+    properties: {
+      n: { type: SchemaType.NUMBER, description: 'Número de la frase, tal cual viene en la lista.' },
+      persona: {
+        type: SchemaType.STRING,
+        description: 'segunda = se dirige al lector (tú, te, tu, tus, ti, o verbo en 2.ª como "eres"/"tienes"/"deja de"). tercera = habla de la gente en general, sin dirigirse a nadie ("el que", "quien", "uno", "nadie", "muchos", impersonal con "se").',
+      },
+      marca: { type: SchemaType.STRING, description: 'La palabra exacta de la frase que lo delata.' },
+    },
+    required: ['n', 'persona', 'marca'],
+  },
+}
+
+/**
+ * Clasifica la persona gramatical de un lote de frases (máx. ~25 por llamada).
+ *
+ * Devuelve una entrada por frase, en el mismo orden. Se pide la **marca** —la
+ * palabra que lo delata— a propósito: con el histórico de este proyecto (Gemini
+ * ha fallado tres veces etiquetando con vocabulario cerrado) una etiqueta sin
+ * evidencia no es auditable, y auditar 118 frases a mano no era viable.
+ *
+ * ⚠️ Esto NO decide solo: el script lo cruza con una heurística gramatical y solo
+ * escribe donde ambos coinciden.
+ */
+export async function classifyPersona(frases: string[]): Promise<PersonaClasificada[]> {
+  const lista = frases.map((f, i) => `${i + 1}. ${f}`).join('\n')
+  const prompt = `Clasifica la PERSONA GRAMATICAL de cada frase.
+
+- "segunda": la frase se dirige al lector. Señales: tú, te, ti, tu, tus, contigo, o un verbo en 2.ª persona ("eres", "tienes", "puedes", "deja de", "mira").
+- "tercera": la frase habla de la gente en general, sin dirigirse a nadie. Señales: "el que", "quien", "uno", "nadie", "muchos", "hay quien", o impersonal con "se" ("se puede", "se nota").
+
+Fíjate solo en la GRAMÁTICA, no en el tono. Devuelve una entrada por frase, con la palabra exacta que lo delata.
+
+${lista}`
+
+  const out = JSON.parse(await generarTexto(prompt, {
+    generationConfig: {
+      temperature: 0,
+      responseMimeType: 'application/json',
+      responseSchema: PERSONA_SCHEMA as any,
+    },
+  })) as { n: number; persona: string; marca: string }[]
+
+  return frases.map((_, i) => {
+    const hit = out.find((o) => o.n === i + 1)
+    const persona: PersonaGramatical = hit?.persona === 'segunda' ? 'segunda' : 'tercera'
+    return { persona, marca: hit?.marca ?? '' }
+  })
+}
+
 /** Analiza una frase en su capa conceptual+simbólica (para matching con imágenes). */
 export async function analyzePhraseStructured(phrase: string): Promise<PhraseAnalysis> {
   const generationConfig = {

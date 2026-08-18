@@ -41,6 +41,13 @@ export interface Phrase {
   moodKeywords?: string[]
   createdAt?: string
   archived?: boolean  // retirada de la rotación, sin borrar (ver db.ts)
+  // Las dos columnas de NORMA de marca (2026-08-18). Una frase que no sea
+  // 'dos_tiempos' + 'tercera' no entra en el pool de publicación: ni /random, ni
+  // /recommend, ni el planificador del lote la proponen. Se muestran en el banco
+  // para que se vea cuál hay que reconvertir — sin el aviso, desaparecerían de la
+  // rotación en silencio. `undefined` = sin clasificar, que tampoco cumple.
+  estructura?: 'dos_tiempos' | 'un_golpe'
+  persona?: 'segunda' | 'tercera'
 }
 
 export interface ImageItem {

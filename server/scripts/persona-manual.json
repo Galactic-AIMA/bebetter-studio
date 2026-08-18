@@ -1,0 +1,22 @@
+[
+  {
+    "id": "e9b80a0d-6d56-4b04-b13f-d57b4cc80e94",
+    "persona": "segunda",
+    "porque": "«si presionas… terminas matando» — 2.ª del singular, inequívoca. La heurística falló porque su lista de verbos no incluía 'presionas' ni 'terminas'."
+  },
+  {
+    "id": "6a2bf57c-23fc-47b0-95e6-017d18630799",
+    "persona": "segunda",
+    "porque": "«el desastre que intentas evitar» — 2.ª del singular. 'intentas' no estaba en la lista."
+  },
+  {
+    "id": "159f93b4-ebba-4d1b-9ec4-13ac87232a8a",
+    "persona": "segunda",
+    "porque": "«si enfrentas resistencia… para que aprendas» — dos verbos en 2.ª. Ninguno estaba en la lista."
+  },
+  {
+    "id": "8a53e835-42f3-4aa7-b38b-b5b083df70ea",
+    "persona": "segunda",
+    "porque": "«No lo ves en su cuenta, lo ves en lo que entrega» — 'ves' es 2.ª inequívoca (la 3.ª sería 've'). Arranca en impersonal y cambia de persona a mitad: por eso la heurística la leyó como tercera."
+  }
+]

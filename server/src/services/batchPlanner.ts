@@ -3,6 +3,7 @@ import { cosine, rerankScore } from '../utils/matching'
 import { ImageAnalysis } from './geminiService'
 import { getAllAudioMeta, getRecentAudio } from './audioMetadata'
 import { bestAudio, noteChosen, RotationState } from './audioMatching'
+import { EN_NORMA_SQL } from '../utils/norma'
 
 /**
  * Planificador del batch "por cantidad" (rediseño 2026-07-25).
@@ -73,9 +74,11 @@ function vec(b: Buffer): Float32Array {
  * Arma un lote de `count` piezas emparejando frases↔imágenes (+ audio por mood).
  */
 export function planBatch(driver: BatchDriver, count: number, allowRepeat: boolean): PlannedPair[] {
+  // Solo frases EN NORMA: es el planificador del que tira la automatizacion, y
+  // una frase fuera de norma no se publicaria nunca. Ver `utils/norma.ts`.
   const phrases = db.prepare(
     `SELECT id, text, author, usage_count, embedding, nivel_energia, paleta, mood_category
-     FROM phrases WHERE embedding IS NOT NULL AND archived = 0
+     FROM phrases WHERE embedding IS NOT NULL AND archived = 0 AND ${EN_NORMA_SQL}
      ORDER BY usage_count ASC, created_at DESC`
   ).all() as PhraseRow[]
   const images = db.prepare(

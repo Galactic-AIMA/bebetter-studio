@@ -2,12 +2,14 @@ import { Router } from 'express'
 import { v4 as uuidv4 } from 'uuid'
 import {
   analyzePhraseStructured,
+  classifyPersona,
   buildPhraseDocument,
   embedText,
   ImageAnalysis,
 } from '../services/geminiService'
 import { cosine, rerankScore } from '../utils/matching'
 import db from '../db'
+import { EN_NORMA_SQL } from '../utils/norma'
 
 const router = Router()
 
@@ -28,17 +30,25 @@ router.get('/', (req, res) => {
     analyzedAt: p.analyzed_at ?? undefined,
     createdAt: p.created_at ?? undefined,
     archived: p.archived === 1 || undefined,
+    // Las dos columnas de norma viajan al cliente para que el banco pueda
+    // distinguir de un vistazo qué frase entra en la rotación y cuál no. NO se
+    // ocultan aquí: hay 57 fuera de norma y esconderlas sin darle a David una
+    // forma de verlas convertiria la reconversión por tandas en un trabajo a ciegas.
+    estructura: p.estructura ?? undefined,
+    persona: p.persona ?? undefined,
   }))
   res.json(phrases)
 })
 
 // GET /api/phrases/random
 router.get('/random', (_req, res) => {
+  // Solo frases EN NORMA (ver `utils/norma.ts`): las de un golpe o en segunda
+  // persona no se publican, así que tampoco se proponen.
   // Preferir frases ya vectorizadas para que el matching de imágenes funcione
   const analyzed = db.prepare(
-    `SELECT * FROM phrases WHERE embedding IS NOT NULL AND archived = 0 ORDER BY RANDOM() LIMIT 1`
+    `SELECT * FROM phrases WHERE embedding IS NOT NULL AND archived = 0 AND ${EN_NORMA_SQL} ORDER BY RANDOM() LIMIT 1`
   ).get() as any
-  const row = analyzed ?? db.prepare(`SELECT * FROM phrases WHERE archived = 0 ORDER BY RANDOM() LIMIT 1`).get() as any
+  const row = analyzed ?? db.prepare(`SELECT * FROM phrases WHERE archived = 0 AND ${EN_NORMA_SQL} ORDER BY RANDOM() LIMIT 1`).get() as any
 
   if (!row) return res.status(404).json({ error: 'No phrases found' })
 
@@ -150,7 +160,7 @@ router.post('/recommend', async (req, res) => {
   try { imgAnalysis = imgRow.analysis_json ? JSON.parse(imgRow.analysis_json) : null } catch (_) { /* ignore */ }
 
   const phrases = db.prepare(
-    `SELECT id, embedding, nivel_energia, paleta FROM phrases WHERE embedding IS NOT NULL AND archived = 0`
+    `SELECT id, embedding, nivel_energia, paleta FROM phrases WHERE embedding IS NOT NULL AND archived = 0 AND ${EN_NORMA_SQL}`
   ).all() as any[]
 
   const scores = phrases
@@ -190,6 +200,7 @@ router.post('/embed-all', async (req, res) => {
     UPDATE phrases SET descripcion_mood = @descripcion_mood, nivel_energia = @nivel_energia,
       paleta = @paleta, mood_category = @mood_category, embedding = @embedding WHERE id = @id
   `)
+  const updPersona = db.prepare(`UPDATE phrases SET persona = ? WHERE id = ? AND persona IS NULL`)
 
   let processed = 0
   const errors: string[] = []
@@ -198,6 +209,18 @@ router.post('/embed-all', async (req, res) => {
     try {
       const analysis = await analyzePhraseStructured(phrase.text)
       const embedding = await embedText(buildPhraseDocument(analysis))
+
+      // La persona gramatical se marca aquí porque vectorizar es el paso por el
+      // que pasa TODA frase antes de poder ser elegida: si no se hiciera, una
+      // frase nueva entraría con `persona = NULL` y quedaría fuera del pool sin
+      // que nadie se enterara. Solo se escribe si está vacía, para no pisar lo
+      // que se decidió a mano en `scripts/persona-manual.json`.
+      try {
+        const [p] = await classifyPersona([phrase.text])
+        updPersona.run(p.persona, phrase.id)
+      } catch (e: any) {
+        errors.push(`${phrase.id}: persona no clasificada (${e.message})`)
+      }
       update.run({
         id: phrase.id,
         descripcion_mood: analysis.mood,
@@ -213,7 +236,15 @@ router.post('/embed-all', async (req, res) => {
     }
   }
 
-  res.json({ processed, total: phrases.length, errors })
+  // La `estructura` NO se clasifica aquí: es semántica y Gemini falló en el 15%
+  // de 139 al intentarlo (por eso existe la clasificación a mano). Se marca
+  // aparte, y mientras tanto la frase se queda fuera del pool. Se informa para
+  // que el agujero sea visible en vez de silencioso.
+  const sinEstructura = (db.prepare(
+    `SELECT COUNT(*) n FROM phrases WHERE archived = 0 AND estructura IS NULL`
+  ).get() as any).n as number
+
+  res.json({ processed, total: phrases.length, errors, sinEstructura })
 })
 
 export default router

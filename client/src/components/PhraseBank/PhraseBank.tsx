@@ -12,6 +12,18 @@ function esNueva(p: Phrase): boolean {
   return !Number.isNaN(t) && Date.now() - t < DIAS_NUEVA * 24 * 60 * 60 * 1000
 }
 
+/**
+ * Por qué una frase se queda fuera de la rotación. Espejo de `fueraDeNorma()` del
+ * servidor (`utils/norma.ts`), que es quien decide de verdad: aquí solo se pinta.
+ * Sin clasificar tampoco cumple — es la dirección segura, pero hay que verlo.
+ */
+function motivosFueraDeNorma(p: Phrase): string[] {
+  const motivos: string[] = []
+  if (p.estructura !== 'dos_tiempos') motivos.push(p.estructura ? 'un golpe' : 'sin clasificar')
+  if (p.persona !== 'tercera') motivos.push(p.persona ? 'segunda persona' : 'persona sin marcar')
+  return motivos
+}
+
 function extractAuthor(line: string): { text: string; author?: string } {
   // 1. “(cualquier cosa - Fuente: Meditaciones)” o “(Fuente: Meditaciones)”
   const fuenteMatch = line.match(/^(.*?)\s*\(.*?[Ff]uente:\s*([^)]+)\)\s*$/)
@@ -70,6 +82,7 @@ export default function PhraseBank() {
   const [preview, setPreview] = useState<{ text: string; author?: string }[]>([])
   const [importing, setImporting] = useState(false)
   const [hideUsed, setHideUsed] = useState(false)
+  const [soloFueraDeNorma, setSoloFueraDeNorma] = useState(false)
   const [analyzeResult, setAnalyzeResult] = useState<string | null>(null)
   const dragId = useRef<string | null>(null)
   const dragOverId = useRef<string | null>(null)
@@ -335,6 +348,25 @@ export default function PhraseBank() {
         </p>
       )}
 
+      {/* Fuera de norma: el dato existe desde el 2026-08-18 y decide qué se
+          publica, así que tiene que verse. Sin este contador, el pool baja de
+          118 a 61 y la app no lo dice en ninguna parte. */}
+      {(() => {
+        const fuera = phrases.filter((p) => motivosFueraDeNorma(p).length > 0).length
+        if (!fuera) return null
+        return (
+          <button
+            onClick={() => setSoloFueraDeNorma(!soloFueraDeNorma)}
+            className="text-xs text-bone-700 hover:text-bone-500 transition-colors text-left"
+            title="Un golpe o segunda persona: fuera de la rotación hasta reconvertirlas"
+          >
+            {soloFueraDeNorma
+              ? `+ Mostrar todas (${phrases.length})`
+              : `○ ${fuera} fuera de norma · ${phrases.length - fuera} en rotación`}
+          </button>
+        )
+      })()}
+
       {/* Toggle ocultar usadas */}
       {phrases.some((p) => (p.usageCount ?? 0) > 0) && (
         <button
@@ -352,7 +384,9 @@ export default function PhraseBank() {
       {/* Lista de frases */}
       <div className="flex flex-col gap-2">
         {(() => {
-          const filtered = phrases.filter((p) => !hideUsed || (p.usageCount ?? 0) === 0)
+          const filtered = phrases
+            .filter((p) => !hideUsed || (p.usageCount ?? 0) === 0)
+            .filter((p) => !soloFueraDeNorma || motivosFueraDeNorma(p).length > 0)
           const hasRecs = compatiblePhraseIds.length > 0
           // El orden responde a "¿cuál produzco ahora?":
           //  - con una imagen activa manda la afinidad (lo que encaja con lo que
@@ -402,6 +436,14 @@ export default function PhraseBank() {
                   )}
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
+                  {motivosFueraDeNorma(phrase).length > 0 && (
+                    <span
+                      className="text-[9px] uppercase tracking-wider text-neon-red/90 border border-neon-red/40 rounded px-1 py-0.5"
+                      title={`Fuera de norma (${motivosFueraDeNorma(phrase).join(' + ')}): no entra en la rotacion ni la propone el lote`}
+                    >
+                      fuera
+                    </span>
+                  )}
                   {esNueva(phrase) && (
                     <span
                       className="text-[9px] uppercase tracking-wider text-gold-500 border border-gold-500/40 rounded px-1 py-0.5"
