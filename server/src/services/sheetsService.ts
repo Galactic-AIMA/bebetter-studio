@@ -104,6 +104,55 @@ export async function appendQueueRows(rows: QueueRow[]): Promise<void> {
   })
 }
 
+/**
+ * Cambia campos de UNA fila de la cola, buscándola por su `id`.
+ *
+ * Hasta ahora el servicio solo sabía **leer y añadir**: el estado de una fila lo
+ * escribía siempre n8n (`Update Status` de `[Pub]`). Eso bastaba mientras la
+ * decisión de aprobar viviera en Telegram, y deja de bastar en cuanto se aprueba
+ * desde la app — que es a donde va la pantalla de revisión de la Fase 5.
+ *
+ * Escribe **solo los campos que se le pasan**: la fila la comparten la app y n8n,
+ * y reescribirla entera pisaría lo que el otro acabe de poner (`telegramMsgId`,
+ * `attempts`, `mediaId`…). Por eso actualiza celda a celda y no la fila completa.
+ *
+ * Devuelve `false` si no encuentra el `id`, en vez de lanzar: quien llama suele
+ * estar reconciliando y una fila que ya no está no es un error.
+ */
+export async function updateQueueRowStatus(
+  queueId: string,
+  cambios: Partial<Pick<QueueRow, 'status' | 'captionIG' | 'ytMeta' | 'error' | 'publishedAt' | 'mediaId' | 'permalink' | 'attempts'>>
+): Promise<boolean> {
+  const campos = Object.keys(cambios) as (keyof QueueRow)[]
+  if (campos.length === 0) return true
+
+  const sheets = getSheets()
+  const spreadsheetId = requireSheetId()
+
+  // Los ids van en la columna A. Se pide solo esa columna: la cola crece y traerse
+  // las 14 columnas para localizar una fila es tráfico tirado.
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `${COLA_SHEET}!A2:A`,
+  })
+  const idx = (res.data.values || []).findIndex((r) => (r[0] ?? '') === queueId)
+  if (idx === -1) return false
+
+  const fila = idx + 2  // +1 por el header, +1 porque Sheets cuenta desde 1
+  const data = campos.map((campo) => {
+    const col = QUEUE_COLUMNS.indexOf(campo)
+    if (col === -1) throw new Error(`Columna desconocida en la cola: ${String(campo)}`)
+    const letra = String.fromCharCode(65 + col)  // 14 columnas: no pasa de la N
+    return { range: `${COLA_SHEET}!${letra}${fila}`, values: [[cambios[campo as keyof typeof cambios] ?? '']] }
+  })
+
+  await sheets.spreadsheets.values.batchUpdate({
+    spreadsheetId,
+    requestBody: { valueInputOption: 'RAW', data },
+  })
+  return true
+}
+
 /** Lee toda la pestaña "config" como mapa key→value. */
 export async function readConfigMap(): Promise<Map<string, string>> {
   const sheets = getSheets()
