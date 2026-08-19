@@ -35,6 +35,18 @@ function puedeCaerAPago(tier: GeminiTier): boolean {
   return tier === 'free' && !!config.google.apiKeyFree && !!config.google.apiKey
 }
 
+/**
+ * Topes de red. Sin ellos, un `fetch` que abre conexión y no recibe respuesta espera
+ * PARA SIEMPRE — pasó el 2026-08-19: `/api/phrases/embed-all` se quedó clavado en la
+ * frase 9 de 28 sin error, sin log y sin devolver nunca, y el lote entero con él.
+ *
+ * Un `AbortError` NO es un 429, así que `withRetry` no lo reintenta: sube tal cual y
+ * quien llama lo anota y pasa a la siguiente. Es lo que se quiere — perder una frase
+ * en voz alta es infinitamente mejor que colgar las veintiocho en silencio.
+ */
+const TOPE_EMBED_MS = 90_000
+const TOPE_TEXTO_MS = 180_000
+
 async function withRetry<T>(fn: () => Promise<T>, retries = 3, delayMs = 8000): Promise<T> {
   try {
     return await fn()
@@ -488,6 +500,7 @@ async function generarTexto(prompt: string, opts: GenOpts = {}): Promise<string>
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify(cuerpo),
+        signal: AbortSignal.timeout(TOPE_TEXTO_MS),
       })
       if (!r.ok) {
         const e: any = new Error(`Vertex ${r.status}: ${(await r.text()).slice(0, 400)}`)
@@ -548,6 +561,7 @@ async function embedTextAiStudio(text: string, taskType: TaskType): Promise<Floa
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content: { parts: [{ text }] }, taskType }),
+      signal: AbortSignal.timeout(TOPE_EMBED_MS),
     })
     if (!r.ok) {
       const err = await r.text()
@@ -577,6 +591,7 @@ async function embedTextVertex(text: string, taskType: TaskType): Promise<Float3
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ instances: [{ content: text, task_type: taskType }] }),
+      signal: AbortSignal.timeout(TOPE_EMBED_MS),
     })
     if (!r.ok) {
       const err = await r.text()

@@ -224,7 +224,13 @@ router.post('/embed-all', async (req, res) => {
     const placeholders = only.map(() => '?').join(',')
     query += ` WHERE id IN (${placeholders})`
   } else if (!force) {
-    query += ` WHERE embedding IS NULL OR descripcion_mood IS NULL`
+    // `embedding_texto` va en la lista a propósito (2026-08-19). Es el vector del
+    // TEXTO CRUDO, y es el único que compara el emparejador de audio contra la frase
+    // de origen de un corte. Una frase que consiguió su `embedding` antes de que esa
+    // columna existiera se quedaba fuera del emparejamiento PARA SIEMPRE: entraba al
+    // pool, salía elegida y se publicaba sin música, sin que nada lo dijera. Apareció
+    // una así, del 2026-05-17.
+    query += ` WHERE embedding IS NULL OR descripcion_mood IS NULL OR embedding_texto IS NULL`
   }
   const phrases = (only ? (await db.prepare(query).all(...only)) : (await db.prepare(query).all())) as any[]
 
