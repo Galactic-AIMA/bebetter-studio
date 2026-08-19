@@ -86,6 +86,13 @@ export const config = {
   // variable es todo el rollback — `kieService` se queda intacto.
   imageBackend: (process.env.IMAGE_BACKEND || 'kie') as 'kie' | 'vertex',
 
+  // Fondos con IA por delante del banco en los lotes (2026-08-18, decisión de David).
+  // Una imagen hecha PARA esa frase gana a la menos mala de 263. Se apaga poniendo
+  // IA_PRIMERO=false, y entonces manda el banco como hasta ahora — el planificador
+  // sigue eligiendo una imagen para cada par en los dos casos, así que apagarlo no
+  // deja piezas sin fondo.
+  iaPrimero: process.env.IA_PRIMERO !== 'false',
+
   pinterest: {
     appId: process.env.PINTEREST_APP_ID || '',
     appSecret: process.env.PINTEREST_APP_SECRET || '',

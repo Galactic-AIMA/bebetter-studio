@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid'
 import db from '../db'
 import { planBatch, BatchDriver, PlannedPair } from './batchPlanner'
+import { generarFondoParaFrase, iaPrimeroActivo } from './aiImageService'
 import { generateVideo } from './videoGenerator'
 import { enqueue } from './queueService'
 import { PRESETS } from '../text/presets'
@@ -148,6 +149,23 @@ async function generarTodas(
   for (const par of pares) {
     try {
       const cfg = configDePieza(par, opts)
+
+      // FONDO CON IA, a medida de esta frase (2026-08-18). Se genera aquí y no al
+      // planificar por la misma regla que gobierna los copies y el contador de uso:
+      // no se gasta hasta que se decide sacar la pieza, así que proponer un lote
+      // sigue siendo gratis.
+      //
+      // Si falla —cuota, red, filtro de contenido— se queda la imagen del banco que
+      // el planificador ya eligió. Por eso el planificador SIGUE emparejando aunque
+      // mande la IA: es el respaldo, y sin él un fallo tumbaría la pieza entera.
+      if (iaPrimeroActivo()) {
+        const fondo = await generarFondoParaFrase(par.phraseText, cfg.text.position.y)
+        if (fondo) {
+          cfg.imagePath = fondo.localPath
+          ;(cfg as any).imageId = fondo.filename
+        }
+      }
+
       const id = uuidv4()
       const base = par.phraseText.slice(0, 60).replace(/[\\/:*?"<>|]/g, '').trim() || 'reel'
       const { filename, localPath, publicUrl } = await enqueue(() => generateVideo(cfg as any, `${base}_${id.slice(0, 8)}`))

@@ -2,6 +2,7 @@ import { Router } from 'express'
 import fs from 'fs'
 import path from 'path'
 import { config } from '../config'
+import { subirMedia, CLAVE_IMAGENES } from '../services/mediaStore'
 import db from '../db'
 import {
   analyzePhraseStructured,
@@ -13,6 +14,7 @@ import {
 import { generateImage, downloadImage, KieAspect } from '../services/kieService'
 import { generateImage as generateImageVertex } from '../services/vertexImageService'
 import { invalidateImageCache } from './imageTags'
+import { logError } from '../services/logService'
 
 const router = Router()
 
@@ -133,6 +135,17 @@ router.post('/generate', async (req, res) => {
     } else {
       const resultUrl = await generateImage({ prompt, aspectRatio: aspect, resolution: '2K', outputFormat: 'png' })
       await downloadImage(resultUrl, outPath)
+    }
+
+    // 2b. Subir al banco de R2 (Fase 1). Sin esto la imagen solo existe en el disco
+    // de David: el lote en la nube la elegiría —la fila está en la base compartida—
+    // y luego no encontraría el archivo para renderizar. Best-effort a propósito: si
+    // R2 falla, la imagen ya está generada y en local, y la sube después el script
+    // `subir-banco-a-r2.ts`, que es idempotente.
+    try {
+      await subirMedia(CLAVE_IMAGENES, filename, outPath)
+    } catch (e: any) {
+      logError('s3', `No se pudo subir ${filename} a R2`, e.message)
     }
 
     // 3. Analizar + vectorizar (mismo pipeline que el banco) para que entre al matching

@@ -4,6 +4,7 @@ import fs from 'fs'
 import { TextConfig, ImageVariant, WatermarkConfig, WatermarkPosition } from '../types'
 import { config } from '../config'
 import { buildScrimFilter } from './videoGenerator'
+import { rutaLocal, CLAVE_IMAGENES } from './mediaStore'
 import { resolveFontFile, resolveItalicFontFile, toFFmpegPath, measurerFor, watermarkFontFile } from '../text/fontMeasure'
 import { wrapWith } from '../text/wrap'
 
@@ -193,8 +194,12 @@ export async function generateImage(opts: ImageGenerateOptions): Promise<ImageGe
   const wmPos = wm?.position ?? 'right'
   const wmY = wm?.y ?? 90
 
+  // Misma resolución que en el vídeo: `imagePath` llega como ruta absoluta del
+  // servidor y eso deja de valer cuando el render no ocurre donde vive el banco.
+  const imagePath = (await rutaLocal(CLAVE_IMAGENES, path.basename(opts.imagePath))) ?? opts.imagePath
+
   return new Promise((resolve, reject) => {
-    const cmd = ffmpeg(opts.imagePath)
+    const cmd = ffmpeg(imagePath)
 
     if (wmEnabled && wmType === 'text') {
       const wmText = (wm!.text ?? '@bebetter.path').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/:/g, '\\:')

@@ -3,6 +3,7 @@ import path from 'path'
 import fs from 'fs'
 import { VideoConfig, WatermarkPosition, TextEffect } from '../types'
 import { config } from '../config'
+import { rutaLocal, CLAVE_AUDIO, CLAVE_IMAGENES } from './mediaStore'
 import db from '../db'
 import { resolveFontFile, resolveItalicFontFile, toFFmpegPath, wrapTextServer, watermarkFontFile } from '../text/fontMeasure'
 
@@ -89,10 +90,28 @@ function resolveItalicFontPath(fontName: string): string | null {
 
 // Resuelve la pista de audio de fondo dentro de data/audio. Devuelve null si
 // no hay pista configurada o el archivo no existe (el video se genera sin audio).
-function resolveAudioPath(audioTrack?: string): string | null {
+/**
+ * Ruta local de la pista, bajándola de R2 si el disco no la tiene (Fase 1).
+ *
+ * En la máquina de David el banco está entero en `data/audio` y no se descarga
+ * nada; en el contenedor no hay banco, y sin esto los reels salían mudos.
+ */
+async function resolveAudioPath(audioTrack?: string): Promise<string | null> {
   if (!audioTrack) return null
-  const p = path.join(config.paths.audio, audioTrack)
-  return fs.existsSync(p) ? p : null
+  return rutaLocal(CLAVE_AUDIO, audioTrack)
+}
+
+/**
+ * Ruta local de la imagen de fondo. `cfg.imagePath` llega del cliente como ruta
+ * ABSOLUTA del servidor —el listado se la dio así—, y eso deja de valer en cuanto
+ * el render no ocurre en la misma máquina que el banco. Se toma como pista: manda
+ * el nombre del archivo, que sí identifica a la imagen en cualquier parte.
+ */
+async function resolveImagePath(imagePath: string): Promise<string> {
+  const local = await rutaLocal(CLAVE_IMAGENES, path.basename(imagePath))
+  // Si no aparece ni en disco ni en R2 se devuelve lo que vino: que falle FFmpeg
+  // con el nombre a la vista es más diagnosticable que un null aguas abajo.
+  return local ?? imagePath
 }
 
 /**
@@ -164,7 +183,8 @@ export async function generateVideo(
 
   const { width, height } = cfg.resolution
   const { text, transition, transitionDuration, duration } = cfg
-  const audioPath = resolveAudioPath(cfg.audioTrack)
+  const audioPath = await resolveAudioPath(cfg.audioTrack)
+  const imagePath = await resolveImagePath(cfg.imagePath)
 
   const maxW = Math.round((text.maxWidth / 100) * width)
   const centerY = Math.round((text.position.y / 100) * height)
@@ -277,7 +297,7 @@ export async function generateVideo(
   const wmY = wm?.y ?? 90
 
   return new Promise((resolve, reject) => {
-    const cmd = ffmpeg(cfg.imagePath).inputOptions(['-loop 1', `-t ${duration}`])
+    const cmd = ffmpeg(imagePath).inputOptions(['-loop 1', `-t ${duration}`])
 
     // Cuando el watermark de imagen usa complexFilter, el mapeo automático de
     // streams se desactiva, así que el audio se debe plegar dentro del grafo.
