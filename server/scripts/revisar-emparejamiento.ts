@@ -21,20 +21,20 @@ function vec(b: Buffer | null): Float32Array | null {
   return new Float32Array(b.buffer, b.byteOffset, b.byteLength / 4)
 }
 
-function main() {
+async function main() {
   const muestra = Number(process.argv[2]) || 12
-  const frases = db.prepare(
+  const frases = (await db.prepare(
     `SELECT id, text, embedding_texto FROM phrases
      WHERE embedding_texto IS NOT NULL AND archived = 0`
-  ).all() as { id: string; text: string; embedding_texto: Buffer }[]
+  ).all()) as { id: string; text: string; embedding_texto: Buffer }[]
 
-  const meta = [...getAllAudioMeta().values()]
-  const fuentes = getSourcesByTrack()
+  const meta = [...(await getAllAudioMeta()).values()]
+  const fuentes = await getSourcesByTrack()
   const enPool = meta.filter((m) => (fuentes.get(m.filename) ?? []).some((f) => f.sourceEmbedding))
   console.log(`${frases.length} frases · ${enPool.length} cortes en el pool\n`)
 
   // Igual que un lote: la rotación se arrastra entre elecciones.
-  const reciente = getRecentAudio(3)
+  const reciente = await getRecentAudio(3)
   const rotation: RotationState = {
     extraUsage: new Map(),
     recentTextures: reciente.textures,
@@ -80,4 +80,4 @@ function main() {
   for (const [f, n] of usados.slice(0, 8)) console.log(`  ${String(n).padStart(3)}  ${f}`)
 }
 
-main()
+main().catch((e) => { console.error('FALLO:', e.message); process.exit(1) })

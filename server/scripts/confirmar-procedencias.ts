@@ -17,10 +17,10 @@ import { confirmarProcedencia } from '../src/services/audioHarvest'
 
 async function main() {
   const force = process.argv.includes('--force')
-  const filas = db.prepare(
+  const filas = (await db.prepare(
     `SELECT source_url, source_phrase FROM audio_sources
      WHERE source_phrase IS NOT NULL${force ? '' : ' AND source_embedding IS NULL'}`
-  ).all() as { source_url: string; source_phrase: string }[]
+  ).all()) as { source_url: string; source_phrase: string }[]
 
   console.log(`${filas.length} procedencias a vectorizar\n`)
   let ok = 0
@@ -33,9 +33,9 @@ async function main() {
     }
   }
 
-  const enPool = db.prepare(
+  const enPool = (await db.prepare(
     `SELECT COUNT(DISTINCT filename) n FROM audio_sources WHERE source_embedding IS NOT NULL`
-  ).get() as { n: number }
+  ).get()) as { n: number }
   console.log(`${ok}/${filas.length} vectorizadas. Cortes en el pool: ${enPool.n}`)
 }
 
