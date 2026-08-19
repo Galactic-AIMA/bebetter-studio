@@ -1,12 +1,13 @@
 import { v4 as uuidv4 } from 'uuid'
 import db from '../db'
 import { planBatch, BatchDriver, PlannedPair } from './batchPlanner'
-import { generarFondoParaFrase, iaPrimeroActivo } from './aiImageService'
+import { generarFondoParaFrase, iaPrimeroActivo, repartoIA } from './aiImageService'
 import { generateVideo } from './videoGenerator'
 import { enqueue } from './queueService'
 import { PRESETS } from '../text/presets'
 import { config as appConfig } from '../config'
 import { logInfo, logError } from './logService'
+import { uploadVideoToS3 } from './s3Service'
 
 /**
  * Genera un lote ENTERO en el servidor, sin navegador.
@@ -146,11 +147,18 @@ async function generarTodas(
   pares: PlannedPair[],
   opts: Required<Pick<OpcionesLote, 'estilo' | 'duracion' | 'resolucion'>>
 ): Promise<void> {
-  for (const par of pares) {
+  // Reparto IA/banco del lote entero, decidido ANTES de empezar: necesita ver todos
+  // los scores para saber cuáles son los mejores emparejamientos del banco.
+  const conIA = iaPrimeroActivo() ? repartoIA(pares.map((p) => p.score)) : new Set<number>()
+  if (pares.length > 0) {
+    logInfo('generate', `Lote ${trabajo.id}: ${conIA.size}/${pares.length} con fondo de IA, ${pares.length - conIA.size} del banco`)
+  }
+
+  for (const [idx, par] of pares.entries()) {
     try {
       const cfg = configDePieza(par, opts)
 
-      // FONDO CON IA, a medida de esta frase (2026-08-18). Se genera aquí y no al
+      // FONDO CON IA para las piezas que toca (ver `repartoIA`). Se genera aquí y no al
       // planificar por la misma regla que gobierna los copies y el contador de uso:
       // no se gasta hasta que se decide sacar la pieza, así que proponer un lote
       // sigue siendo gratis.
@@ -158,7 +166,7 @@ async function generarTodas(
       // Si falla —cuota, red, filtro de contenido— se queda la imagen del banco que
       // el planificador ya eligió. Por eso el planificador SIGUE emparejando aunque
       // mande la IA: es el respaldo, y sin él un fallo tumbaría la pieza entera.
-      if (iaPrimeroActivo()) {
+      if (conIA.has(idx)) {
         const fondo = await generarFondoParaFrase(par.phraseText, cfg.text.position.y)
         if (fondo) {
           cfg.imagePath = fondo.localPath
@@ -170,12 +178,30 @@ async function generarTodas(
       const base = par.phraseText.slice(0, 60).replace(/[\\/:*?"<>|]/g, '').trim() || 'reel'
       const { filename, localPath, publicUrl } = await enqueue(() => generateVideo(cfg as any, `${base}_${id.slice(0, 8)}`))
 
+      // A R2 EN CUANTO SE RENDERIZA, no al aprobar (Fase 1, 2026-08-18).
+      //
+      // Una pieza de lote nace en `pendiente_revision` y puede quedarse ahí horas o
+      // días, y hasta ahora solo existía en el disco local: la subida vivía en
+      // `/queue`. Con OUTPUT_PATH en /tmp —que es lo que exige el contenedor— un
+      // reinicio se llevaría el lote entero por delante, dejando en la base 30 filas
+      // apuntando a rutas muertas. Y no avisaría: el fallo aparecería al abrir la
+      // revisión, no al ocurrir.
+      //
+      // Best-effort: si R2 falla, la pieza queda igual con su ruta local y `/queue`
+      // vuelve a intentarlo (`ensureR2AndThumbnail` sube si `s3_url` está vacío).
+      let s3Url: string | null = null
+      try {
+        s3Url = await uploadVideoToS3(localPath, filename)
+      } catch (e: any) {
+        logError('s3', `Lote ${trabajo.id}: ${filename} no subió a R2`, e.message)
+      }
+
       db.prepare(`
         INSERT INTO videos
-          (id, filename, title, description, tags, local_path, public_url,
+          (id, filename, title, description, tags, local_path, public_url, s3_url,
            phrase_id, viral, font, effect, resolution, config_extra, created_at, estado)
         VALUES
-          (@id, @filename, @title, '', '[]', @local_path, @public_url,
+          (@id, @filename, @title, '', '[]', @local_path, @public_url, @s3_url,
            @phrase_id, 0, @font, NULL, @resolution, @config_extra, @created_at, 'pendiente_revision')
       `).run({
         id,
@@ -183,6 +209,7 @@ async function generarTodas(
         title: base,
         local_path: localPath,
         public_url: publicUrl,
+        s3_url: s3Url,
         phrase_id: par.phraseId,
         font: cfg.text.font,
         resolution: `${opts.resolucion.width}x${opts.resolucion.height}`,

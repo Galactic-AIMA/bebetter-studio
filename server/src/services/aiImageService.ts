@@ -44,6 +44,40 @@ export function iaPrimeroActivo(): boolean {
   return config.iaPrimero
 }
 
+/**
+ * Qué piezas de un lote llevan fondo de IA y cuáles se quedan con el banco.
+ *
+ * David pidió 80/20 para empezar. La parte que no es obvia es CUÁLES son las 2 de
+ * cada 10 que van al banco, y sortearlas sería desaprovecharlo: a veces le tocaría
+ * una frase para la que el banco solo tiene una imagen mediocre, mientras la IA
+ * cubre otra que el banco bordaba.
+ *
+ * Así que no hay sorteo. Se ordenan las piezas por lo bien que las empareja el
+ * banco (`PlannedPair.score`, el coseno conceptual ya calculado por el planificador)
+ * y **el banco se queda sus mejores**. La IA cubre el resto, que es justo donde el
+ * banco flojea. Ninguna llamada de más y el reparto sale por donde tiene sentido.
+ *
+ * Devuelve el conjunto de ÍNDICES que deben generarse con IA.
+ */
+export function repartoIA(scores: number[], proporcion = config.iaProporcion): Set<number> {
+  const total = scores.length
+  if (total === 0 || proporcion <= 0) return new Set()
+  if (proporcion >= 1) return new Set(scores.map((_, i) => i))
+
+  const conIA = Math.round(total * proporcion)
+  const alBanco = total - conIA
+  if (alBanco <= 0) return new Set(scores.map((_, i) => i))
+
+  // Los `alBanco` índices con MEJOR score se quedan el banco; el resto, IA.
+  const mejores = scores
+    .map((score, i) => ({ score, i }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, alBanco)
+    .map((x) => x.i)
+  const sonDelBanco = new Set(mejores)
+  return new Set(scores.map((_, i) => i).filter((i) => !sonDelBanco.has(i)))
+}
+
 // ── Prompt de marca para FONDOS de reel (imagen simbólica SIN texto) ──────────
 // Distinto del carrusel (que integra texto). Aquí la imagen es el fondo sobre el
 // que FFmpeg pondrá la frase → debe quedar espacio negativo y NADA de texto.

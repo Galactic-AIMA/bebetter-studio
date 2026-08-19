@@ -93,6 +93,13 @@ export const config = {
   // deja piezas sin fondo.
   iaPrimero: process.env.IA_PRIMERO !== 'false',
 
+  // Qué proporción de cada lote lleva fondo generado con IA (2026-08-18). David
+  // pidió empezar en 80/20: de 10 reels, 8 de IA y 2 del banco. No es un sorteo —
+  // ver `repartoIA()` en aiImageService: el banco se queda las piezas donde SU
+  // match es mejor, así que las 2 del banco son sus dos mejores emparejamientos y
+  // la IA cubre justo donde el banco flojea.
+  iaProporcion: Math.min(1, Math.max(0, Number(process.env.IA_PROPORCION ?? '0.8'))),
+
   pinterest: {
     appId: process.env.PINTEREST_APP_ID || '',
     appSecret: process.env.PINTEREST_APP_SECRET || '',

@@ -134,7 +134,48 @@ export async function rutaLocal(prefijo: string, filename: string): Promise<stri
   }
 }
 
-/** Borra el caché de descargas. No toca el banco en disco ni R2. */
+/** Borra el caché de descargas entero. No toca el banco en disco ni R2. */
 export function limpiarCache(): void {
   try { fs.rmSync(CACHE, { recursive: true, force: true }) } catch { /* no existía */ }
+}
+
+/** Cuánto puede ocupar el caché antes de empezar a tirar lo más viejo. */
+const CACHE_MAX_BYTES = 500 * 1024 * 1024
+
+/**
+ * Recorta el caché por tamaño, tirando primero lo que hace más tiempo que no se usa.
+ *
+ * Hace falta porque el caché no se limita solo: en un contenedor de vida larga,
+ * pedir imágenes distintas acabaría bajando el banco entero (272 MB hoy, y crece con
+ * cada fondo de IA) sobre un /tmp que además comparte espacio con los renders.
+ * Tirar por antigüedad de acceso es lo correcto aquí: una pista sale en muchas
+ * piezas seguidas y conviene conservarla; una imagen se usa una vez y no vuelve.
+ */
+export function recortarCache(maxBytes = CACHE_MAX_BYTES): number {
+  if (!fs.existsSync(CACHE)) return 0
+  const ficheros: { ruta: string; tam: number; atime: number }[] = []
+  const recorrer = (dir: string) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const ruta = path.join(dir, e.name)
+      if (e.isDirectory()) recorrer(ruta)
+      else {
+        try {
+          const st = fs.statSync(ruta)
+          ficheros.push({ ruta, tam: st.size, atime: st.atimeMs })
+        } catch { /* desapareció */ }
+      }
+    }
+  }
+  recorrer(CACHE)
+
+  let total = ficheros.reduce((a, f) => a + f.tam, 0)
+  if (total <= maxBytes) return 0
+
+  ficheros.sort((a, b) => a.atime - b.atime) // el más viejo primero
+  let borrados = 0
+  for (const f of ficheros) {
+    if (total <= maxBytes) break
+    try { fs.unlinkSync(f.ruta); total -= f.tam; borrados++ } catch { /* ya no está */ }
+  }
+  return borrados
 }
