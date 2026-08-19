@@ -215,6 +215,14 @@ for (const sql of [
   // ni dejar el mensaje de Telegram sin el caption que hay que aprobar. Y de paso
   // los copies solo se pagan por lo aprobado: 30 llamadas menos por lote.
   `ALTER TABLE videos ADD COLUMN estado TEXT`,
+  // Segundo por el que empieza a sonar la pista (2026-08-18). Hasta ahora el audio
+  // entraba siempre desde el 0, y con las 12 pistas actuales daba igual: duran
+  // 10,102086 s clavadas, son recortes fijos y no hay de dónde elegir. Existe para
+  // poder subir temas de 30-40 s, donde arrancar en 0 se lleva la intro en vez del
+  // estribillo. Lo propone `mejorTramo()` midiendo la sonoridad segundo a segundo,
+  // y se puede corregir a mano: en algo orquestal que crece, el pico está al final
+  // y entrar justo ahí suena abrupto.
+  `ALTER TABLE audio_tracks ADD COLUMN offset_seg REAL`,
   // Id de la fila de la cola (Google Sheet) que generó este vídeo al encolarse.
   // Es el único hilo que une la pieza con lo que decide David EN TELEGRAM: n8n
   // escribe ahí `approved` o `rejected` (nodo `Parse Aprobacion` de `[Pub]`), y

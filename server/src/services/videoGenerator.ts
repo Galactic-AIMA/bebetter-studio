@@ -3,6 +3,7 @@ import path from 'path'
 import fs from 'fs'
 import { VideoConfig, WatermarkPosition, TextEffect } from '../types'
 import { config } from '../config'
+import db from '../db'
 import { resolveFontFile, resolveItalicFontFile, toFFmpegPath, wrapTextServer, watermarkFontFile } from '../text/fontMeasure'
 
 function wmXExpr(position: WatermarkPosition, isText = false): string {
@@ -92,6 +93,17 @@ function resolveAudioPath(audioTrack?: string): string | null {
   if (!audioTrack) return null
   const p = path.join(config.paths.audio, audioTrack)
   return fs.existsSync(p) ? p : null
+}
+
+/**
+ * Segundo por el que debe empezar a sonar la pista. Ver `audioSegment.ts`: con
+ * temas largos, arrancar en 0 se lleva la intro en vez del estribillo.
+ */
+function resolveAudioOffset(audioTrack?: string): number {
+  if (!audioTrack) return 0
+  const row = db.prepare(`SELECT offset_seg FROM audio_tracks WHERE filename = ?`).get(audioTrack) as any
+  const off = Number(row?.offset_seg ?? 0)
+  return Number.isFinite(off) && off > 0 ? off : 0
 }
 
 const AUDIO_FADE = 1 // segundos de fade in/out del audio de fondo
@@ -303,7 +315,13 @@ export async function generateVideo(
 
     // Audio de fondo: loop infinito (se recorta por -t) como último input.
     if (audioPath) {
-      cmd.input(audioPath).inputOptions(['-stream_loop -1'])
+      // `-ss` va como opción de ENTRADA (antes del input): busca sin decodificar
+      // todo lo anterior. Con `-stream_loop -1` la pista sigue repitiéndose si el
+      // reel dura más que lo que queda desde el offset.
+      const inOpts = ['-stream_loop -1']
+      const off = resolveAudioOffset(cfg.audioTrack)
+      if (off > 0) inOpts.push(`-ss ${off}`)
+      cmd.input(audioPath).inputOptions(inOpts)
       if (!audioInComplex) cmd.audioFilters(audioFilterChain(duration))
     }
 
