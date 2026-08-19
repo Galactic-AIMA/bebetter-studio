@@ -70,6 +70,9 @@ export const config = {
       //   gemini-2.5-flash-image = más rápido y barato, calidad menor
       imageLocation: process.env.VERTEX_IMAGE_LOCATION || 'global',
       imageModel: process.env.VERTEX_IMAGE_MODEL || 'gemini-3-pro-image',
+      // A quién se le pide cuando el principal no da hueco (429 de la cuota
+      // compartida). Vaciarlo desactiva el respaldo y el fallo sube tal cual.
+      imageModelRespaldo: process.env.VERTEX_IMAGE_MODEL_FALLBACK ?? 'gemini-2.5-flash-image',
       // Los modelos de texto 3.x tampoco están en us-central1: solo en `global`.
       // Los embeddings sí (y ahí es donde se validó que los vectores coinciden),
       // por eso son dos `location` distintas y no una.

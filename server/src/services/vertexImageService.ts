@@ -13,8 +13,12 @@ import { config } from '../config'
 //     1:1 → 1024x1024, 9:16 → 768x1344.
 //   · ⚠️ Los modelos de imagen SOLO responden en `global`, no en us-central1.
 //   · ⚠️ `gemini-3-pro-image` devuelve 429 con frecuencia (Dynamic Shared Quota:
-//     no hay cuota propia, se reparte capacidad entre todos). Medido: un 429
-//     seguido de un 200 al reintentar. Por eso el backoff no es opcional.
+//     no hay cuota propia, se reparte capacidad entre todos). Un 429 ahí NO
+//     significa "gastaste tu límite" sino "ahora no hay hueco", así que no depende
+//     de cuánto hayas generado y llega en cualquier momento.
+//     ⇒ Por eso hay CADENA DE MODELOS, no solo backoff: si el Pro no da hueco se
+//     genera con `gemini-2.5-flash-image`. Medido el 2026-08-18 con el mismo
+//     prompt: Pro 430,5 s (reintentos encadenados) contra flash 7,2 s.
 
 export type ImagenAspect = '9:16' | '4:5' | '1:1' | '16:9' | '3:4'
 
@@ -47,11 +51,11 @@ function auth(): GoogleAuth {
   return _auth
 }
 
-function endpoint(): string {
-  const { project, imageLocation, imageModel } = config.google.vertex
+function endpoint(modelo: string): string {
+  const { project, imageLocation } = config.google.vertex
   if (!project) throw new Error('VERTEX_PROJECT no está configurada')
   const host = imageLocation === 'global' ? 'aiplatform.googleapis.com' : `${imageLocation}-aiplatform.googleapis.com`
-  return `https://${host}/v1/projects/${project}/locations/${imageLocation}/publishers/google/models/${imageModel}:generateContent`
+  return `https://${host}/v1/projects/${project}/locations/${imageLocation}/publishers/google/models/${modelo}:generateContent`
 }
 
 async function parteImagen(ref: string) {
@@ -81,6 +85,23 @@ async function conReintento<T>(fn: () => Promise<T>, intentos = 4, esperaMs = 5_
   throw ultimo
 }
 
+/** Una llamada al modelo indicado, sin reintentos. */
+async function llamar(modelo: string, cuerpo: unknown): Promise<any> {
+  const { token } = await (await auth().getClient()).getAccessToken()
+  const r = await fetch(endpoint(modelo), {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(cuerpo),
+    signal: AbortSignal.timeout(300_000),
+  })
+  if (!r.ok) {
+    const err: any = new Error(`Vertex imagen ${r.status}: ${(await r.text()).slice(0, 400)}`)
+    err.status = r.status
+    throw err
+  }
+  return r.json()
+}
+
 export async function generateImage(opts: VertexImageOptions): Promise<VertexImageResult> {
   const partes: any[] = [{ text: opts.prompt }]
   if (opts.imageInput) {
@@ -93,21 +114,34 @@ export async function generateImage(opts: VertexImageOptions): Promise<VertexIma
     generationConfig: { imageConfig: { aspectRatio: opts.aspectRatio ?? '9:16' } },
   }
 
-  const json = await conReintento(async () => {
-    const { token } = await (await auth().getClient()).getAccessToken()
-    const r = await fetch(endpoint(), {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(cuerpo),
-      signal: AbortSignal.timeout(300_000),
-    })
-    if (!r.ok) {
-      const err: any = new Error(`Vertex imagen ${r.status}: ${(await r.text()).slice(0, 400)}`)
-      err.status = r.status
-      throw err
+  // Cadena de modelos: el bueno primero, el ligero cuando el bueno no da hueco.
+  //
+  // El primario solo se reintenta DOS veces, no cuatro. Insistirle a un modelo
+  // saturado deja de tener sentido en cuanto hay una alternativa que responde en
+  // segundos: medido el 2026-08-18 con el mismo prompt, `gemini-3-pro-image` tardó
+  // **430,5 s** (o sea, ciclos de reintento encadenados) y `gemini-2.5-flash-image`
+  // **7,2 s**. Sesenta veces. Y la calidad no es de otra categoría — el Pro sale más
+  // minimalista y el flash con más textura, pero los dos cumplen la norma de marca y
+  // ninguno mete texto.
+  const cadena = [config.google.vertex.imageModel, config.google.vertex.imageModelRespaldo]
+    .filter((m, i, a): m is string => !!m && a.indexOf(m) === i)
+
+  let json: any
+  let ultimo: any
+  for (const [i, modelo] of cadena.entries()) {
+    const esUltimo = i === cadena.length - 1
+    try {
+      json = await conReintento(() => llamar(modelo, cuerpo), esUltimo ? 3 : 2)
+      if (i > 0) console.log(`[vertex] ${cadena[0]} sin hueco; generado con ${modelo}`)
+      break
+    } catch (e: any) {
+      ultimo = e
+      // Solo se cambia de modelo por FALTA DE CAPACIDAD. Un 400 o un bloqueo del
+      // filtro de contenido fallarían igual en el otro y esconderían el motivo real.
+      if (e?.status !== 429 || esUltimo) throw e
     }
-    return r.json() as Promise<any>
-  })
+  }
+  if (!json) throw ultimo
 
   const parts = json?.candidates?.[0]?.content?.parts ?? []
   const inline = parts.map((p: any) => p.inlineData || p.inline_data).find((x: any) => x?.data)
