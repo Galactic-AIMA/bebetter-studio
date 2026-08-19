@@ -318,6 +318,25 @@ export const videosApi = {
   queue: (id: string) =>
     api.post<{ success: boolean; queueId: string }>(`/videos/${id}/queue`).then((r) => r.data),
   remove: (id: string) => api.delete(`/videos/${id}`),
+
+  // ── Cola de revisión (Fase 5) ──────────────────────────────────────────────
+  /** Lo que produjo un lote y todavía no ha mirado nadie. */
+  pendientes: () => api.get<VideoRecord[]>('/videos/pendientes').then((r) => r.data),
+  /**
+   * Descarta una pieza. `motivo: 'frase'` además ARCHIVA la frase: sin eso volvería
+   * a salir en el siguiente lote, porque el planificador ordena por `usage_count` y
+   * rechazar no lo toca.
+   */
+  reject: (id: string, motivo: 'imagen' | 'frase' | 'otro') =>
+    api.post<{ success: boolean; fraseArchivada: boolean }>(`/videos/${id}/reject`, { motivo })
+      .then((r) => r.data),
+  /**
+   * «Otra imagen»: descarta esta y rehace la MISMA frase con un fondo nuevo.
+   * Genera una imagen, así que tarda — de ahí el timeout largo.
+   */
+  rehacer: (id: string) =>
+    api.post<{ video: VideoRecord }>(`/videos/${id}/rehacer`, {}, { timeout: 10 * 60 * 1000 })
+      .then((r) => r.data.video),
 }
 
 export interface CadenceConfig {

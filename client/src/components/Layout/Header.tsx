@@ -1,10 +1,12 @@
-import { Film, Image, GalleryHorizontalEnd, HardDrive, Send, RotateCcw, ChevronDown, ScrollText, Clock, ListPlus, Music, BarChart3 } from 'lucide-react'
+import { Film, Image, GalleryHorizontalEnd, HardDrive, Send, RotateCcw, ChevronDown, ScrollText, Clock, ListPlus, Music, BarChart3, ClipboardCheck } from 'lucide-react'
 import { useRef, useEffect, useState } from 'react'
 import { useVideoStore } from '../../store/videoStore'
 import { ContentMode } from '../../store/videoStore'
 import LogsModal from '../Logs/LogsModal'
 import CadenceModal from '../Cadence/CadenceModal'
 import AudioTagsPanel from '../Audio/AudioTagsPanel'
+import ReviewPanel from '../Review/ReviewPanel'
+import { videosApi } from '../../api'
 
 interface Props {
   lastVideoId: string | null
@@ -22,6 +24,11 @@ export default function Header({ lastVideoId, lastImageId, isGenerating, toast, 
   const [showLogs, setShowLogs] = useState(false)
   const [showCadence, setShowCadence] = useState(false)
   const [showAudio, setShowAudio] = useState(false)
+  const [showReview, setShowReview] = useState(false)
+  // Cuántas piezas esperan revisión. Va en el Header porque un lote termina EN
+  // SEGUNDO PLANO: sin este número, David no tendría forma de enterarse de que hay
+  // 30 piezas esperando salvo abriendo el panel a ciegas.
+  const [pendientes, setPendientes] = useState(0)
   const envMenuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -33,6 +40,15 @@ export default function Header({ lastVideoId, lastImageId, isGenerating, toast, 
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [])
+
+  useEffect(() => {
+    const mirar = () => videosApi.pendientes().then((v) => setPendientes(v.length)).catch(() => {})
+    mirar()
+    // Cada minuto: un lote de 30 tarda bastante, así que el contador tiene que
+    // subir solo mientras David hace otra cosa.
+    const t = setInterval(mirar, 60_000)
+    return () => clearInterval(t)
+  }, [showReview])
 
   const hasResult = lastVideoId || lastImageId
   const busy = toast?.state === 'loading'
@@ -133,6 +149,19 @@ export default function Header({ lastVideoId, lastImageId, isGenerating, toast, 
         </button>
 
         <button
+          onClick={() => setShowReview(true)}
+          className="relative p-1.5 text-bone-700 hover:text-bone-500 transition-colors"
+          title={pendientes ? `${pendientes} pieza(s) esperando revisión` : 'Revisión del lote'}
+        >
+          <ClipboardCheck size={14} />
+          {pendientes > 0 && (
+            <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] px-1 flex items-center justify-center rounded-full bg-gold-500 text-carbon-900 text-[9px] font-bold tabular-nums">
+              {pendientes > 99 ? '99+' : pendientes}
+            </span>
+          )}
+        </button>
+
+        <button
           onClick={() => setShowAudio(true)}
           className="p-1.5 text-bone-700 hover:text-bone-500 transition-colors"
           title="Audio — energía y mood"
@@ -169,6 +198,7 @@ export default function Header({ lastVideoId, lastImageId, isGenerating, toast, 
       {showLogs && <LogsModal onClose={() => setShowLogs(false)} />}
       {showCadence && <CadenceModal onClose={() => setShowCadence(false)} />}
       {showAudio && <AudioTagsPanel onClose={() => setShowAudio(false)} />}
+      {showReview && <ReviewPanel onClose={() => setShowReview(false)} />}
     </header>
   )
 }
