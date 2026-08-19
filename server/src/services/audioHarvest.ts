@@ -5,6 +5,7 @@ import path from 'path'
 import { config } from '../config'
 import { embedText, readReelPhrase } from './geminiService'
 import { filenameDeAsset, upsertSource, setSourcePhrase, getSource } from './audioSources'
+import { setAudioDuracion } from './audioMetadata'
 
 /**
  * Cosecha de audio CON PROCEDENCIA (2026-08-18).
@@ -261,6 +262,10 @@ export async function harvestFromUrl(url: string): Promise<HarvestResult> {
 
     // Procedencia a medias: URL, archivo y metadatos sí, frase todavía no. Sin frase
     // vectorizada esta fila NO puntúa en el emparejamiento.
+    // La duración se guarda porque DECIDE la del reel (`utils/duracionReel.ts`), y
+    // medirla con ffprobe en cada elección de audio costaría un proceso por pieza.
+    if (dur > 0) setAudioDuracion(filename, dur)
+
     upsertSource({
       sourceUrl: limpia,
       filename,

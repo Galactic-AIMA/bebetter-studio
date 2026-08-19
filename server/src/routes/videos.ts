@@ -10,6 +10,7 @@ import { sendToWebhook, sendToApprovalWebhook } from '../services/webhookService
 import { appendQueueRows, QueueRow } from '../services/sheetsService'
 import { generateCopies } from '../services/geminiService'
 import { pickAudioForPhrase } from '../services/audioMatching'
+import { duracionSegunAudio } from '../utils/duracionReel'
 import { bumpAudioUsage } from '../services/audioMetadata'
 import { GenerateVideoRequest } from '../types'
 import { config } from '../config'
@@ -86,6 +87,15 @@ router.post('/generate', async (req, res) => {
       const pick = pickAudioForPhrase(phraseId)
       vidConfig.audioTrack = pick ? pick.filename : undefined
       if (pick) {
+        // El AUDIO manda la duración cuando la pista se eligió sola (2026-08-18).
+        // Solo en el carril automático: si David tecleó una duración en el editor y
+        // eligió pista a mano, esa decisión se respeta — este `if` ya está dentro de
+        // la rama "no eligió pista o pidió auto".
+        const dur = duracionSegunAudio(pick.duracionSeg, vidConfig.duration)
+        if (dur !== vidConfig.duration) {
+          logInfo('generate', `Duración ${vidConfig.duration}s → ${dur}s (la del corte: ${pick.duracionSeg}s)`)
+          vidConfig.duration = dur
+        }
         logInfo('generate', `Audio auto: ${pick.filename} (coseno ${pick.score.toFixed(3)} con «${pick.sourcePhrase}»)`)
       } else {
         // Silencio explícito: desde el 18-ago solo suenan cortes cosechados con su

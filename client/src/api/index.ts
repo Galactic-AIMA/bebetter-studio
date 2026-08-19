@@ -261,6 +261,9 @@ export interface AutoPick {
   audioArtist?: string | null
   /** Cuántos reels del nicho distintos usaron este tema. */
   reelsDelNicho?: number
+  duracionSeg?: number | null
+  /** Lo que durará el reel si se genera con esta pista (la marca el corte). */
+  duracionReel?: number
 }
 
 export const audioApi = {

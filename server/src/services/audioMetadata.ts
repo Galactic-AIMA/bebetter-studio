@@ -19,6 +19,8 @@ export interface AudioMeta {
   analyzedAt: string | null
   /** Corte al que se fusionó este por ser el mismo tema. null = no es duplicado. */
   mergedInto: string | null
+  /** Duración del corte en segundos. Decide la duración del reel. */
+  duracionSeg: number | null
 }
 
 interface Row {
@@ -30,6 +32,7 @@ interface Row {
   usage_count: number
   analyzed_at: string | null
   merged_into: string | null
+  duracion_seg: number | null
 }
 
 const toMeta = (r: Row): AudioMeta => ({
@@ -41,6 +44,7 @@ const toMeta = (r: Row): AudioMeta => ({
   usageCount: r.usage_count,
   analyzedAt: r.analyzed_at,
   mergedInto: r.merged_into,
+  duracionSeg: r.duracion_seg,
 })
 
 /** Todas las filas de audio_tracks, indexadas por filename. */
@@ -114,6 +118,14 @@ export function getRecentAudio(n: number): { tracks: string[]; textures: string[
     if (tex) textures.push(tex)
   }
   return { tracks, textures }
+}
+
+/** Guarda la duración medida del corte (la usa `duracionSegunAudio`). */
+export function setAudioDuracion(filename: string, seg: number): void {
+  db.prepare(
+    `INSERT INTO audio_tracks (filename, duracion_seg) VALUES (?, ?)
+     ON CONFLICT(filename) DO UPDATE SET duracion_seg = excluded.duracion_seg`
+  ).run(filename, Math.round(seg * 100) / 100)
 }
 
 /** +1 al usage_count (best-effort; crea la fila si no existía). */

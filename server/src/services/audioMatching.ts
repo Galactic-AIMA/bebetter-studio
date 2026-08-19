@@ -62,6 +62,8 @@ export interface AudioCandidate {
   moodCategory: string | null
   textura: string | null
   usageCount: number
+  /** Duración del corte. Desde el 18-ago decide cuánto dura el reel. */
+  duracionSeg: number | null
 }
 
 /** Estado de rotación que se arrastra entre elecciones consecutivas. */
@@ -160,6 +162,7 @@ export function bestAudio(
       moodCategory: m.moodCategory,
       textura: m.textura,
       usageCount: m.usageCount,
+      duracionSeg: m.duracionSeg,
     }
     ranked.push({ cand, rank: mejor.score + USAGE_WEIGHT * usageVariety })
   }

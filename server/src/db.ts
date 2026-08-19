@@ -294,6 +294,11 @@ for (const sql of [
   // `videos.config_extra` de reels ya publicados, y borrarlo dejaría el historial
   // sin resolver.
   `ALTER TABLE audio_tracks ADD COLUMN merged_into TEXT`,
+  // Duración del corte en segundos (2026-08-18). Se guarda en vez de medirla con
+  // ffprobe cada vez porque desde hoy DECIDE la duración del reel (ver
+  // `utils/duracionReel.ts`), o sea que se consulta en cada elección de audio y en
+  // cada pieza de un lote de 30.
+  `ALTER TABLE audio_tracks ADD COLUMN duracion_seg REAL`,
 ]) {
   try { db.exec(sql) } catch (_) { /* columna ya existe */ }
 }

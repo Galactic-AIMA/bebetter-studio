@@ -3,6 +3,7 @@ import { cosine, rerankScore } from '../utils/matching'
 import { ImageAnalysis } from './geminiService'
 import { getAllAudioMeta, getRecentAudio } from './audioMetadata'
 import { bestAudio, noteChosen, RotationState } from './audioMatching'
+import { duracionSegunAudio } from '../utils/duracionReel'
 import { EN_NORMA_SQL } from '../utils/norma'
 
 /**
@@ -32,6 +33,12 @@ export interface PlannedPair {
   audioSourcePhrase?: string
   /** Coseno frase↔frase de origen (0..1). */
   audioScore?: number
+  /**
+   * Duración de ESTA pieza, sacada de la del corte (2026-08-18). Va por par y no por
+   * lote porque cada frase se lleva un corte distinto: con una duración común, los
+   * cortes más cortos que el vídeo darían la vuelta al bucle y la costura se oye.
+   */
+  duracionSeg?: number
 }
 
 // Jitter al score para dar VARIEDAD entre "Proponer lote" sucesivos: mueve el
@@ -78,7 +85,13 @@ function vec(b: Buffer): Float32Array {
 /**
  * Arma un lote de `count` piezas emparejando frases↔imágenes (+ audio por mood).
  */
-export function planBatch(driver: BatchDriver, count: number, allowRepeat: boolean): PlannedPair[] {
+export function planBatch(
+  driver: BatchDriver,
+  count: number,
+  allowRepeat: boolean,
+  /** Duración de reserva, solo para los cortes cuya duración no esté medida. */
+  duracionLote = 10
+): PlannedPair[] {
   // Solo frases EN NORMA: es el planificador del que tira la automatizacion, y
   // una frase fuera de norma no se publicaria nunca. Ver `utils/norma.ts`.
   const phrases = db.prepare(
@@ -167,6 +180,7 @@ export function planBatch(driver: BatchDriver, count: number, allowRepeat: boole
       audioEnergia: audio?.energia ?? undefined,
       audioSourcePhrase: audio?.sourcePhrase ?? undefined,
       audioScore: audio?.score,
+      duracionSeg: audio ? duracionSegunAudio(audio.duracionSeg, duracionLote) : undefined,
     })
   }
   return out

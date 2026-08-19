@@ -14,6 +14,7 @@ import db from '../src/db'
 import { getAllAudioMeta, getRecentAudio } from '../src/services/audioMetadata'
 import { getSourcesByTrack } from '../src/services/audioSources'
 import { bestAudio, noteChosen, RotationState } from '../src/services/audioMatching'
+import { duracionSegunAudio, DURACION_MIN, DURACION_MAX } from '../src/utils/duracionReel'
 
 function vec(b: Buffer | null): Float32Array | null {
   if (!b || b.byteLength === 0) return null
@@ -42,12 +43,14 @@ function main() {
 
   const conteo = new Map<string, number>()
   const scores: number[] = []
+  const duraciones: number[] = []
   for (const [i, f] of frases.entries()) {
     const pick = bestAudio(meta, vec(f.embedding_texto), rotation, fuentes)
     if (!pick) { console.log(`✗ sin corte: ${f.text.slice(0, 50)}`); continue }
     noteChosen(rotation, pick)
     conteo.set(pick.filename, (conteo.get(pick.filename) ?? 0) + 1)
     scores.push(pick.score)
+    duraciones.push(duracionSegunAudio(pick.duracionSeg, 10))
     if (i < muestra) {
       console.log(`  "${f.text.replace(/\s+/g, ' ').slice(0, 66)}…"`)
       console.log(`     → ${pick.filename}  ${pick.score.toFixed(3)}`)
@@ -61,6 +64,18 @@ function main() {
   console.log(`\nReparto: ${usados.length} de ${enPool.length} cortes usados`)
   console.log(`Coseno medio del elegido: ${media.toFixed(3)}`)
   console.log(`El más repetido se lleva ${usados[0][1]} de ${scores.length} frases (${(100 * usados[0][1] / scores.length).toFixed(0)}%)`)
+  // Duración: cada pieza dura lo que su corte, acotada. Interesa cuántas tocan los
+  // topes, que es donde vuelve a haber bucle (suelo) o recorte (techo).
+  const alTecho = duraciones.filter((d) => d === DURACION_MAX).length
+  const alSuelo = duraciones.filter((d) => d === DURACION_MIN).length
+  const mediaDur = duraciones.reduce((a, b) => a + b, 0) / duraciones.length
+  console.log(
+    `\nDuración: media ${mediaDur.toFixed(1)}s · min ${Math.min(...duraciones)}s · max ${Math.max(...duraciones)}s`
+  )
+  console.log(`  recortadas al techo (${DURACION_MAX}s): ${alTecho}`)
+  console.log(`  estiradas al suelo (${DURACION_MIN}s, ahí SÍ habría bucle): ${alSuelo}`)
+  console.log(`  exactas a su corte: ${duraciones.length - alTecho - alSuelo}`)
+
   console.log('\nTop 8:')
   for (const [f, n] of usados.slice(0, 8)) console.log(`  ${String(n).padStart(3)}  ${f}`)
 }

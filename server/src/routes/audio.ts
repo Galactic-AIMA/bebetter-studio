@@ -7,6 +7,7 @@ import { config } from '../config'
 import { getAllAudioMeta, upsertAudioMeta } from '../services/audioMetadata'
 import { analyzeAudioStructured, MOOD_CATEGORIES, TEXTURE_CATEGORIES } from '../services/geminiService'
 import { pickAudioForPhrase } from '../services/audioMatching'
+import { duracionSegunAudio } from '../utils/duracionReel'
 import { harvestFromUrl, confirmarProcedencia } from '../services/audioHarvest'
 import { getSourcesByTrack, deleteSource } from '../services/audioSources'
 
@@ -107,6 +108,10 @@ router.get('/pick', (req, res) => {
       audioTitle: pick.audioTitle,
       audioArtist: pick.audioArtist,
       reelsDelNicho: pick.reelsDelNicho,
+      duracionSeg: pick.duracionSeg,
+      // Lo que va a durar el reel si se genera con esta pista: desde el 18-ago la
+      // marca el corte, así que el preview debe poder enseñarlo antes de generar.
+      duracionReel: duracionSegunAudio(pick.duracionSeg, 10),
     },
   })
 })

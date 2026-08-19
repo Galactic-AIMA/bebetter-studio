@@ -74,7 +74,10 @@ function configDePieza(par: PlannedPair, opts: Required<Pick<OpcionesLote, 'esti
   return {
     imageId: par.imageId,
     imagePath: `${appConfig.paths.images}/${par.imageId}`,
-    duration: opts.duracion,
+    // La duración la marca EL CORTE de esta pieza, no el lote (2026-08-18): cada
+    // frase se lleva un audio distinto, y con una duración común los cortes más
+    // cortos que el vídeo darían la vuelta al bucle y la costura se oye.
+    duration: par.duracionSeg ?? opts.duracion,
     transition: 'fadeBlack' as const,
     transitionDuration: 1,
     text: {
@@ -108,7 +111,7 @@ export function lanzarLote(opts: OpcionesLote): TrabajoLote {
   const duracion = opts.duracion ?? 10
   const resolucion = opts.resolucion ?? { width: 1080, height: 1920 }
 
-  const pares = planBatch(driver, opts.count, opts.allowRepeat === true)
+  const pares = planBatch(driver, opts.count, opts.allowRepeat === true, duracion)
 
   const trabajo: TrabajoLote = {
     id: uuidv4(),
