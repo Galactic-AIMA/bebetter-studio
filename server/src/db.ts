@@ -299,6 +299,20 @@ for (const sql of [
   // `utils/duracionReel.ts`), o sea que se consulta en cada elección de audio y en
   // cada pieza de un lote de 30.
   `ALTER TABLE audio_tracks ADD COLUMN duracion_seg REAL`,
+  // Modelo que generó la imagen (2026-08-19). NULL = del banco, no la hizo una IA.
+  //
+  // Existe para poder DECIDIR CON DATOS entre `gemini-3-pro-image` y
+  // `gemini-2.5-flash-image` en vez de por intuición. El 18-ago se midió que el Pro
+  // tardaba 430,5 s contra 7,2 s del flash con el mismo prompt —cuota compartida
+  // saturada— y que la calidad no era de otra categoría, solo de otro estilo: el Pro
+  // más minimalista, el flash con más textura. Con una imagen de cada no se decide
+  // nada, pero `publications` ya permite cruzar rendimiento por imagen, así que
+  // guardando esta columna un mes de publicaciones lo resuelve solo.
+  //
+  // Es el mismo movimiento que ya funcionó con `images.origen` (IA vs banco): esa
+  // columna es la que permitió medir que las piezas con imagen de IA hacen 5,80 s de
+  // watch contra 5,63 s del banco. Sin ella habría sido una discusión de opiniones.
+  `ALTER TABLE images ADD COLUMN modelo TEXT`,
 ]) {
   try { db.exec(sql) } catch (_) { /* columna ya existe */ }
 }

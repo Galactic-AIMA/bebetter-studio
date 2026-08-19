@@ -104,11 +104,11 @@ router.post('/prompt', async (req, res) => {
 })
 
 const insertImage = db.prepare(`
-  INSERT INTO images (filename, tags, analysis_json, embedding, analyzed_at, usage_count, origen)
-  VALUES (@filename, @tags, @analysis_json, @embedding, @analyzed_at, 0, 'ia')
+  INSERT INTO images (filename, tags, analysis_json, embedding, analyzed_at, usage_count, origen, modelo)
+  VALUES (@filename, @tags, @analysis_json, @embedding, @analyzed_at, 0, 'ia', @modelo)
   ON CONFLICT(filename) DO UPDATE SET
     tags = @tags, analysis_json = @analysis_json, embedding = @embedding,
-    analyzed_at = @analyzed_at, origen = 'ia'
+    analyzed_at = @analyzed_at, origen = 'ia', modelo = @modelo
 `)
 
 // POST /api/ai-images/generate — genera la imagen con KIE, la guarda en el banco
@@ -127,11 +127,15 @@ router.post('/generate', async (req, res) => {
     const filename = `ia-${Date.now()}.png`
     const outPath = path.join(config.paths.images, filename)
 
+    // El modelo que RESPONDIÓ, no el que se pidió: la cadena de respaldo puede
+    // haber cambiado a otro, y anotar el configurado falsearía la comparación.
+    let modelo = 'kie:nano-banana-pro'
     if (config.imageBackend === 'vertex') {
       // Vertex es síncrono y devuelve la imagen en base64: no hay URL que descargar.
-      const { buffer } = await generateImageVertex({ prompt, aspectRatio: aspect })
+      const r = await generateImageVertex({ prompt, aspectRatio: aspect })
       fs.mkdirSync(path.dirname(outPath), { recursive: true })
-      fs.writeFileSync(outPath, buffer)
+      fs.writeFileSync(outPath, r.buffer)
+      modelo = r.modelo
     } else {
       const resultUrl = await generateImage({ prompt, aspectRatio: aspect, resolution: '2K', outputFormat: 'png' })
       await downloadImage(resultUrl, outPath)
@@ -160,6 +164,7 @@ router.post('/generate', async (req, res) => {
         analysis_json: JSON.stringify(analysis),
         embedding: Buffer.from(embedding.buffer),
         analyzed_at: new Date().toISOString(),
+        modelo,
       })
       invalidateImageCache()
     } catch (analyzeErr: any) {
@@ -167,7 +172,7 @@ router.post('/generate', async (req, res) => {
       // re-analizar luego desde el banco). Igual devolvemos la imagen.
       insertImage.run({
         filename, tags: '[]', analysis_json: null, embedding: null,
-        analyzed_at: null,
+        analyzed_at: null, modelo,
       })
     }
 

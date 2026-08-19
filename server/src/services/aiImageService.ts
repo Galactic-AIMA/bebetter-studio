@@ -115,11 +115,11 @@ export function buildBrandImagePrompt(a: PhraseAnalysis, textY = TEXTO_Y): strin
 }
 
 const insertImage = db.prepare(`
-  INSERT INTO images (filename, tags, analysis_json, embedding, analyzed_at, usage_count, origen)
-  VALUES (@filename, @tags, @analysis_json, @embedding, @analyzed_at, 0, 'ia')
+  INSERT INTO images (filename, tags, analysis_json, embedding, analyzed_at, usage_count, origen, modelo)
+  VALUES (@filename, @tags, @analysis_json, @embedding, @analyzed_at, 0, 'ia', @modelo)
   ON CONFLICT(filename) DO UPDATE SET
     tags = @tags, analysis_json = @analysis_json, embedding = @embedding,
-    analyzed_at = @analyzed_at, origen = 'ia'
+    analyzed_at = @analyzed_at, origen = 'ia', modelo = @modelo
 `)
 
 export interface ImagenGenerada {
@@ -146,12 +146,19 @@ export async function generarFondoParaFrase(
     const outPath = path.join(path.resolve(config.paths.images), filename)
     fs.mkdirSync(path.dirname(outPath), { recursive: true })
 
+    // Qué modelo acabó haciéndola. NO se da por hecho el configurado: la cadena de
+    // respaldo puede haber cambiado a otro si el principal no daba hueco, y anotar
+    // el que se pidió en vez del que respondió falsearía justo la comparación que
+    // esta columna existe para hacer.
+    let modelo: string
     if (config.imageBackend === 'vertex') {
-      const { buffer } = await generateImageVertex({ prompt, aspectRatio: ASPECTO })
-      fs.writeFileSync(outPath, buffer)
+      const r = await generateImageVertex({ prompt, aspectRatio: ASPECTO })
+      fs.writeFileSync(outPath, r.buffer)
+      modelo = r.modelo
     } else {
       const url = await generateImageKie({ prompt, aspectRatio: ASPECTO, resolution: '2K', outputFormat: 'png' })
       await downloadImage(url, outPath)
+      modelo = 'kie:nano-banana-pro'
     }
     if (!fs.existsSync(outPath)) throw new Error('la imagen no llegó a escribirse')
 
@@ -174,15 +181,16 @@ export async function generarFondoParaFrase(
         analysis_json: JSON.stringify(ia),
         embedding: Buffer.from((await embedText(buildImageDocument(ia))).buffer),
         analyzed_at: new Date().toISOString(),
+        modelo,
       })
     } catch (e: any) {
       // La imagen sirve para ESTA pieza aunque no se haya podido analizar; se
       // registra sin vector para que exista y se pueda re-analizar desde el banco.
-      insertImage.run({ filename, tags: '[]', analysis_json: null, embedding: null, analyzed_at: null })
+      insertImage.run({ filename, tags: '[]', analysis_json: null, embedding: null, analyzed_at: null, modelo })
       logError('generate', `Fondo IA ${filename} sin analizar`, e.message)
     }
 
-    logInfo('generate', `Fondo IA generado: ${filename}`)
+    logInfo('generate', `Fondo IA generado: ${filename} (${modelo})`)
     return { filename, localPath: outPath }
   } catch (e: any) {
     logError('generate', 'No se pudo generar el fondo con IA; se usa el banco', e.message)

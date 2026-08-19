@@ -38,6 +38,8 @@ export interface VertexImageOptions {
 export interface VertexImageResult {
   buffer: Buffer
   mime: string
+  /** Modelo que acabó generándola. No siempre es el principal: ver la cadena. */
+  modelo: string
 }
 
 let _auth: GoogleAuth | null = null
@@ -127,11 +129,13 @@ export async function generateImage(opts: VertexImageOptions): Promise<VertexIma
     .filter((m, i, a): m is string => !!m && a.indexOf(m) === i)
 
   let json: any
+  let usado = cadena[0]
   let ultimo: any
   for (const [i, modelo] of cadena.entries()) {
     const esUltimo = i === cadena.length - 1
     try {
       json = await conReintento(() => llamar(modelo, cuerpo), esUltimo ? 3 : 2)
+      usado = modelo
       if (i > 0) console.log(`[vertex] ${cadena[0]} sin hueco; generado con ${modelo}`)
       break
     } catch (e: any) {
@@ -149,5 +153,9 @@ export async function generateImage(opts: VertexImageOptions): Promise<VertexIma
     const texto = parts.find((p: any) => p.text)?.text
     throw new Error(`Vertex no devolvió imagen${texto ? ` (respondió texto: ${texto.slice(0, 200)})` : ''}`)
   }
-  return { buffer: Buffer.from(inline.data, 'base64'), mime: inline.mimeType || inline.mime_type || 'image/png' }
+  return {
+    buffer: Buffer.from(inline.data, 'base64'),
+    mime: inline.mimeType || inline.mime_type || 'image/png',
+    modelo: usado,
+  }
 }

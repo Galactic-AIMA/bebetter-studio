@@ -200,6 +200,8 @@ export interface PieceStats {
   nivelEnergia?: number
   /** 'ia' | 'banco' — de dónde salió la imagen de fondo */
   imagenOrigen?: string
+  /** Modelo que generó la imagen. Solo en las de IA. */
+  imagenModelo?: string
   estilo?: string
   efecto?: string
   audio?: string
@@ -233,6 +235,7 @@ export function pieceStats(): PieceStats[] {
          r.recipe_blocks, r.has_phrase, r.has_image, r.has_audio, r.has_render,
          COALESCE(r.image_filename, json_extract(v.config_extra, '$.imageId')) AS imagen_archivo,
          img.origen AS imagen_origen,
+         img.modelo AS imagen_modelo,
          COALESCE(pv.text, pc.text) AS frase_video,
          COALESCE(pv.mood_category, pc.mood_category) AS mood,
          COALESCE(pv.nivel_energia, pc.nivel_energia) AS energia,
@@ -296,6 +299,7 @@ export function pieceStats(): PieceStats[] {
       moodCategory: f.mood ?? undefined,
       nivelEnergia: f.energia ?? undefined,
       imagenOrigen,
+      imagenModelo: f.imagen_modelo ?? undefined,
       estilo: f.style ?? undefined,
       efecto: f.effect ?? undefined,
       audio,
@@ -357,6 +361,11 @@ export function summaryByDimension(stats: PieceStats[] = pieceStats()): Dimensio
     ['mood', (s) => s.moodCategory],
     ['formato', (s) => (s.mediaType === 'CAROUSEL_ALBUM' ? 'carrusel' : 'reel')],
     ['imagen', (s) => s.imagenOrigen],
+    // Solo las de IA tienen modelo, así que esta dimensión compara Pro contra flash
+    // sin que el banco meta ruido. Existe para resolver con datos una duda que hoy
+    // es de opinión: el 18-ago el Pro tardó 430,5 s contra 7,2 s del flash y no se
+    // vio un salto de calidad, pero con una imagen de cada no se decide nada.
+    ['modelo imagen', (s) => s.imagenModelo],
     ['audio', (s) => (!s.hasAudio ? undefined : s.audio && s.audio !== 'ninguno' ? 'con música' : 'sin música')],
     ['estilo', (s) => s.estilo],
     ['efecto', (s) => s.efecto],
