@@ -7,6 +7,8 @@ import { config } from '../config'
 import { getAllAudioMeta, upsertAudioMeta } from '../services/audioMetadata'
 import { analyzeAudioStructured, MOOD_CATEGORIES, TEXTURE_CATEGORIES } from '../services/geminiService'
 import { pickAudioForPhrase } from '../services/audioMatching'
+import { harvestFromUrl, confirmarProcedencia } from '../services/audioHarvest'
+import { getSourcesByTrack, deleteSource } from '../services/audioSources'
 
 const router = Router()
 
@@ -20,6 +22,26 @@ export interface AudioTrack {
   textura?: string | null
   descripcion?: string | null
   analyzed?: boolean
+  /** Reels del nicho de los que salió este corte (varios comparten tema). */
+  sources?: TrackSource[]
+  /**
+   * Corte al que se fusionó este por ser el mismo tema. Sin este dato, un duplicado
+   * fusionado y una pista que nunca se cosechó se ven exactamente igual —los dos
+   * sin procedencia— y el panel no puede explicar por qué está fuera del pool.
+   */
+  mergedInto?: string | null
+  /** true = tiene alguna frase de origen vectorizada, o sea que puede sonar. */
+  enPool?: boolean
+}
+
+export interface TrackSource {
+  sourceUrl: string
+  sourcePhrase: string | null
+  audioTitle: string | null
+  audioArtist: string | null
+  startMs: number | null
+  /** true = frase confirmada y vectorizada. */
+  confirmada: boolean
 }
 
 /** Lista los archivos de audio en data/audio (ordenados). */
@@ -35,8 +57,10 @@ function listAudioFiles(dir: string): string[] {
 router.get('/', (_req, res) => {
   const dir = path.resolve(config.paths.audio)
   const meta = getAllAudioMeta()
+  const fuentes = getSourcesByTrack()
   const tracks: AudioTrack[] = listAudioFiles(dir).map((filename) => {
     const m = meta.get(filename)
+    const src = fuentes.get(filename) ?? []
     return {
       filename,
       name: path.basename(filename, path.extname(filename)).replace(/[-_]/g, ' '),
@@ -46,6 +70,18 @@ router.get('/', (_req, res) => {
       descripcion: m?.descripcion ?? null,
       // Sin textura la pista suena igual pero deja de rotar: cuenta como pendiente.
       analyzed: !!(m && m.energia !== null && m.moodCategory && m.textura),
+      mergedInto: m?.mergedInto ?? null,
+      sources: src.map((f) => ({
+        sourceUrl: f.sourceUrl,
+        sourcePhrase: f.sourcePhrase,
+        audioTitle: f.audioTitle,
+        audioArtist: f.audioArtist,
+        startMs: f.startMs,
+        confirmada: f.sourceEmbedding !== null,
+      })),
+      // Lo que decide si suena o no desde el 18-ago. Las etiquetas de energía/mood
+      // ya no puntúan: sin ninguna procedencia confirmada la pista queda fuera.
+      enPool: src.some((f) => f.sourceEmbedding !== null),
     }
   })
   res.json(tracks)
@@ -66,6 +102,11 @@ router.get('/pick', (req, res) => {
       textura: pick.textura,
       energia: pick.energia,
       score: pick.score,
+      sourcePhrase: pick.sourcePhrase,
+      sourceUrl: pick.sourceUrl,
+      audioTitle: pick.audioTitle,
+      audioArtist: pick.audioArtist,
+      reelsDelNicho: pick.reelsDelNicho,
     },
   })
 })
@@ -124,6 +165,78 @@ router.post('/analyze', async (req, res) => {
     }
   }
   res.json({ proposals, errors })
+})
+
+// POST /api/audio/harvest  { url }  → baja el corte del reel y PROPONE su frase
+// de origen (leída de los fotogramas). NO la persiste: David la confirma con
+// PUT /:filename/source. Mismo circuito que el tagging, y aquí importa más — una
+// frase de origen equivocada empareja mal para siempre y sin avisar.
+router.post('/harvest', async (req, res) => {
+  const url = String(req.body?.url || '').trim()
+  if (!url) return res.status(400).json({ error: 'url requerida' })
+  try {
+    res.json(await harvestFromUrl(url))
+  } catch (e: any) {
+    const msg = String(e.message || e)
+    // El fallo típico no es un bug: es Instagram pidiendo sesión. Se traduce para
+    // que David sepa que la salida es configurar YTDLP_COOKIES_FROM_BROWSER.
+    const login = /login|rate-?limit|not available|cookies|restricted/i.test(msg)
+    res.status(login ? 401 : 500).json({
+      error: login
+        ? `Instagram pidió sesión para ese reel. Configura YTDLP_COOKIES_FROM_BROWSER=chrome (o firefox/edge) en el .env y reinicia. Detalle: ${msg.slice(0, 300)}`
+        : msg.slice(0, 500),
+    })
+  }
+})
+
+// POST /api/audio/harvest-batch  { urls: string[] }  → cosecha una tanda.
+//
+// En SERIE a propósito: son peticiones a Instagram desde la IP de casa de David y
+// lanzarlas en paralelo es como se llega antes al bloqueo. A ~17 s por reel, una
+// tanda de 50 tarda unos 15 min, así que el cliente necesita un timeout largo.
+router.post('/harvest-batch', async (req, res) => {
+  const urls: string[] = Array.isArray(req.body?.urls)
+    ? req.body.urls.map((u: any) => String(u).trim()).filter(Boolean)
+    : []
+  if (urls.length === 0) return res.status(400).json({ error: 'urls requeridas' })
+
+  const results: any[] = []
+  const errors: string[] = []
+  for (const url of urls) {
+    try {
+      results.push(await harvestFromUrl(url))
+    } catch (e: any) {
+      errors.push(`${url}: ${String(e.message).slice(0, 200)}`)
+    }
+  }
+  res.json({ results, errors })
+})
+
+// PUT /api/audio/source  { sourceUrl, sourcePhrase } — confirma la frase de origen
+// de UN reel y la vectoriza. Es lo que mete esa procedencia en el pool.
+//
+// La clave es la URL del reel y no el filename porque una misma pista tiene varias
+// procedencias: cinco reels del nicho pueden compartir tema y cada uno lleva su
+// propia frase.
+router.put('/source', async (req, res) => {
+  const sourceUrl = String(req.body?.sourceUrl || '').trim()
+  const sourcePhrase = String(req.body?.sourcePhrase || '').trim()
+  if (!sourceUrl) return res.status(400).json({ error: 'sourceUrl requerida' })
+  if (!sourcePhrase) return res.status(400).json({ error: 'sourcePhrase requerida' })
+  try {
+    await confirmarProcedencia(sourceUrl, sourcePhrase)
+    res.json({ success: true })
+  } catch (e: any) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// DELETE /api/audio/source?url=… — quita una procedencia mal cosechada. No borra el
+// archivo de audio: puede estar sosteniendo las procedencias de otros reels.
+router.delete('/source', (req, res) => {
+  const url = String(req.query.url || '').trim()
+  if (!url) return res.status(400).json({ error: 'url requerida' })
+  res.json({ success: deleteSource(url) })
 })
 
 // PUT /api/audio/:filename/tags  { energia, moodCategory, textura?, descripcion } — confirma/edita

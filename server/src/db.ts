@@ -75,6 +75,43 @@ db.exec(`
     analyzed_at   TEXT
   );
 
+  -- Reels del nicho de los que salió cada corte de audio (2026-08-18).
+  --
+  -- Tabla aparte de "audio_tracks" porque la relación es 1:N: VARIOS reels usan el
+  -- mismo tema, y cada uno aporta una frase de origen distinta. Colapsarlo en una
+  -- columna de "audio_tracks" haría dos daños: bajaría N copias casi idénticas del
+  -- mismo mp3, y la regla de "no repetir pista" —que compara por filename— dejaría
+  -- de verlas como la misma, así que dos reels seguidos sonarían igual.
+  --
+  -- Por qué existe la tabla. El emparejamiento por "energia" se midió el 2026-08-18
+  -- sobre 40 publicaciones y no predice nada (el desajuste grande tenía incluso
+  -- mejor watch). La causa: la «energía» de una frase la infiere un prompt que pide
+  -- «encontrarle la IMAGEN de fondo ideal» — describe qué imagen le pega, no qué
+  -- música. Lo que sustituye a ese eje no es un eje musical mejor, es una señal de
+  -- nicho: cuando alguien usó ESE corte para ESA frase, ya emparejó por nosotros.
+  --
+  --   "source_phrase"    la frase que se leía EN PANTALLA en ese reel. NULL = aún
+  --                      sin confirmar; sin ella la fila no puntúa.
+  --   "audio_asset_id"   id del audio en Instagram. Es la clave de deduplicación
+  --                      REAL: dos reels con el mismo id comparten tema aunque sus
+  --                      URLs no se parezcan en nada.
+  --   "start_ms"         segundo del tema por el que entra ESE reel. El 18-ago se
+  --                      dio por hecho que ese dato no existía en ninguna API; sí
+  --                      existe, dentro del payload del propio reel.
+  CREATE TABLE IF NOT EXISTS audio_sources (
+    source_url       TEXT PRIMARY KEY,
+    filename         TEXT NOT NULL,
+    source_phrase    TEXT,
+    source_embedding BLOB,
+    audio_asset_id   TEXT,
+    audio_title      TEXT,
+    audio_artist     TEXT,
+    start_ms         INTEGER,
+    harvested_at     TEXT DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_audio_sources_file ON audio_sources(filename);
+  CREATE INDEX IF NOT EXISTS idx_audio_sources_asset ON audio_sources(audio_asset_id);
+
   CREATE TABLE IF NOT EXISTS carousels (
     id            TEXT PRIMARY KEY,
     tema          TEXT NOT NULL,
@@ -231,6 +268,32 @@ for (const sql of [
   // Telegram, la frase queda marcada como usada sin haberse publicado nunca.
   // Ver `reconciliarRechazos()` en services/queueReconcile.ts.
   `ALTER TABLE videos ADD COLUMN queue_id TEXT`,
+  // ── Procedencia del audio (2026-08-18) ──────────────────────────────────────
+  // La pista y su procedencia viven en tablas distintas (`audio_sources`), porque
+  // VARIOS reels del nicho usan el mismo tema. Ver la definición más abajo.
+  // Embedding del TEXTO CRUDO de la frase, y por qué no vale el que ya había.
+  // `phrases.embedding` NO vectoriza la frase: vectoriza sus `metaforasVisuales`
+  // (ver `buildPhraseDocument`), porque nació para buscar imagen de fondo. Usarlo
+  // para el audio repetiría exactamente el error que se acaba de jubilar — comparar
+  // por un eje medido para otra cosa. Este va con taskType SEMANTIC_SIMILARITY
+  // sobre el texto tal cual, que es lo mismo que se guarda de la frase de origen
+  // del corte, así que los dos lados hablan por fin el mismo idioma.
+  `ALTER TABLE phrases ADD COLUMN embedding_texto BLOB`,
+  // Corte al que se fusionó este, por ser EL MISMO TEMA (2026-08-18).
+  //
+  // Varios reels del nicho usan la misma canción: de la primera cosecha, 68 cortes
+  // eran solo 41 temas. Al fusionarlos, las procedencias se reapuntan al canónico y
+  // el duplicado se queda sin ninguna — o sea, fuera del pool.
+  //
+  // Sin esta columna ese estado es INDISTINGUIBLE del de una pista vieja que nunca
+  // tuvo procedencia, y el panel acababa diciéndole a David que un corte recién
+  // cosechado "es anterior a la cosecha". Guarda el porqué, que es lo único que
+  // separa "duplicado, su frase vive en otro sitio" de "sin cosechar".
+  //
+  // No se borra la fila del duplicado a propósito: su nombre puede aparecer en
+  // `videos.config_extra` de reels ya publicados, y borrarlo dejaría el historial
+  // sin resolver.
+  `ALTER TABLE audio_tracks ADD COLUMN merged_into TEXT`,
 ]) {
   try { db.exec(sql) } catch (_) { /* columna ya existe */ }
 }

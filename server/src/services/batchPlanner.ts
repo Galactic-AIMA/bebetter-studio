@@ -24,10 +24,14 @@ export interface PlannedPair {
   imageId: string        // filename (PK de images)
   imageUrl: string
   score: number
-  audioTrack?: string     // filename de la pista (o ausente si no hay etiquetadas)
+  audioTrack?: string     // filename del corte (ausente si no hay ninguno cosechado)
   audioMood?: string
-  audioTextura?: string   // familia sonora — es lo que hace que el lote no suene igual
+  audioTextura?: string   // familia sonora — dato informativo desde el 18-ago
   audioEnergia?: number
+  /** Frase del reel del que salió el corte: el porqué visible de la elección. */
+  audioSourcePhrase?: string
+  /** Coseno frase↔frase de origen (0..1). */
+  audioScore?: number
 }
 
 // Jitter al score para dar VARIEDAD entre "Proponer lote" sucesivos: mueve el
@@ -49,6 +53,7 @@ interface PhraseRow {
   author?: string
   usage_count: number
   embedding: Buffer
+  embedding_texto: Buffer | null
   nivel_energia: number | null
   paleta: string | null
   mood_category: string | null
@@ -77,7 +82,7 @@ export function planBatch(driver: BatchDriver, count: number, allowRepeat: boole
   // Solo frases EN NORMA: es el planificador del que tira la automatizacion, y
   // una frase fuera de norma no se publicaria nunca. Ver `utils/norma.ts`.
   const phrases = db.prepare(
-    `SELECT id, text, author, usage_count, embedding, nivel_energia, paleta, mood_category
+    `SELECT id, text, author, usage_count, embedding, embedding_texto, nivel_energia, paleta, mood_category
      FROM phrases WHERE embedding IS NOT NULL AND archived = 0 AND ${EN_NORMA_SQL}
      ORDER BY usage_count ASC, created_at DESC`
   ).all() as PhraseRow[]
@@ -151,7 +156,7 @@ export function planBatch(driver: BatchDriver, count: number, allowRepeat: boole
   for (const [, c] of pairsByDriver) {
     const p = pList[c.pIdx]
     const img = iList[c.iIdx]
-    const audio = bestAudio(audioMeta, p.nivel_energia, p.mood_category, rotation)
+    const audio = bestAudio(audioMeta, p.embedding_texto ? vec(p.embedding_texto) : null, rotation)
     if (audio) noteChosen(rotation, audio)
     out.push({
       phraseId: p.id, phraseText: p.text, author: p.author,
@@ -159,7 +164,9 @@ export function planBatch(driver: BatchDriver, count: number, allowRepeat: boole
       audioTrack: audio?.filename,
       audioMood: audio?.moodCategory ?? undefined,
       audioTextura: audio?.textura ?? undefined,
-      audioEnergia: audio?.energia,
+      audioEnergia: audio?.energia ?? undefined,
+      audioSourcePhrase: audio?.sourcePhrase ?? undefined,
+      audioScore: audio?.score,
     })
   }
   return out

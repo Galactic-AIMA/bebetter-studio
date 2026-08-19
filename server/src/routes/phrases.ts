@@ -180,6 +180,34 @@ router.post('/recommend', async (req, res) => {
   res.json({ recommendations: scores })
 })
 
+// POST /api/phrases/embed-texto — rellena SOLO `embedding_texto` (2026-08-18).
+// Body opcional: { force: true } re-vectoriza todas.
+//
+// Existe aparte de `embed-all` porque es una operación mucho más barata: no llama
+// a `analyzePhraseStructured` ni reclasifica la persona, solo vectoriza el texto.
+// Meterlo en `embed-all` habría obligado a re-analizar las 118 frases —y a pisar
+// mood, energía y paleta— para conseguir un vector que no depende del análisis.
+router.post('/embed-texto', async (req, res) => {
+  const force: boolean = req.body?.force === true
+  const rows = db.prepare(
+    `SELECT id, text FROM phrases${force ? '' : ' WHERE embedding_texto IS NULL'}`
+  ).all() as { id: string; text: string }[]
+
+  const update = db.prepare(`UPDATE phrases SET embedding_texto = ? WHERE id = ?`)
+  let processed = 0
+  const errors: string[] = []
+  for (const p of rows) {
+    try {
+      const v = await embedText(p.text, 'SEMANTIC_SIMILARITY')
+      update.run(Buffer.from(v.buffer, v.byteOffset, v.byteLength), p.id)
+      processed++
+    } catch (e: any) {
+      errors.push(`${p.id}: ${e.message}`)
+    }
+  }
+  res.json({ total: rows.length, processed, errors })
+})
+
 // POST /api/phrases/embed-all — genera análisis conceptual + embedding de frases
 // Body opcional: { force: true } re-vectoriza TODAS (necesario tras cambiar el
 // documento de embedding); { only: string[] } restringe a ids concretos (subset).
@@ -198,7 +226,8 @@ router.post('/embed-all', async (req, res) => {
 
   const update = db.prepare(`
     UPDATE phrases SET descripcion_mood = @descripcion_mood, nivel_energia = @nivel_energia,
-      paleta = @paleta, mood_category = @mood_category, embedding = @embedding WHERE id = @id
+      paleta = @paleta, mood_category = @mood_category, embedding = @embedding,
+      embedding_texto = @embedding_texto WHERE id = @id
   `)
   const updPersona = db.prepare(`UPDATE phrases SET persona = ? WHERE id = ? AND persona IS NULL`)
 
@@ -209,6 +238,13 @@ router.post('/embed-all', async (req, res) => {
     try {
       const analysis = await analyzePhraseStructured(phrase.text)
       const embedding = await embedText(buildPhraseDocument(analysis))
+      // Segundo vector, del TEXTO CRUDO. No es un duplicado del anterior: aquel
+      // vectoriza las `metaforasVisuales` para buscar imagen de fondo, y este la
+      // frase tal cual, que es lo único comparable con la frase de origen de un
+      // corte de audio (`audio_tracks.source_phrase`). Usar el primero para el
+      // audio repetiría el error que jubiló a la energía: comparar por un eje
+      // medido para otra cosa.
+      const embeddingTexto = await embedText(phrase.text, 'SEMANTIC_SIMILARITY')
 
       // La persona gramatical se marca aquí porque vectorizar es el paso por el
       // que pasa TODA frase antes de poder ser elegida: si no se hiciera, una
@@ -228,6 +264,7 @@ router.post('/embed-all', async (req, res) => {
         paleta: JSON.stringify(analysis.paletaIdeal),
         mood_category: analysis.moodCategory,
         embedding: Buffer.from(embedding.buffer),
+        embedding_texto: Buffer.from(embeddingTexto.buffer, embeddingTexto.byteOffset, embeddingTexto.byteLength),
       })
       processed++
       await new Promise((r) => setTimeout(r, 100))

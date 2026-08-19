@@ -100,4 +100,18 @@ export const config = {
     boardUrl: process.env.PINTEREST_BOARD_URL || '',
     limit: parseInt(process.env.GALLERY_DL_LIMIT || '0') || 0,
   },
+
+  // Cosecha de audio con procedencia (2026-08-18). Se queda SIEMPRE en local, y
+  // es mejor así: yt-dlp contra Instagram desde una IP de datacenter se bloquea
+  // mucho más que desde una residencial, la dispara David pegando links (no
+  // necesita ser autónoma) y el resultado sube a R2 como una pista más. Solo
+  // viaja el resultado, no la descarga.
+  ytDlp: {
+    bin: process.env.YTDLP_PATH || 'yt-dlp',
+    // Instagram pide sesión para casi todo. `chrome`/`firefox`/`edge` lee las
+    // cookies del navegador donde David ya está logueado; el fichero Netscape es
+    // la alternativa si el navegador las tiene cifradas y no las suelta.
+    cookiesFromBrowser: process.env.YTDLP_COOKIES_FROM_BROWSER || '',
+    cookiesFile: process.env.YTDLP_COOKIES_FILE || '',
+  },
 }

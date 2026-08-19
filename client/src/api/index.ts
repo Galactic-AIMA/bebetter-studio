@@ -207,6 +207,36 @@ export interface AudioTrack {
   textura?: string | null
   descripcion?: string | null
   analyzed?: boolean
+  /** Reels del nicho de los que salió este corte (varios comparten tema). */
+  sources?: TrackSource[]
+  /** Corte al que se fusionó este por ser el mismo tema. null = no es duplicado. */
+  mergedInto?: string | null
+  /** true = tiene alguna frase de origen vectorizada, o sea que puede sonar. */
+  enPool?: boolean
+}
+
+export interface TrackSource {
+  sourceUrl: string
+  sourcePhrase: string | null
+  audioTitle: string | null
+  audioArtist: string | null
+  startMs: number | null
+  confirmada: boolean
+}
+
+export interface HarvestResult {
+  filename: string
+  sourceUrl: string
+  /** Lo que Gemini leyó en los fotogramas. Vacío = no encontró texto legible. */
+  proposedPhrase: string
+  durationSeg: number
+  /** Nombre de la canción, si el reel usó la biblioteca de audio de Instagram. */
+  audioTitle: string | null
+  audioArtist: string | null
+  startMs: number | null
+  /** true = otro reel ya había traído este mismo tema; se reutiliza el archivo. */
+  temaRepetido: boolean
+  yaEstaba: boolean
 }
 
 export interface AudioProposal {
@@ -222,8 +252,15 @@ export interface AutoPick {
   name: string
   moodCategory: string | null
   textura?: string | null
-  energia: number
+  energia: number | null
+  /** Coseno frase↔frase de origen del corte (0..1). */
   score: number
+  sourcePhrase?: string | null
+  sourceUrl?: string | null
+  audioTitle?: string | null
+  audioArtist?: string | null
+  /** Cuántos reels del nicho distintos usaron este tema. */
+  reelsDelNicho?: number
 }
 
 export const audioApi = {
@@ -239,6 +276,24 @@ export const audioApi = {
     api
       .put(`/audio/${encodeURIComponent(filename)}/tags`, { energia, moodCategory, descripcion, textura })
       .then((r) => r.data),
+  // Cosecha con procedencia: baja el corte del reel y propone su frase de origen.
+  // Tarda (descarga + FFmpeg + lectura de fotogramas) → timeout largo a propósito.
+  harvest: (url: string) =>
+    api.post<HarvestResult>('/audio/harvest', { url }, { timeout: 5 * 60 * 1000 }).then((r) => r.data),
+  // Tanda: el servidor cosecha en serie (~17 s por reel), así que 50 links son unos
+  // 15 min. De ahí el timeout de 45.
+  harvestBatch: (urls: string[]) =>
+    api
+      .post<{ results: HarvestResult[]; errors: string[] }>(
+        '/audio/harvest-batch', { urls }, { timeout: 45 * 60 * 1000 }
+      )
+      .then((r) => r.data),
+  // La procedencia se confirma por URL del reel, no por pista: una misma pista
+  // tiene varias, una por cada reel del nicho que usó ese tema.
+  saveSource: (sourceUrl: string, sourcePhrase: string) =>
+    api.put('/audio/source', { sourceUrl, sourcePhrase }).then((r) => r.data),
+  deleteSource: (sourceUrl: string) =>
+    api.delete('/audio/source', { params: { url: sourceUrl } }).then((r) => r.data),
 }
 
 export const historyApi = {

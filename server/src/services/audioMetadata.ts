@@ -1,9 +1,12 @@
 import db from '../db'
 
 /**
- * Metadata de las pistas de audio (tabla audio_tracks). Guarda las etiquetas de
- * energía/mood que produce el tagging por IA (confirmadas por David) y el
- * usage_count para el desempate por variedad en el matching.
+ * Metadata de las pistas de audio (tabla audio_tracks): el archivo en sí y lo que
+ * se sabe de cómo suena.
+ *
+ * ⚠️ Energía, mood y textura son INFORMATIVOS desde el 2026-08-18: ya no deciden
+ * qué pista suena. Quien empareja es la procedencia (`services/audioSources.ts`),
+ * y el `usage_count` de aquí sigue sirviendo para el desempate por variedad.
  */
 
 export interface AudioMeta {
@@ -14,6 +17,8 @@ export interface AudioMeta {
   descripcion: string | null
   usageCount: number
   analyzedAt: string | null
+  /** Corte al que se fusionó este por ser el mismo tema. null = no es duplicado. */
+  mergedInto: string | null
 }
 
 interface Row {
@@ -24,6 +29,7 @@ interface Row {
   descripcion: string | null
   usage_count: number
   analyzed_at: string | null
+  merged_into: string | null
 }
 
 const toMeta = (r: Row): AudioMeta => ({
@@ -34,6 +40,7 @@ const toMeta = (r: Row): AudioMeta => ({
   descripcion: r.descripcion,
   usageCount: r.usage_count,
   analyzedAt: r.analyzed_at,
+  mergedInto: r.merged_into,
 })
 
 /** Todas las filas de audio_tracks, indexadas por filename. */

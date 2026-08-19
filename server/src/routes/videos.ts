@@ -81,11 +81,17 @@ router.post('/generate', async (req, res) => {
   try {
     const { config: vidConfig, phraseId, paraRevision } = parsed.data
 
-    // Auto-pick de audio por mood si no se eligió pista (o se eligió "auto").
+    // Auto-pick de audio POR PROCEDENCIA si no se eligió pista (o se eligió "auto").
     if ((!vidConfig.audioTrack || vidConfig.audioTrack === 'auto') && phraseId) {
       const pick = pickAudioForPhrase(phraseId)
       vidConfig.audioTrack = pick ? pick.filename : undefined
-      if (pick) logInfo('generate', `Audio auto: ${pick.filename} (score ${pick.score.toFixed(2)}, mood ${pick.moodCategory})`)
+      if (pick) {
+        logInfo('generate', `Audio auto: ${pick.filename} (coseno ${pick.score.toFixed(3)} con «${pick.sourcePhrase}»)`)
+      } else {
+        // Silencio explícito: desde el 18-ago solo suenan cortes cosechados con su
+        // frase de origen, así que un banco sin cosechar deja los reels sin música.
+        logInfo('generate', 'Audio auto: sin corte con procedencia para esta frase (¿frase sin embedding_texto o banco sin cosechar?)')
+      }
     } else if (vidConfig.audioTrack === 'auto') {
       vidConfig.audioTrack = undefined // "auto" sin phraseId → sin audio
     }

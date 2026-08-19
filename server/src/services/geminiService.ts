@@ -407,6 +407,43 @@ La textura y la descripción deben coincidir: si describes guitarra acústica, l
   return parsed
 }
 
+// ── Lectura de la frase de un reel cosechado (2026-08-18) ─────────────────────
+// La procedencia de un corte de audio es la frase que se leía EN PANTALLA en el
+// reel del que salió. No está en el caption ni en los metadatos: solo en los
+// píxeles, así que se lee de los fotogramas.
+//
+// Van VARIOS fotogramas a propósito: el texto de un reel suele aparecer con
+// retardo, cambiar a media pieza o partirse en dos tiempos que nunca coinciden en
+// el mismo instante. Con un solo frame se cosecharía media frase.
+//
+// La propuesta NO se persiste sola: David la confirma en el panel 🎵, igual que
+// con las etiquetas. Un OCR malo aquí no rompe un vídeo — envenena el
+// emparejamiento de esa pista para siempre y en silencio.
+export async function readReelPhrase(
+  frames: Buffer[],
+  tier: GeminiTier = 'paid'
+): Promise<string> {
+  if (frames.length === 0) return ''
+  const model = getClient(tier).getGenerativeModel({ model: 'gemini-3.5-flash' })
+  const prompt = `Estos fotogramas son de UN MISMO reel motivacional, en orden cronológico.
+
+Transcribe LITERALMENTE el texto principal sobreimpreso que se lee en él, uniendo lo que aparezca en distintos fotogramas si el texto se muestra por partes (es normal que la frase salga en dos tiempos).
+
+Reglas:
+- Devuelve SOLO la frase, sin comillas, sin explicaciones, sin nombres de cuenta.
+- Respeta la puntuación y los saltos de tiempo con un punto si los hay.
+- IGNORA: el @usuario, el logo o marca de agua, los textos de la interfaz de Instagram (me gusta, comentarios, "Seguir", "Audio original"), los subtítulos automáticos y cualquier llamada a la acción tipo "sígueme".
+- IGNORA TAMBIÉN la atribución del autor si la hay (por ejemplo "- Séneca -", "— Marco Aurelio", "Epicteto"): devuelve solo la frase. El nombre no es parte de lo que se compara.
+- Si no hay texto sobreimpreso legible, devuelve exactamente: SIN_TEXTO`
+
+  const partes = frames.map((f) => ({
+    inlineData: { mimeType: 'image/jpeg', data: f.toString('base64') },
+  }))
+  const result = await withRetry(() => model.generateContent([prompt, ...partes]))
+  const texto = result.response.text().trim().replace(/^["'“”]|["'“”]$/g, '').trim()
+  return texto === 'SIN_TEXTO' ? '' : texto
+}
+
 // taskType SEMANTIC_SIMILARITY = correcto para matching simétrico frase↔imagen
 // (ambos lados describen "lo mismo" en registro comparable). Cambiarlo invalida
 // los vectores guardados → hay que re-vectorizar todo el banco.
