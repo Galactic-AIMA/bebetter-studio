@@ -32,13 +32,17 @@ import { logInfo, logError } from './logService'
 async function devolverUso(row: any) {
   if (row.phrase_id) {
     await db.prepare(
-      `UPDATE phrases SET usage_count = MAX(0, usage_count - 1) WHERE id = ?`
+      `UPDATE phrases
+       SET usage_count = CASE WHEN usage_count - 1 < 0 THEN 0 ELSE usage_count - 1 END
+       WHERE id = ?`
     ).run(row.phrase_id)
   }
   const cfg = row.config_extra ? JSON.parse(row.config_extra) : {}
   if (cfg.imageId) {
     await db.prepare(
-      `UPDATE images SET usage_count = MAX(0, usage_count - 1) WHERE filename = ?`
+      `UPDATE images
+       SET usage_count = CASE WHEN usage_count - 1 < 0 THEN 0 ELSE usage_count - 1 END
+       WHERE filename = ?`
     ).run(cfg.imageId)
   }
   if (cfg.audioTrack && cfg.audioTrack !== 'auto') await bumpAudioUsage(cfg.audioTrack, -1)

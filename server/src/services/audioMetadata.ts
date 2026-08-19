@@ -139,8 +139,11 @@ export async function bumpAudioUsage(filename: string, delta = 1): Promise<void>
   const exists = await db.prepare(`SELECT 1 FROM audio_tracks WHERE filename = ?`).get(filename)
   if (exists) {
     await db.prepare(
-      `UPDATE audio_tracks SET usage_count = MAX(0, usage_count + ?) WHERE filename = ?`
-    ).run(delta, filename)
+      `UPDATE audio_tracks
+       SET usage_count = CASE WHEN usage_count + ? < 0 THEN 0 ELSE usage_count + ? END
+       WHERE filename = ?`
+      // `delta` va DOS veces: la expresión se repite en las dos ramas del CASE.
+    ).run(delta, delta, filename)
   } else if (delta > 0) {
     await db.prepare(`INSERT INTO audio_tracks (filename, usage_count) VALUES (?, ?)`).run(filename, delta)
   }

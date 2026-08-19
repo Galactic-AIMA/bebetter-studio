@@ -233,7 +233,7 @@ export async function pieceStats(): Promise<PieceStats[]> {
       `SELECT
          r.media_id, r.permalink, r.published_at, r.media_type, r.recipe_status,
          r.recipe_blocks, r.has_phrase, r.has_image, r.has_audio, r.has_render,
-         COALESCE(r.image_filename, json_extract(v.config_extra, '$.imageId')) AS imagen_archivo,
+         r.imagen_archivo,
          img.origen AS imagen_origen,
          img.modelo AS imagen_modelo,
          COALESCE(pv.text, pc.text) AS frase_video,
@@ -244,7 +244,7 @@ export async function pieceStats(): Promise<PieceStats[]> {
          i.metrics_json
        FROM v_publication_recipe r
        LEFT JOIN videos    v  ON v.id = r.video_id
-       LEFT JOIN images    img ON img.filename = COALESCE(r.image_filename, json_extract(v.config_extra, '$.imageId'))
+       LEFT JOIN images    img ON img.filename = r.imagen_archivo
        LEFT JOIN carousels c  ON c.id = r.carousel_id
        LEFT JOIN phrases   pv ON pv.id = v.phrase_id
        LEFT JOIN phrases   pc ON pc.id = r.phrase_id

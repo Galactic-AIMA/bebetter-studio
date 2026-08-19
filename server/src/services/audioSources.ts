@@ -111,7 +111,7 @@ export async function upsertSource(s: {
    */
   proposedPhrase?: string | null
 }): Promise<void> {
-  await db.prepare(`INSERT OR IGNORE INTO audio_tracks (filename) VALUES (?)`).run(s.filename)
+  await db.prepare(`INSERT INTO audio_tracks (filename) VALUES (?) ON CONFLICT (filename) DO NOTHING`).run(s.filename)
   await db.prepare(
     `INSERT INTO audio_sources (source_url, filename, audio_asset_id, audio_title, audio_artist, start_ms, source_phrase, harvested_at)
      VALUES (@source_url, @filename, @audio_asset_id, @audio_title, @audio_artist, @start_ms, @source_phrase, @harvested_at)

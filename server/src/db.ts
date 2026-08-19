@@ -343,6 +343,12 @@ sqlite.exec(`
   CREATE VIEW v_publication_recipe AS
   SELECT
     p.*,
+    -- La imagen de fondo, venga de donde venga: identificada a posteriori en la
+    -- miniatura (\`p.image_filename\`, publicaciones anteriores al historial) o
+    -- guardada en la receta del vídeo. Se expone AQUÍ y no se calcula en cada
+    -- consulta porque \`json_extract\` es sintaxis de SQLite y Postgres usa \`->>\`:
+    -- teniéndolo solo en la vista, el cambio de motor toca un sitio y no seis.
+    COALESCE(p.image_filename, json_extract(v.config_extra, '$.imageId')) AS imagen_archivo,
     CASE WHEN p.phrase_id IS NOT NULL OR v.phrase_id IS NOT NULL OR p.carousel_id IS NOT NULL
          THEN 1 ELSE 0 END AS has_phrase,
     CASE WHEN p.image_filename IS NOT NULL

@@ -1,0 +1,28 @@
+# Postgres de DESARROLLO para la Fase 2 (2026-08-19).
+#
+# Aparte del PostgreSQL 17 que ya corre en la máquina de David: ese puede ser de
+# otro proyecto y esta migración no tiene por qué tocarlo.
+#
+# La versión es 17 a propósito, la misma que él ya tiene instalada, para que lo que
+# se verifique aquí valga también si algún día se apunta a esa instancia.
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: bebetter-pg-dev
+    environment:
+      POSTGRES_USER: bebetter
+      POSTGRES_PASSWORD: bebetter_dev
+      POSTGRES_DB: bebetter
+    ports:
+      # 5433 y no 5432: el 5432 lo tiene ocupado el PostgreSQL 17 nativo.
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bebetter -d bebetter"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  pgdata:

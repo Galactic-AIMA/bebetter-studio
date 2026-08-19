@@ -159,12 +159,12 @@ export async function syncBoardImages(): Promise<SyncResult> {
 
       // Si el archivo ya existe, registrar sin volver a bajarlo
       if (fs.existsSync(destPath)) {
-        await db.prepare(`INSERT OR IGNORE INTO pinterest_pins (pin_id) VALUES (?)`).run(pin.id)
+        await db.prepare(`INSERT INTO pinterest_pins (pin_id) VALUES (?) ON CONFLICT (pin_id) DO NOTHING`).run(pin.id)
         continue
       }
 
       await downloadImage(imageUrl, destPath)
-      await db.prepare(`INSERT OR IGNORE INTO pinterest_pins (pin_id) VALUES (?)`).run(pin.id)
+      await db.prepare(`INSERT INTO pinterest_pins (pin_id) VALUES (?) ON CONFLICT (pin_id) DO NOTHING`).run(pin.id)
       downloaded++
 
       // Y al banco de R2 (Fase 1). Es la tercera puerta por la que entra una imagen
