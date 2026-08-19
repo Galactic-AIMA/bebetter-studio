@@ -2,6 +2,10 @@ node_modules/
 dist/
 .env
 server/.env
+# Y sus copias de seguridad: llevan las mismas credenciales dentro y el patrón
+# `.env` a secas no las cubre (2026-08-18).
+.env.*
+server/.env.*
 
 # Generated videos
 output/
