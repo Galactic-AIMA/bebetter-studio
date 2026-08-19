@@ -1,6 +1,17 @@
 import Database from 'better-sqlite3'
 import path from 'path'
-import { clienteSqlite, DbClient } from './dbClient'
+import { Pool } from 'pg'
+import { clienteSqlite, clientePostgres, DbClient } from './dbClient'
+import { ESQUEMA_PG, VISTA_PG } from './schemaPg'
+
+/**
+ * Qué motor usa la app. `postgres` o cualquier otra cosa → SQLite.
+ *
+ * Es un INTERRUPTOR y no un salto sin red: mientras el fichero siga ahí se puede
+ * volver atrás cambiando una variable, que es justo lo que hace falta cuando el
+ * cambio de motor destapa algo en producción y hay que publicar igualmente.
+ */
+const USA_PG = (process.env.DB_ENGINE || 'sqlite').toLowerCase() === 'postgres'
 
 const DB_FILE = path.join(__dirname, '../../data/bebetter.db')
 
@@ -386,6 +397,24 @@ sqlite.exec(`
 
 // Lo que consume la app. Asíncrono desde el 2026-08-19 aunque detrás siga SQLite:
 // ver `dbClient.ts` para por qué el contrato cambia ANTES que el motor.
-const db: DbClient = clienteSqlite(sqlite)
+const db: DbClient = USA_PG
+  ? clientePostgres(new Pool({ connectionString: process.env.DATABASE_URL }))
+  : clienteSqlite(sqlite)
+
+/**
+ * Prepara el esquema. Hay que llamarla ANTES de servir peticiones.
+ *
+ * Con SQLite no hace nada: el esquema ya se creó arriba, al importar el módulo,
+ * porque `better-sqlite3` es síncrono y podía. Con Postgres no se puede —crear
+ * tablas es asíncrono— así que este es el hueco donde encaja, y por eso existe
+ * aunque parezca vacía en el camino de SQLite.
+ */
+export async function initDb(): Promise<void> {
+  if (!USA_PG) return
+  if (!process.env.DATABASE_URL) throw new Error('DB_ENGINE=postgres pero falta DATABASE_URL')
+  await db.exec(ESQUEMA_PG)
+  await db.exec(VISTA_PG)
+  console.log('[db] Postgres listo')
+}
 
 export default db

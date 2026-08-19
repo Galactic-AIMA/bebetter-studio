@@ -25,6 +25,7 @@ import { syncBoardImages } from './services/pinterestService'
 import { runCleanup } from './services/cleanupService'
 import { reconciliarRechazosSeguro } from './services/queueReconcile'
 import { logInfo } from './services/logService'
+import { initDb } from './db'
 
 const app = express()
 
@@ -73,6 +74,14 @@ app.get('/api/watermark', (req, res) => {
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }))
 
+// El esquema ANTES de escuchar: si la base no está lista, es mejor no arrancar que
+// aceptar peticiones que van a fallar una por una.
+initDb().then(() => arrancar()).catch((e: any) => {
+  console.error('[db] No se pudo preparar la base:', e.message)
+  process.exit(1)
+})
+
+function arrancar() {
 app.listen(config.port, () => {
   logInfo('system', `Servidor iniciado en http://localhost:${config.port}`)
   console.log(`Server running on http://localhost:${config.port}`)
@@ -127,3 +136,5 @@ app.listen(config.port, () => {
     })
   }
 })
+}
+
