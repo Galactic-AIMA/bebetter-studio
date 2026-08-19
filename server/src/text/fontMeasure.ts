@@ -21,30 +21,24 @@ import { MeasureText, wrapWith, WrapOptions } from './wrap'
  * `./splitByTiempos`, que no tocan Node.
  */
 
-const WINDOWS_FONTS = 'C:/Windows/Fonts'
-
 /**
- * Fuentes sin TTF propio en `data/fonts`. Son un parche de la época en que las
- * fuentes salían de `C:/Windows/Fonts` y ==no sobreviven al contenedor==:
- * cuando se hornee la imagen (Fase 1) esto debe desaparecer y el TTF propio
- * debe existir siempre.
+ * Todas las fuentes que el selector puede pedir tienen su TTF en `data/fonts`
+ * (23 claves, 23 archivos, comprobado el 2026-08-18). Antes había un mapa de
+ * reserva a `C:/Windows/Fonts` —arial, georgia, calibri— que ya no sirve para
+ * nada y sí hacía daño: en el contenedor esas rutas no existen, así que una
+ * fuente que faltara se habría pintado con otra tipografía **sin avisar**, y el
+ * corte de línea medido contra el TTF correcto habría dejado de cuadrar con lo
+ * pintado. Mejor romper con un mensaje claro.
  */
-const FONT_FALLBACKS: Record<string, string> = {
-  'Montserrat-Bold':          `${WINDOWS_FONTS}/arialbd.ttf`,
-  'Montserrat-Regular':       `${WINDOWS_FONTS}/arial.ttf`,
-  'PlayfairDisplay-Bold':     `${WINDOWS_FONTS}/georgiab.ttf`,
-  'PlayfairDisplay-Regular':  `${WINDOWS_FONTS}/georgia.ttf`,
-  'Lato-Regular':             `${WINDOWS_FONTS}/calibri.ttf`,
-  'Lato-Bold':                `${WINDOWS_FONTS}/calibrib.ttf`,
-  'Oswald-Bold':              `${WINDOWS_FONTS}/arialbd.ttf`,
-  'RobotoCondensed-Bold':     `${WINDOWS_FONTS}/arialbd.ttf`,
-}
 
 /** Ruta real del TTF de una clave de fuente ('Inter-Bold'). Sin escapar. */
 export function resolveFontFile(fontName: string): string {
-  const own = path.join(config.paths.fonts, `${fontName}.ttf`)
-  if (fs.existsSync(own)) return own
-  return FONT_FALLBACKS[fontName] || `${WINDOWS_FONTS}/arial.ttf`
+  const propia = path.join(config.paths.fonts, `${fontName}.ttf`)
+  if (fs.existsSync(propia)) return propia
+  throw new Error(
+    `No existe la fuente ${fontName}.ttf en ${config.paths.fonts}. ` +
+    'Genérala con `python scripts/download-fonts.py --force` (FONTS_PATH apunta ahí).'
+  )
 }
 
 /** Ruta del TTF en cursiva de la familia, si existe (para el pie de autor). */
@@ -54,13 +48,12 @@ export function resolveItalicFontFile(fontName: string): string | null {
 }
 
 /**
- * Fuente de la marca de agua en modo texto. Históricamente el Arial de Windows;
- * si no existe —que es lo que pasará en el contenedor— cae a la Inter propia.
- * ⚠️ Fase 1 debe hornear una fuente propia y quitar la dependencia de Windows.
+ * Fuente de la marca de agua en modo texto. Era el Arial de Windows; pasa a ser
+ * la Inter propia (Fase 1). Cambia levemente el trazo del handle, que va a
+ * `fontsize=22` y viene desactivado por defecto en la config del editor.
  */
 export function watermarkFontFile(): string {
-  const arial = `${WINDOWS_FONTS}/arial.ttf`
-  return fs.existsSync(arial) ? arial : resolveFontFile('Inter-Regular')
+  return resolveFontFile('Inter-Regular')
 }
 
 /** Escapa una ruta para meterla en un filtro de FFmpeg (`C:` → `C\:`). */
