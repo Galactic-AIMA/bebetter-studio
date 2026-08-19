@@ -4,6 +4,7 @@ import axios from 'axios'
 import { config } from '../config'
 import { analyzeImage } from './geminiService'
 import db from '../db'
+import { subirMedia, CLAVE_IMAGENES } from './mediaStore'
 
 interface PinterestToken {
   access_token: string
@@ -165,6 +166,12 @@ export async function syncBoardImages(): Promise<SyncResult> {
       await downloadImage(imageUrl, destPath)
       db.prepare(`INSERT OR IGNORE INTO pinterest_pins (pin_id) VALUES (?)`).run(pin.id)
       downloaded++
+
+      // Y al banco de R2 (Fase 1). Es la tercera puerta por la que entra una imagen
+      // —con la subida manual y gallery-dl—, y todas comparten el mismo riesgo: la
+      // fila va a la base, que es compartida, así que el render en la nube ELEGIRÍA
+      // la imagen y luego no encontraría el archivo. Sale una pieza rota, no un error.
+      subirMedia(CLAVE_IMAGENES, filename, destPath).catch(() => { /* lo recoge subir-banco-a-r2 */ })
 
       // Analizar en background
       analyzeImage(destPath).then((tags) => {
