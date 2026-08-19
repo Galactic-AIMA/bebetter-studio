@@ -63,7 +63,7 @@ export async function validar(textos: string[], opts: { ia?: boolean; coseno?: b
 
   // Banco vectorizado, para el chequeo de repetición
   const banco = usarCos
-    ? (db.prepare(`SELECT text, embedding FROM phrases WHERE archived = 0 AND embedding IS NOT NULL`).all() as any[])
+    ? ((await db.prepare(`SELECT text, embedding FROM phrases WHERE archived = 0 AND embedding IS NOT NULL`).all()) as any[])
     : []
 
   const out: Veredicto[] = []

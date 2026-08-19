@@ -1,3 +1,12 @@
+// ⚠️ dotenv AQUÍ, y no solo en `config.ts` (2026-08-19).
+//
+// `USA_PG` se evalúa al CARGAR este módulo. Un script que hace
+// `import db from '../src/db'` sin cargar antes el .env ve `DB_ENGINE` vacío, cae a
+// SQLite **sin decir nada** y escribe en la base equivocada mientras la app corre
+// sobre Postgres. Pasó de verdad con `aplicar-tanda-D.ts`: archivó 28 frases y creó
+// otras 28 en el fichero SQLite, e imprimió un resumen correcto — del motor
+// equivocado. Cargarlo aquí hace que el motor no dependa del orden de los imports.
+import 'dotenv/config'
 import Database from 'better-sqlite3'
 import path from 'path'
 import { Pool } from 'pg'
@@ -12,6 +21,10 @@ import { ESQUEMA_PG, VISTA_PG } from './schemaPg'
  * cambio de motor destapa algo en producción y hay que publicar igualmente.
  */
 const USA_PG = (process.env.DB_ENGINE || 'sqlite').toLowerCase() === 'postgres'
+
+/** Qué motor quedó elegido. Los scripts lo IMPRIMEN antes de escribir: es la única
+ *  forma barata de que un fallo de configuración se vea antes y no después. */
+export const MOTOR: 'postgres' | 'sqlite' = USA_PG ? 'postgres' : 'sqlite'
 
 const DB_FILE = path.join(__dirname, '../../data/bebetter.db')
 
