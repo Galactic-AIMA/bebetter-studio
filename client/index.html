@@ -3,7 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- `viewport-fit=cover` es lo que hace que `env(safe-area-inset-*)` devuelva
+         algo distinto de 0 en iOS; sin él, el `pb-[env(...)]` de la barra inferior
+         no reserva nada y la barra de gestos se come los botones. Se deja el zoom
+         con dos dedos habilitado a propósito (no se pone `user-scalable=no`). -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#1C1C1C" />
     <title>BeBetter Studio</title>
   </head>
   <body>

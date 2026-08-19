@@ -7,6 +7,11 @@ import HistoryPanel from '../History/HistoryPanel'
 
 type Tab = 'images' | 'phrases' | 'batch' | 'history'
 
+interface Props {
+  /** Si se ve en móvil. En `lg` hacia arriba siempre se ve, mande lo que mande. */
+  visibleMovil: boolean
+}
+
 const TABS: { id: Tab; icon: typeof Image; label: string }[] = [
   { id: 'images',  icon: Image,         label: 'Imágenes' },
   { id: 'phrases', icon: MessageSquare, label: 'Frases'   },
@@ -14,24 +19,28 @@ const TABS: { id: Tab; icon: typeof Image; label: string }[] = [
   { id: 'history', icon: Clock,         label: 'Historial' },
 ]
 
-export default function LeftPanel() {
+export default function LeftPanel({ visibleMovil }: Props) {
   const [tab, setTab] = useState<Tab>('images')
 
   return (
-    <aside className="w-80 min-w-80 flex flex-col bg-carbon-700 overflow-hidden">
-      {/* Tab nav */}
-      <nav className="flex flex-col gap-0.5 p-2">
+    <aside
+      className={`${visibleMovil ? 'flex' : 'hidden'} lg:flex w-full lg:w-80 lg:min-w-80 flex-col bg-carbon-700 overflow-hidden`}
+    >
+      {/* Las pestañas van en COLUMNA en escritorio (hay 320 px de ancho y sobra
+          alto) y en FILA en móvil, donde el alto es el recurso escaso: cuatro
+          botones apilados se comerían 140 px de los ~600 útiles. */}
+      <nav className="flex flex-row lg:flex-col gap-0.5 p-2 shrink-0 overflow-x-auto">
         {TABS.map(({ id, icon: Icon, label }) => (
           <button
             key={id}
             onClick={() => setTab(id)}
-            className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs transition-colors text-left ${
+            className={`flex items-center justify-center lg:justify-start gap-2.5 flex-1 lg:flex-none shrink-0 px-3 py-2 rounded-lg text-xs transition-colors text-left ${
               tab === id
-                ? 'bg-carbon-700 text-[#E8E4DC] border-l-2 border-neon-red'
-                : 'text-[#E8E4DC]/70 hover:text-[#E8E4DC] hover:bg-carbon-700 border-l-2 border-transparent'
+                ? 'bg-carbon-800 lg:bg-carbon-700 text-[#E8E4DC] border-b-2 lg:border-b-0 lg:border-l-2 border-neon-red'
+                : 'text-[#E8E4DC]/70 hover:text-[#E8E4DC] hover:bg-carbon-700 border-b-2 lg:border-b-0 lg:border-l-2 border-transparent'
             }`}
           >
-            <Icon size={13} />
+            <Icon size={13} className="shrink-0" />
             <span className="font-medium">{label}</span>
           </button>
         ))}

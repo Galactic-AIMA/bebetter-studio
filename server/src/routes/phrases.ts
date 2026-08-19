@@ -203,7 +203,7 @@ router.post('/embed-texto', async (req, res) => {
   for (const p of rows) {
     try {
       const v = await embedText(p.text, 'SEMANTIC_SIMILARITY')
-      update.run(Buffer.from(v.buffer, v.byteOffset, v.byteLength), p.id)
+      await update.run(Buffer.from(v.buffer, v.byteOffset, v.byteLength), p.id)
       processed++
     } catch (e: any) {
       errors.push(`${p.id}: ${e.message}`)
@@ -257,11 +257,11 @@ router.post('/embed-all', async (req, res) => {
       // que se decidió a mano en `scripts/persona-manual.json`.
       try {
         const [p] = await classifyPersona([phrase.text])
-        updPersona.run(p.persona, phrase.id)
+        await updPersona.run(p.persona, phrase.id)
       } catch (e: any) {
         errors.push(`${phrase.id}: persona no clasificada (${e.message})`)
       }
-      update.run({
+      await update.run({
         id: phrase.id,
         descripcion_mood: analysis.mood,
         nivel_energia: analysis.nivelEnergia,

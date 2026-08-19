@@ -175,7 +175,7 @@ export async function generarFondoParaFrase(
     // como respaldo de otra pieza.
     try {
       const ia = await analyzeImageStructured(outPath)
-      insertImage.run({
+      await insertImage.run({
         filename,
         tags: JSON.stringify([ia.emocionDominante, ia.composicion, ...ia.paletaColores].slice(0, 8)),
         analysis_json: JSON.stringify(ia),
@@ -186,7 +186,7 @@ export async function generarFondoParaFrase(
     } catch (e: any) {
       // La imagen sirve para ESTA pieza aunque no se haya podido analizar; se
       // registra sin vector para que exista y se pueda re-analizar desde el banco.
-      insertImage.run({ filename, tags: '[]', analysis_json: null, embedding: null, analyzed_at: null, modelo })
+      await insertImage.run({ filename, tags: '[]', analysis_json: null, embedding: null, analyzed_at: null, modelo })
       logError('generate', `Fondo IA ${filename} sin analizar`, e.message)
     }
 

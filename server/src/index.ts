@@ -117,13 +117,18 @@ app.listen(config.port, () => {
   // snapshot y el punto se perdería. Al arrancar se recoge lo que falte del día.
   // Condicionado a que no haya snapshot de hoy: si no, cada reinicio del server
   // repetiría ~60 llamadas a la Graph API sin añadir nada a la serie.
-  if (!haySnapshotDeHoy()) {
-    collectInsights(true)
-      .then((r) => console.log(`Insights: snapshot de arranque, ${r.ok}/${r.total} publicaciones`))
-      .catch((err) => console.error('Insights (arranque): fallo al recoger —', err.message))
-  } else {
-    console.log('Insights: ya hay snapshot de hoy, no se repite al arrancar')
-  }
+  // Encadenado y no `await`: el callback de `app.listen` es síncrono, y volverlo
+  // async convertiría cualquier fallo de aquí dentro en un rechazo sin dueño.
+  haySnapshotDeHoy()
+    .then((hay) => {
+      if (hay) {
+        console.log('Insights: ya hay snapshot de hoy, no se repite al arrancar')
+        return
+      }
+      return collectInsights(true)
+        .then((r) => console.log(`Insights: snapshot de arranque, ${r.ok}/${r.total} publicaciones`))
+    })
+    .catch((err) => console.error('Insights (arranque): fallo al recoger —', err.message))
 
   // gallery-dl retirado (2026-07-26): duplicaba imágenes que la Pinterest API ya
   // baja. La sincronización queda solo por la Pinterest API v5 (abajo).

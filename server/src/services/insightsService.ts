@@ -108,9 +108,15 @@ export async function saveSnapshot(mediaId: string, metrics: Record<string, numb
   ).run(mediaId, capturedAt ?? fechaLocal(), JSON.stringify(metrics))
 }
 
-/** ¿Ya hay snapshot de hoy? Lo usa el arranque para no repetir el del cron. */
-export function haySnapshotDeHoy(): boolean {
-  const r = db
+/**
+ * ¿Ya hay snapshot de hoy? Lo usa el arranque para no repetir el del cron.
+ *
+ * ⚠️ Es `async` desde la Fase 2 y tiene que llamarse con `await`. Cuando devolvía
+ * `boolean` sobre un `.get()` que ya era una promesa, `!!r` era SIEMPRE `true`
+ * (una promesa es un objeto) y el snapshot de arranque no se tomaba nunca.
+ */
+export async function haySnapshotDeHoy(): Promise<boolean> {
+  const r = await db
     .prepare(`SELECT 1 FROM media_insights WHERE captured_at = ? LIMIT 1`)
     .get(fechaLocal())
   return !!r

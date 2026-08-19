@@ -201,7 +201,7 @@ async function generarTodas(
         logError('s3', `Lote ${trabajo.id}: ${filename} no subió a R2`, e.message)
       }
 
-      db.prepare(`
+      await db.prepare(`
         INSERT INTO videos
           (id, filename, title, description, tags, local_path, public_url, s3_url,
            phrase_id, viral, font, effect, resolution, config_extra, created_at, estado)

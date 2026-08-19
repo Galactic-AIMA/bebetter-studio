@@ -6,10 +6,10 @@ import db from '../db'
 
 const router = Router()
 
-router.get('/status', (_req, res) => {
-  const lastSyncRow = db.prepare(
+router.get('/status', async (_req, res) => {
+  const lastSyncRow = (await db.prepare(
     `SELECT * FROM pinterest_sync_log ORDER BY id DESC LIMIT 1`
-  ).get() as any
+  ).get()) as any
 
   const lastSync = lastSyncRow
     ? {
@@ -37,8 +37,8 @@ router.get('/boards', async (_req, res) => {
   }
 })
 
-function saveSyncLog(entry: { newImages: number; totalChecked: number; status: string; error?: string }) {
-  db.prepare(`
+async function saveSyncLog(entry: { newImages: number; totalChecked: number; status: string; error?: string }) {
+  await db.prepare(`
     INSERT INTO pinterest_sync_log (timestamp, new_images, total_checked, status, error)
     VALUES (@timestamp, @new_images, @total_checked, @status, @error)
   `).run({
@@ -54,7 +54,7 @@ function saveSyncLog(entry: { newImages: number; totalChecked: number; status: s
 router.post('/sync', async (_req, res) => {
   try {
     const result = await syncWithGalleryDl()
-    saveSyncLog(result)
+    await saveSyncLog(result)
     res.json(result)
   } catch (err: any) {
     res.status(500).json({ error: err.message })
@@ -65,7 +65,7 @@ router.post('/sync', async (_req, res) => {
 router.post('/sync/api', async (_req, res) => {
   try {
     const result = await syncBoardImages()
-    saveSyncLog(result)
+    await saveSyncLog(result)
     res.json(result)
   } catch (err: any) {
     res.status(500).json({ error: err.message })

@@ -51,8 +51,8 @@ router.post('/image', upload.single('image'), (req, res) => {
   subirMedia(CLAVE_IMAGENES, filename, filePath).catch((e) =>
     logError('s3', `Imagen subida ${filename} no llegó a R2`, e.message)
   )
-  analyzeImage(filePath).then((tags) => {
-    db.prepare(`
+  analyzeImage(filePath).then(async (tags) => {
+    await db.prepare(`
       INSERT INTO images (filename, tags, analyzed_at)
       VALUES (@filename, @tags, @analyzed_at)
       ON CONFLICT(filename) DO UPDATE SET tags = @tags, analyzed_at = @analyzed_at

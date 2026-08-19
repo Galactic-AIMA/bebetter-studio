@@ -146,9 +146,9 @@ export default function AnalyticsPanel() {
   }
 
   return (
-    <div className="h-full overflow-y-auto px-8 py-6 text-bone-500">
+    <div className="h-full overflow-y-auto px-4 sm:px-8 py-4 sm:py-6 text-bone-500">
       {/* Cabecera */}
-      <div className="flex items-center justify-between mb-1">
+      <div className="flex items-center justify-between gap-2 flex-wrap mb-1">
         <div className="flex items-center gap-3">
           <button
             onClick={() => setMode('video')}
@@ -194,9 +194,13 @@ export default function AnalyticsPanel() {
       ) : (
         <>
           {/* --- Ranking ------------------------------------------------- */}
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="text-sm font-medium">Publicaciones</h2>
-            <div className="flex items-center rounded-md overflow-hidden border border-carbon-600 text-[11px]">
+          {/* En columna por debajo de `sm`: siete criterios de orden no caben en
+              390 px al lado del título, y comprimirlos los dejaba ilegibles. La
+              tira se desplaza en horizontal DENTRO de su caja, no arrastrando la
+              página. */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
+            <h2 className="text-sm font-medium shrink-0">Publicaciones</h2>
+            <div className="flex items-center rounded-md overflow-x-auto sm:overflow-hidden border border-carbon-600 text-[11px] max-w-full">
               {([
                 ['reach', 'Alcance'],
                 ['views', 'Vistas'],
@@ -209,7 +213,7 @@ export default function AnalyticsPanel() {
                 <button
                   key={id}
                   onClick={() => setOrden(id)}
-                  className={`px-2.5 py-1 transition-colors ${
+                  className={`shrink-0 whitespace-nowrap px-2.5 py-1.5 sm:py-1 transition-colors ${
                     orden === id
                       ? 'bg-carbon-700 text-bone-500'
                       : 'bg-carbon-800 text-bone-700 hover:text-bone-500'

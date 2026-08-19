@@ -90,7 +90,7 @@ router.post('/prompt', async (req, res) => {
   try {
     let text: string = phrase
     if (phraseId && !phrase) {
-      const row = db.prepare(`SELECT text FROM phrases WHERE id = ?`).get(phraseId) as any
+      const row = (await db.prepare(`SELECT text FROM phrases WHERE id = ?`).get(phraseId)) as any
       text = row?.text
       if (!text) return res.status(404).json({ error: 'Frase no encontrada' })
     }
@@ -158,7 +158,7 @@ router.post('/generate', async (req, res) => {
       const analysis = await analyzeImageStructured(outPath)
       const embedding = await embedText(buildImageDocument(analysis))
       tags = [analysis.emocionDominante, analysis.composicion, ...analysis.paletaColores].slice(0, 8)
-      insertImage.run({
+      await insertImage.run({
         filename,
         tags: JSON.stringify(tags),
         analysis_json: JSON.stringify(analysis),
@@ -170,7 +170,7 @@ router.post('/generate', async (req, res) => {
     } catch (analyzeErr: any) {
       // La imagen se generó y guardó; el análisis es best-effort (se puede
       // re-analizar luego desde el banco). Igual devolvemos la imagen.
-      insertImage.run({
+      await insertImage.run({
         filename, tags: '[]', analysis_json: null, embedding: null,
         analyzed_at: null, modelo,
       })

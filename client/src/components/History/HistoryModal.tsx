@@ -62,10 +62,10 @@ export default function HistoryModal({ item, onClose }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-2 sm:p-4"
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="relative w-full max-w-md bg-carbon-800 rounded-xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+      <div className="relative w-full max-w-md bg-carbon-800 rounded-xl overflow-hidden shadow-2xl flex flex-col max-h-[92dvh]">
         {/* Close */}
         <button
           onClick={onClose}
@@ -76,8 +76,8 @@ export default function HistoryModal({ item, onClose }: Props) {
 
         {/* Preview: video reproducible (si es video) o thumbnail de la imagen */}
         {isVideo && videoSrc ? (
-          <div className="bg-black flex items-center justify-center shrink-0 max-h-[45vh]">
-            <video src={videoSrc} controls playsInline className="max-h-[45vh] w-auto" />
+          <div className="bg-black flex items-center justify-center shrink-0 max-h-[45dvh]">
+            <video src={videoSrc} controls playsInline className="max-h-[45dvh] w-auto" />
           </div>
         ) : thumbnailUrl ? (
           <div className="h-36 bg-carbon-900 overflow-hidden shrink-0">

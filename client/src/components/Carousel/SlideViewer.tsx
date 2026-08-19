@@ -66,7 +66,7 @@ export default function SlideViewer({ slides, index, onIndex, onClose }: Props) 
         <img
           src={slide.publicUrl}
           alt={`Slide ${slide.n}`}
-          className="max-h-[82vh] max-w-full w-auto object-contain rounded-lg shadow-2xl"
+          className="max-h-[82dvh] max-w-full w-auto object-contain rounded-lg shadow-2xl"
         />
 
         {slides.length > 1 && (

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Play } from 'lucide-react'
+import { Play, Wand2 } from 'lucide-react'
 import { useVideoStore } from '../store/videoStore'
 import { videosApi, imagesOutputApi } from '../api'
 import { wrapText } from '../lib/wrapText'
@@ -11,6 +11,7 @@ import VideoPreview from '../components/Preview/VideoPreview'
 import VideoResultModal from '../components/Preview/VideoResultModal'
 import CarouselStudio from '../components/Carousel/CarouselStudio'
 import AnalyticsPanel from '../components/Analytics/AnalyticsPanel'
+import BottomNav, { Seccion } from '../components/Layout/BottomNav'
 
 type ToastState = { state: 'loading' | 'success' | 'error'; loadingText?: string; successText?: string; message?: string }
 
@@ -22,6 +23,10 @@ export default function Editor() {
   const [error, setError] = useState<string | null>(null)
   const [toast, setToast] = useState<ToastState | null>(null)
   const [showVideoPreview, setShowVideoPreview] = useState(false)
+  // Qué panel se ve EN MÓVIL. En escritorio se ven los tres y este estado no pinta
+  // nada (las clases `lg:` mandan). Arranca en 'vista' porque el preview es lo que
+  // da sentido a todo lo demás.
+  const [seccion, setSeccion] = useState<Seccion>('vista')
 
   const hasDelimiter = config.text.content.includes('//')
 
@@ -106,8 +111,11 @@ export default function Editor() {
     }
   }
 
+  // `h-[100dvh]` y no `h-screen`: en el móvil `100vh` mide la ventana SIN la barra
+  // de direcciones, así que la barra inferior quedaba por debajo del borde visible
+  // hasta que se hacía scroll.
   return (
-    <div className="flex flex-col h-screen bg-carbon-900 text-bone-500 overflow-hidden">
+    <div className="flex flex-col h-[100dvh] bg-carbon-900 text-bone-500 overflow-hidden">
       <Header
         lastVideoId={lastVideo?.id ?? null}
         lastImageId={lastImage?.id ?? null}
@@ -129,10 +137,10 @@ export default function Editor() {
           </main>
         ) : (
         <>
-        <LeftPanel />
+        <LeftPanel visibleMovil={seccion === 'banco'} />
 
         {/* Center */}
-        <main className="flex-1 flex flex-col items-center justify-center bg-carbon-900 p-6 gap-3 overflow-hidden rounded-md m-0">
+        <main className={`${seccion === 'vista' ? 'flex' : 'hidden'} lg:flex flex-1 flex-col items-center justify-center bg-carbon-900 p-3 sm:p-6 gap-3 overflow-hidden rounded-md m-0`}>
           {/* Variant selector */}
           {mode === 'image' && hasDelimiter && (
             <div className="flex rounded-lg overflow-hidden border border-carbon-600 text-xs">
@@ -154,7 +162,7 @@ export default function Editor() {
 
           {/* Preview */}
           <div
-            className="h-full max-h-[calc(100vh-120px)]"
+            className="h-full max-h-[calc(100dvh-190px)] lg:max-h-[calc(100dvh-120px)]"
             style={{ aspectRatio: `${config.resolution.width}/${config.resolution.height}` }}
           >
             <VideoPreview config={config} />
@@ -190,10 +198,30 @@ export default function Editor() {
           )}
         </main>
 
-        <RightPanel isGenerating={isGenerating} onGenerate={generate} />
+        <RightPanel isGenerating={isGenerating} onGenerate={generate} visibleMovil={seccion === 'ajustes'} />
         </>
         )}
       </div>
+
+      {/* Móvil: generar y navegar. Solo en los modos de edición — carrusel y
+          analítica ocupan la pantalla entera y no tienen paneles que alternar. */}
+      {mode !== 'carousel' && mode !== 'analytics' && (
+        <>
+          <div className="lg:hidden shrink-0 px-3 py-2 bg-carbon-700 border-t border-carbon-600">
+            <button
+              onClick={generate}
+              disabled={isGenerating}
+              className="w-full flex items-center justify-center gap-2 h-11 bg-[#E8E4DC] hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed text-[#0A0A0A] font-bold text-sm tracking-wide rounded-xl transition-colors"
+            >
+              <Wand2 size={15} />
+              {isGenerating
+                ? 'Generando...'
+                : mode === 'video' ? 'Generar video' : 'Generar imagen'}
+            </button>
+          </div>
+          <BottomNav seccion={seccion} onSeccion={setSeccion} />
+        </>
+      )}
 
       {/* Toast */}
       {toast && (

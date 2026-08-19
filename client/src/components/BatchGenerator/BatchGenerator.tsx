@@ -761,10 +761,10 @@ export default function BatchGenerator() {
       {/* Mini-picker para cambiar la imagen de un par a mano */}
       {picker !== null && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-2 sm:p-4"
           onClick={(e) => { if (e.target === e.currentTarget) setPicker(null) }}
         >
-          <div className="relative w-full max-w-lg bg-carbon-800 rounded-xl overflow-hidden shadow-2xl flex flex-col max-h-[80vh]">
+          <div className="relative w-full max-w-lg bg-carbon-800 rounded-xl overflow-hidden shadow-2xl flex flex-col max-h-[85dvh]">
             <div className="flex items-center gap-2.5 px-4 py-3 border-b border-carbon-700 shrink-0">
               <h2 className="text-sm font-semibold text-bone-500">Elegir imagen</h2>
               <span className="text-[11px] text-bone-700">ordenadas por compatibilidad</span>

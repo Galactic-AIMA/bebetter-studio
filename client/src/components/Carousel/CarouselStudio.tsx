@@ -326,7 +326,7 @@ export default function CarouselStudio() {
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
-    <div className="w-full h-full overflow-y-auto px-6 py-5">
+    <div className="w-full h-full overflow-y-auto px-3 sm:px-6 py-4 sm:py-5">
       <div className="max-w-4xl mx-auto">
         {/* Título */}
         <div className="flex items-center gap-2.5 mb-1">

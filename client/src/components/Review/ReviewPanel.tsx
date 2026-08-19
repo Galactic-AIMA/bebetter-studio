@@ -93,7 +93,7 @@ export default function ReviewPanel({ onClose }: Props) {
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-2 sm:p-4"
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="relative w-full max-w-5xl bg-carbon-800 rounded-xl overflow-hidden shadow-2xl flex flex-col max-h-[92vh] sm:max-h-[85vh]">
+      <div className="relative w-full max-w-5xl bg-carbon-800 rounded-xl overflow-hidden shadow-2xl flex flex-col max-h-[92dvh] sm:max-h-[90dvh]">
         <div className="flex items-center gap-2.5 px-4 py-3 border-b border-carbon-700 shrink-0">
           <ClipboardCheck size={15} className="text-gold-500" />
           <h2 className="text-sm font-semibold tracking-wide text-bone-500">Revisión del lote</h2>
@@ -135,6 +135,10 @@ export default function ReviewPanel({ onClose }: Props) {
                     <video
                       src={v.s3Url || v.publicUrl}
                       controls
+                      // `playsInline` o iOS abre el vídeo a PANTALLA COMPLETA al
+                      // darle a play, y revisar un lote de 30 pasa a ser entrar y
+                      // salir 30 veces en vez de recorrer la rejilla.
+                      playsInline
                       preload="metadata"
                       className="w-full aspect-[9/16] bg-black object-contain"
                     />

@@ -5,20 +5,26 @@ import { useVideoStore } from '../../store/videoStore'
 interface Props {
   isGenerating: boolean
   onGenerate: () => void
+  /** Si se ve en móvil. En `lg` hacia arriba siempre se ve. */
+  visibleMovil: boolean
 }
 
-export default function RightPanel({ isGenerating, onGenerate }: Props) {
+export default function RightPanel({ isGenerating, onGenerate, visibleMovil }: Props) {
   const { mode } = useVideoStore()
 
   return (
-    <aside className="w-[300px] min-w-[300px] flex flex-col bg-carbon-700 overflow-hidden">
+    <aside
+      className={`${visibleMovil ? 'flex' : 'hidden'} lg:flex w-full lg:w-[300px] lg:min-w-[300px] flex-col bg-carbon-700 overflow-hidden`}
+    >
       {/* Scrollable controls */}
       <div className="flex-1 overflow-y-auto">
         <VideoEditor />
       </div>
 
-      {/* Sticky generate button */}
-      <div className="p-3 bg-carbon-700">
+      {/* Botón de generar, fijo abajo. En móvil NO va aquí: vive fuera del panel
+          (ver `Editor.tsx`) para poder pulsarse también desde el banco y desde el
+          preview, sin tener que volver a la pestaña de ajustes. */}
+      <div className="hidden lg:block p-3 bg-carbon-700">
         <button
           onClick={onGenerate}
           disabled={isGenerating}
