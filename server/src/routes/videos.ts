@@ -228,8 +228,14 @@ router.post('/:id/publish', async (req, res) => {
 })
 
 // POST /api/videos/:id/queue — enviar a aprobación (Fase 4): sube a R2 + escribe
-// una fila `pending` en la cola (Google Sheet). n8n genera copies y manda el
-// paquete a Telegram; los copies quedan vacíos aquí.
+// una fila `pending` en la cola (Google Sheet) y pinga a n8n para que mande el
+// paquete a Telegram.
+//
+// ⚠️ Los copies los genera ESTA ruta, no n8n (ver `generateCopies` más abajo). Los
+// nodos Gemini de `[Pub]` siguen existiendo pero desde el 2026-08-18 tienen un IF
+// delante (`preApproved && trae el copy`) y no se ejecutan en este carril: antes
+// corrían siempre y se tiraban dos llamadas pagadas por reel programado.
+// El carril EXPRESS (`/publish`) sí sigue dependiendo de los Gemini de n8n.
 router.post('/:id/queue', async (req, res) => {
   try {
     // Falla rápido si n8n no está configurado (evita generar copies y una fila huérfana)
