@@ -14,7 +14,7 @@ router.post('/plan', (req, res) => {
     return res.status(400).json({ error: "driver debe ser 'phrases' o 'images'" })
   }
   try {
-    const pairs = planBatch(driver, count, allowRepeat)
+    const pairs = await planBatch(driver, count, allowRepeat)
     res.json({ pairs, requested: count, produced: pairs.length })
   } catch (err: any) {
     res.status(500).json({ error: err.message })
@@ -40,7 +40,7 @@ router.post('/run', (req, res) => {
     return res.status(400).json({ error: `estilo desconocido: ${estilo}` })
   }
   try {
-    const trabajo = lanzarLote({
+    const trabajo = await lanzarLote({
       count,
       driver,
       allowRepeat: req.body?.allowRepeat === true,

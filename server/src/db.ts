@@ -1,15 +1,19 @@
 import Database from 'better-sqlite3'
 import path from 'path'
+import { clienteSqlite, DbClient } from './dbClient'
 
 const DB_FILE = path.join(__dirname, '../../data/bebetter.db')
 
-const db = new Database(DB_FILE)
+// Instancia CRUDA de SQLite. Solo la usan el arranque del esquema (aquí abajo) y
+// los scripts de migración: el código de la app habla con `db`, que es el cliente
+// asíncrono y por tanto lo único que hay que cambiar al pasar a Postgres.
+export const sqlite = new Database(DB_FILE)
 
-db.pragma('journal_mode = WAL')
-db.pragma('foreign_keys = ON')
-db.pragma('synchronous = NORMAL')
+sqlite.pragma('journal_mode = WAL')
+sqlite.pragma('foreign_keys = ON')
+sqlite.pragma('synchronous = NORMAL')
 
-db.exec(`
+sqlite.exec(`
   CREATE TABLE IF NOT EXISTS phrases (
     id            TEXT PRIMARY KEY,
     text          TEXT NOT NULL,
@@ -314,7 +318,7 @@ for (const sql of [
   // watch contra 5,63 s del banco. Sin ella habría sido una discusión de opiniones.
   `ALTER TABLE images ADD COLUMN modelo TEXT`,
 ]) {
-  try { db.exec(sql) } catch (_) { /* columna ya existe */ }
+  try { sqlite.exec(sql) } catch (_) { /* columna ya existe */ }
 }
 
 // Cobertura de la receta de cada publicación, DERIVADA por bloques.
@@ -334,8 +338,8 @@ for (const sql of [
 // En carruseles, `audio` y `render` NO APLICAN (no llevan música y el "render" es
 // el prompt de marca, que ya vive en slides_json) → cuentan como cubiertos, para
 // no marcarlos incompletos por algo que nunca van a tener.
-db.exec(`DROP VIEW IF EXISTS v_publication_recipe`)
-db.exec(`
+sqlite.exec(`DROP VIEW IF EXISTS v_publication_recipe`)
+sqlite.exec(`
   CREATE VIEW v_publication_recipe AS
   SELECT
     p.*,
@@ -373,5 +377,9 @@ db.exec(`
   FROM publications p
   LEFT JOIN videos v ON v.id = p.video_id
 `)
+
+// Lo que consume la app. Asíncrono desde el 2026-08-19 aunque detrás siga SQLite:
+// ver `dbClient.ts` para por qué el contrato cambia ANTES que el motor.
+const db: DbClient = clienteSqlite(sqlite)
 
 export default db

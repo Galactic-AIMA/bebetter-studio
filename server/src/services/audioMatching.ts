@@ -109,7 +109,11 @@ export function bestAudio(
   meta: AudioMeta[],
   phraseVec: Float32Array | null,
   rotation: RotationState = {},
-  sourcesByTrack: Map<string, AudioSource[]> = getSourcesByTrack()
+  // Ya no tiene valor por defecto: cargarlo aquí obligaría a que `bestAudio` fuera
+  // asíncrona, y es una función PURA de ranking sobre datos ya cargados. Quien la
+  // llama trae las procedencias, que además así se cargan una vez por lote y no una
+  // vez por pieza.
+  sourcesByTrack: Map<string, AudioSource[]> = new Map()
 ): AudioCandidate | null {
   if (!phraseVec) return null
 
@@ -194,14 +198,15 @@ function vec(b: Buffer | null): Float32Array | null {
  * procedencia confirmada. Arranca la rotación con lo que sonó en los últimos reels
  * del historial, para que un reel suelto no repita la pista del anterior.
  */
-export function pickAudioForPhrase(phraseId: string): AudioCandidate | null {
-  const p = db.prepare(
+export async function pickAudioForPhrase(phraseId: string): Promise<AudioCandidate | null> {
+  const p = (await db.prepare(
     `SELECT embedding_texto FROM phrases WHERE id = ?`
-  ).get(phraseId) as { embedding_texto: Buffer | null } | undefined
+  ).get(phraseId)) as { embedding_texto: Buffer | null } | undefined
   if (!p) return null
-  const reciente = getRecentAudio(3)
-  return bestAudio([...getAllAudioMeta().values()], vec(p.embedding_texto), {
+  const reciente = await getRecentAudio(3)
+  const meta = [...(await getAllAudioMeta()).values()]
+  return bestAudio(meta, vec(p.embedding_texto), {
     recentTextures: reciente.textures,
     recentTracks: reciente.tracks,
-  })
+  }, await getSourcesByTrack())
 }

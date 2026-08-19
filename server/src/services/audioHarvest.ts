@@ -204,11 +204,11 @@ export async function harvestFromUrl(url: string): Promise<HarvestResult> {
   const limpia = url.trim()
   if (!/^https?:\/\//i.test(limpia)) throw new Error('La URL debe empezar por http:// o https://')
 
-  const yaRegistrada = getSource(limpia)
+  const yaRegistrada = await getSource(limpia)
   const meta = await metadatosDelReel(limpia)
 
   // Deduplicación por TEMA, antes de tocar la red para el vídeo.
-  const compartido = meta.audioAssetId ? filenameDeAsset(meta.audioAssetId) : null
+  const compartido = meta.audioAssetId ? await filenameDeAsset(meta.audioAssetId) : null
   const code = shortcodeDe(limpia)
   const filename = compartido
     ?? yaRegistrada?.filename
@@ -264,9 +264,9 @@ export async function harvestFromUrl(url: string): Promise<HarvestResult> {
     // vectorizada esta fila NO puntúa en el emparejamiento.
     // La duración se guarda porque DECIDE la del reel (`utils/duracionReel.ts`), y
     // medirla con ffprobe en cada elección de audio costaría un proceso por pieza.
-    if (dur > 0) setAudioDuracion(filename, dur)
+    if (dur > 0) await setAudioDuracion(filename, dur)
 
-    upsertSource({
+    await upsertSource({
       sourceUrl: limpia,
       filename,
       audioAssetId: meta.audioAssetId,
@@ -306,5 +306,5 @@ export async function confirmarProcedencia(sourceUrl: string, sourcePhrase: stri
   const frase = sourcePhrase.trim()
   if (!frase) throw new Error('La frase de origen no puede estar vacía')
   const vec = await embedText(frase, 'SEMANTIC_SIMILARITY')
-  setSourcePhrase(sourceUrl.trim(), frase, vec)
+  await setSourcePhrase(sourceUrl.trim(), frase, vec)
 }

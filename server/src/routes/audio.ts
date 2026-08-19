@@ -9,7 +9,7 @@ import { analyzeAudioStructured, MOOD_CATEGORIES, TEXTURE_CATEGORIES } from '../
 import { pickAudioForPhrase } from '../services/audioMatching'
 import { duracionSegunAudio } from '../utils/duracionReel'
 import { harvestFromUrl, confirmarProcedencia } from '../services/audioHarvest'
-import { getSourcesByTrack, deleteSource } from '../services/audioSources'
+import { getSourcesByTrack, deleteSource, AudioSource } from '../services/audioSources'
 
 const router = Router()
 
@@ -55,10 +55,10 @@ function listAudioFiles(dir: string): string[] {
 }
 
 // GET /api/audio — lista las pistas con su metadata (energía/mood si ya se analizó)
-router.get('/', (_req, res) => {
+router.get('/', async (_req, res) => {
   const dir = path.resolve(config.paths.audio)
-  const meta = getAllAudioMeta()
-  const fuentes = getSourcesByTrack()
+  const meta = await getAllAudioMeta()
+  const fuentes = await getSourcesByTrack()
   const tracks: AudioTrack[] = listAudioFiles(dir).map((filename) => {
     const m = meta.get(filename)
     const src = fuentes.get(filename) ?? []
@@ -72,7 +72,7 @@ router.get('/', (_req, res) => {
       // Sin textura la pista suena igual pero deja de rotar: cuenta como pendiente.
       analyzed: !!(m && m.energia !== null && m.moodCategory && m.textura),
       mergedInto: m?.mergedInto ?? null,
-      sources: src.map((f) => ({
+      sources: src.map((f: AudioSource) => ({
         sourceUrl: f.sourceUrl,
         sourcePhrase: f.sourcePhrase,
         audioTitle: f.audioTitle,
@@ -82,7 +82,7 @@ router.get('/', (_req, res) => {
       })),
       // Lo que decide si suena o no desde el 18-ago. Las etiquetas de energía/mood
       // ya no puntúan: sin ninguna procedencia confirmada la pista queda fuera.
-      enPool: src.some((f) => f.sourceEmbedding !== null),
+      enPool: src.some((f: AudioSource) => f.sourceEmbedding !== null),
     }
   })
   res.json(tracks)
@@ -90,10 +90,10 @@ router.get('/', (_req, res) => {
 
 // GET /api/audio/pick?phraseId=X — pista que elegiría el auto-pick para esa frase.
 // Sirve para PREVISUALIZAR el "Auto (por mood)" antes de generar y poder verificar.
-router.get('/pick', (req, res) => {
+router.get('/pick', async (req, res) => {
   const phraseId = String(req.query.phraseId || '')
   if (!phraseId) return res.status(400).json({ error: 'phraseId requerido' })
-  const pick = pickAudioForPhrase(phraseId)
+  const pick = await pickAudioForPhrase(phraseId)
   if (!pick) return res.json({ pick: null })
   res.json({
     pick: {
@@ -151,7 +151,7 @@ router.post('/analyze', async (req, res) => {
   const dir = path.resolve(config.paths.audio)
   const all = listAudioFiles(dir)
   if (all.length === 0) return res.json({ proposals: [], errors: [] })
-  const meta = getAllAudioMeta()
+  const meta = await getAllAudioMeta()
   const requested: string[] | undefined = Array.isArray(req.body?.filenames) ? req.body.filenames : undefined
   const targets = (requested ?? all).filter(
     (f) => all.includes(f) && (requested ? true : !meta.get(f)?.moodCategory)
@@ -238,14 +238,14 @@ router.put('/source', async (req, res) => {
 
 // DELETE /api/audio/source?url=… — quita una procedencia mal cosechada. No borra el
 // archivo de audio: puede estar sosteniendo las procedencias de otros reels.
-router.delete('/source', (req, res) => {
+router.delete('/source', async (req, res) => {
   const url = String(req.query.url || '').trim()
   if (!url) return res.status(400).json({ error: 'url requerida' })
-  res.json({ success: deleteSource(url) })
+  res.json({ success: await deleteSource(url) })
 })
 
 // PUT /api/audio/:filename/tags  { energia, moodCategory, textura?, descripcion } — confirma/edita
-router.put('/:filename/tags', (req, res) => {
+router.put('/:filename/tags', async (req, res) => {
   const safe = path.basename(req.params.filename)
   const energia = Math.max(0, Math.min(10, Math.round(Number(req.body?.energia))))
   const moodCategory = String(req.body?.moodCategory || '')
@@ -258,7 +258,7 @@ router.put('/:filename/tags', (req, res) => {
   if (textura && !TEXTURE_CATEGORIES.includes(textura as any)) {
     return res.status(400).json({ error: `textura debe ser una de: ${TEXTURE_CATEGORIES.join(', ')}` })
   }
-  upsertAudioMeta(safe, energia, moodCategory, descripcion, textura)
+  await upsertAudioMeta(safe, energia, moodCategory, descripcion, textura)
   res.json({ success: true })
 })
 

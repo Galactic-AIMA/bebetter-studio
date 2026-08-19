@@ -48,25 +48,25 @@ const toMeta = (r: Row): AudioMeta => ({
 })
 
 /** Todas las filas de audio_tracks, indexadas por filename. */
-export function getAllAudioMeta(): Map<string, AudioMeta> {
-  const rows = db.prepare(`SELECT * FROM audio_tracks`).all() as Row[]
+export async function getAllAudioMeta(): Promise<Map<string, AudioMeta>> {
+  const rows = (await db.prepare(`SELECT * FROM audio_tracks`).all()) as Row[]
   return new Map(rows.map((r) => [r.filename, toMeta(r)]))
 }
 
-export function getAudioMeta(filename: string): AudioMeta | null {
-  const r = db.prepare(`SELECT * FROM audio_tracks WHERE filename = ?`).get(filename) as Row | undefined
+export async function getAudioMeta(filename: string): Promise<AudioMeta | null> {
+  const r = (await db.prepare(`SELECT * FROM audio_tracks WHERE filename = ?`).get(filename)) as Row | undefined
   return r ? toMeta(r) : null
 }
 
 /** Inserta/actualiza las etiquetas (mantiene usage_count si ya existía). */
-export function upsertAudioMeta(
+export async function upsertAudioMeta(
   filename: string,
   energia: number,
   moodCategory: string,
   descripcion: string,
   textura?: string
-): void {
-  db.prepare(
+): Promise<void> {
+  await db.prepare(
     `INSERT INTO audio_tracks (filename, energia, mood_category, textura, descripcion, analyzed_at)
      VALUES (@filename, @energia, @mood_category, @textura, @descripcion, @analyzed_at)
      ON CONFLICT(filename) DO UPDATE SET
@@ -95,16 +95,15 @@ export function upsertAudioMeta(
  * Sirve para que la rotación no arranque en frío: sin esto, el primer reel de un
  * lote puede repetir lo que sonó en el último que se generó ayer.
  */
-export function getRecentAudio(n: number): { tracks: string[]; textures: string[] } {
-  const rows = db.prepare(
+export async function getRecentAudio(n: number): Promise<{ tracks: string[]; textures: string[] }> {
+  const rows = (await db.prepare(
     `SELECT config_extra FROM videos
      WHERE config_extra IS NOT NULL ORDER BY created_at DESC LIMIT ?`
-  ).all(n * 4) as { config_extra: string }[] // *4: muchos vídeos no llevan audio
+  ).all(n * 4)) as { config_extra: string }[] // *4: muchos vídeos no llevan audio
 
-  const texturas = new Map(
-    (db.prepare(`SELECT filename, textura FROM audio_tracks`).all() as
-      { filename: string; textura: string | null }[]).map((t) => [t.filename, t.textura])
-  )
+  const filas = (await db.prepare(`SELECT filename, textura FROM audio_tracks`).all()) as
+    { filename: string; textura: string | null }[]
+  const texturas = new Map(filas.map((t) => [t.filename, t.textura]))
 
   const tracks: string[] = []
   const textures: string[] = []
@@ -121,8 +120,8 @@ export function getRecentAudio(n: number): { tracks: string[]; textures: string[
 }
 
 /** Guarda la duración medida del corte (la usa `duracionSegunAudio`). */
-export function setAudioDuracion(filename: string, seg: number): void {
-  db.prepare(
+export async function setAudioDuracion(filename: string, seg: number): Promise<void> {
+  await db.prepare(
     `INSERT INTO audio_tracks (filename, duracion_seg) VALUES (?, ?)
      ON CONFLICT(filename) DO UPDATE SET duracion_seg = excluded.duracion_seg`
   ).run(filename, Math.round(seg * 100) / 100)
@@ -136,13 +135,13 @@ export function setAudioDuracion(filename: string, seg: number): void {
  * pieza descartada en Telegram. Con suelo en 0: la rotación de audio se alimenta
  * de este contador y un negativo la dejaría eligiendo siempre la misma pista.
  */
-export function bumpAudioUsage(filename: string, delta = 1): void {
-  const exists = db.prepare(`SELECT 1 FROM audio_tracks WHERE filename = ?`).get(filename)
+export async function bumpAudioUsage(filename: string, delta = 1): Promise<void> {
+  const exists = await db.prepare(`SELECT 1 FROM audio_tracks WHERE filename = ?`).get(filename)
   if (exists) {
-    db.prepare(
+    await db.prepare(
       `UPDATE audio_tracks SET usage_count = MAX(0, usage_count + ?) WHERE filename = ?`
     ).run(delta, filename)
   } else if (delta > 0) {
-    db.prepare(`INSERT INTO audio_tracks (filename, usage_count) VALUES (?, ?)`).run(filename, delta)
+    await db.prepare(`INSERT INTO audio_tracks (filename, usage_count) VALUES (?, ?)`).run(filename, delta)
   }
 }

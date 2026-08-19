@@ -54,8 +54,8 @@ const toSource = (r: Row): AudioSource => ({
 })
 
 /** Todas las procedencias, agrupadas por pista. */
-export function getSourcesByTrack(): Map<string, AudioSource[]> {
-  const rows = db.prepare(`SELECT * FROM audio_sources ORDER BY harvested_at ASC`).all() as Row[]
+export async function getSourcesByTrack(): Promise<Map<string, AudioSource[]>> {
+  const rows = (await db.prepare(`SELECT * FROM audio_sources ORDER BY harvested_at ASC`).all()) as Row[]
   const out = new Map<string, AudioSource[]>()
   for (const r of rows) {
     const s = toSource(r)
@@ -66,8 +66,8 @@ export function getSourcesByTrack(): Map<string, AudioSource[]> {
   return out
 }
 
-export function getSource(sourceUrl: string): AudioSource | null {
-  const r = db.prepare(`SELECT * FROM audio_sources WHERE source_url = ?`).get(sourceUrl) as Row | undefined
+export async function getSource(sourceUrl: string): Promise<AudioSource | null> {
+  const r = (await db.prepare(`SELECT * FROM audio_sources WHERE source_url = ?`).get(sourceUrl)) as Row | undefined
   return r ? toSource(r) : null
 }
 
@@ -79,10 +79,10 @@ export function getSource(sourceUrl: string): AudioSource | null {
  * clave correcta para esto — dos reels que comparten tema tienen URLs que no se
  * parecen en nada.
  */
-export function filenameDeAsset(audioAssetId: string): string | null {
-  const r = db.prepare(
+export async function filenameDeAsset(audioAssetId: string): Promise<string | null> {
+  const r = (await db.prepare(
     `SELECT filename FROM audio_sources WHERE audio_asset_id = ? LIMIT 1`
-  ).get(audioAssetId) as { filename: string } | undefined
+  ).get(audioAssetId)) as { filename: string } | undefined
   return r?.filename ?? null
 }
 
@@ -96,7 +96,7 @@ export function filenameDeAsset(audioAssetId: string): string | null {
  * sin etiquetar —energía, mood y textura son informativos desde el 18-ago— y con
  * `usage_count` a 0.
  */
-export function upsertSource(s: {
+export async function upsertSource(s: {
   sourceUrl: string
   filename: string
   audioAssetId?: string | null
@@ -110,9 +110,9 @@ export function upsertSource(s: {
    * escrita — lo que distingue propuesta de confirmada es el VECTOR, no el texto.
    */
   proposedPhrase?: string | null
-}): void {
-  db.prepare(`INSERT OR IGNORE INTO audio_tracks (filename) VALUES (?)`).run(s.filename)
-  db.prepare(
+}): Promise<void> {
+  await db.prepare(`INSERT OR IGNORE INTO audio_tracks (filename) VALUES (?)`).run(s.filename)
+  await db.prepare(
     `INSERT INTO audio_sources (source_url, filename, audio_asset_id, audio_title, audio_artist, start_ms, source_phrase, harvested_at)
      VALUES (@source_url, @filename, @audio_asset_id, @audio_title, @audio_artist, @start_ms, @source_phrase, @harvested_at)
      ON CONFLICT(source_url) DO UPDATE SET
@@ -137,14 +137,14 @@ export function upsertSource(s: {
 }
 
 /** Guarda la frase de origen ya vectorizada. Es lo que mete la fila en el pool. */
-export function setSourcePhrase(sourceUrl: string, frase: string, vector: Float32Array): void {
-  const r = db.prepare(
+export async function setSourcePhrase(sourceUrl: string, frase: string, vector: Float32Array): Promise<void> {
+  const r = await db.prepare(
     `UPDATE audio_sources SET source_phrase = ?, source_embedding = ? WHERE source_url = ?`
   ).run(frase, Buffer.from(vector.buffer, vector.byteOffset, vector.byteLength), sourceUrl)
   if (r.changes === 0) throw new Error(`No hay procedencia registrada para ${sourceUrl}`)
 }
 
 /** Borra una procedencia (un reel mal cosechado, sin tocar el archivo de audio). */
-export function deleteSource(sourceUrl: string): boolean {
-  return db.prepare(`DELETE FROM audio_sources WHERE source_url = ?`).run(sourceUrl).changes > 0
+export async function deleteSource(sourceUrl: string): Promise<boolean> {
+  return (await db.prepare(`DELETE FROM audio_sources WHERE source_url = ?`).run(sourceUrl)).changes > 0
 }

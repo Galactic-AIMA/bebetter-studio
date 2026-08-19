@@ -106,14 +106,19 @@ function configDePieza(par: PlannedPair, opts: Required<Pick<OpcionesLote, 'esti
   }
 }
 
-/** Arranca un lote y devuelve el trabajo ya registrado (la generación sigue en segundo plano). */
-export function lanzarLote(opts: OpcionesLote): TrabajoLote {
+/**
+ * Arranca un lote y devuelve el trabajo ya registrado.
+ *
+ * `await` solo cubre la PLANIFICACIÓN, que es rápida; la generación sigue en segundo
+ * plano (`void generarTodas`) para que la petición no se quede colgada media hora.
+ */
+export async function lanzarLote(opts: OpcionesLote): Promise<TrabajoLote> {
   const driver: BatchDriver = opts.driver ?? 'phrases'
   const estilo = opts.estilo ?? 'bebetter'
   const duracion = opts.duracion ?? 10
   const resolucion = opts.resolucion ?? { width: 1080, height: 1920 }
 
-  const pares = planBatch(driver, opts.count, opts.allowRepeat === true, duracion)
+  const pares = await planBatch(driver, opts.count, opts.allowRepeat === true, duracion)
 
   const trabajo: TrabajoLote = {
     id: uuidv4(),
