@@ -30,11 +30,11 @@ const MIME_OVERRIDES: Record<string, string> = {
  * `path` se sigue devolviendo porque el editor lo reenvía tal cual al generar, pero
  * ya es solo una PISTA: quien resuelve de verdad es `mediaStore`, por nombre.
  */
-router.get('/', (_req, res) => {
+router.get('/', async (_req, res) => {
   try {
-    const rows = db.prepare(
+    const rows = (await db.prepare(
       `SELECT filename, tags, analyzed_at, usage_count, origen FROM images ORDER BY filename`
-    ).all() as any[]
+    ).all()) as any[]
 
     const dir = path.resolve(config.paths.images)
     const images: ImageItem[] = rows
@@ -57,16 +57,16 @@ router.get('/', (_req, res) => {
 })
 
 // GET /api/images/random — imagen aleatoria (también desde la base)
-router.get('/random', (_req, res) => {
+router.get('/random', async (_req, res) => {
   try {
     // Preferir las ya analizadas: sin `tags` el matching de frases no puede opinar
     // sobre ellas, así que entrarían al azar de verdad.
-    const analizadas = db.prepare(
+    const analizadas = (await db.prepare(
       `SELECT filename, tags, analyzed_at FROM images WHERE tags IS NOT NULL AND tags != '[]'`
-    ).all() as any[]
+    ).all()) as any[]
     const todas = analizadas.length > 0
       ? analizadas
-      : (db.prepare(`SELECT filename, tags, analyzed_at FROM images`).all() as any[])
+      : ((await db.prepare(`SELECT filename, tags, analyzed_at FROM images`).all()) as any[])
     if (todas.length === 0) return res.status(404).json({ error: 'No images found' })
 
     const row = todas[Math.floor(Math.random() * todas.length)]

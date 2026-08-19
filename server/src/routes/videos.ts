@@ -32,7 +32,7 @@ async function ensureR2AndThumbnail(row: any): Promise<{ s3Url: string; thumbnai
   let s3Url = row.s3_url
   if (!s3Url) {
     s3Url = await uploadVideoToS3(row.local_path, row.filename)
-    db.prepare(`UPDATE videos SET s3_url = ? WHERE id = ?`).run(s3Url, row.id)
+    await db.prepare(`UPDATE videos SET s3_url = ? WHERE id = ?`).run(s3Url, row.id)
   }
 
   let thumbnailUrl: string | undefined
@@ -52,26 +52,26 @@ async function ensureR2AndThumbnail(row: any): Promise<{ s3Url: string; thumbnai
 }
 
 // GET /api/videos — listar todos los videos generados
-router.get('/', (_req, res) => {
-  const rows = db.prepare(`SELECT * FROM videos ORDER BY created_at DESC`).all() as any[]
+router.get('/', async (_req, res) => {
+  const rows = (await db.prepare(`SELECT * FROM videos ORDER BY created_at DESC`).all()) as any[]
   res.json(rows.map(rowToVideoRecord))
 })
 
 // Suma el contador de uso (frase + imagen + audio) de un video. Se llama al
 // PUBLICAR o ENCOLAR, NO al generar: así regenerar/descartar un video no infla
 // el conteo y la rotación prioriza lo que realmente decidiste sacar.
-function bumpUsageForVideo(row: any) {
+async function bumpUsageForVideo(row: any) {
   if (row.phrase_id) {
-    db.prepare(`UPDATE phrases SET usage_count = usage_count + 1 WHERE id = ?`).run(row.phrase_id)
+    await db.prepare(`UPDATE phrases SET usage_count = usage_count + 1 WHERE id = ?`).run(row.phrase_id)
   }
   const cfg = row.config_extra ? JSON.parse(row.config_extra) : {}
   if (cfg.imageId) {
-    db.prepare(
+    await db.prepare(
       `INSERT INTO images (filename, usage_count) VALUES (@f, 1)
        ON CONFLICT(filename) DO UPDATE SET usage_count = usage_count + 1`
     ).run({ f: cfg.imageId })
   }
-  if (cfg.audioTrack && cfg.audioTrack !== 'auto') bumpAudioUsage(cfg.audioTrack)
+  if (cfg.audioTrack && cfg.audioTrack !== 'auto') await bumpAudioUsage(cfg.audioTrack)
 }
 
 // POST /api/videos/generate — generar un video nuevo
@@ -84,7 +84,7 @@ router.post('/generate', async (req, res) => {
 
     // Auto-pick de audio POR PROCEDENCIA si no se eligió pista (o se eligió "auto").
     if ((!vidConfig.audioTrack || vidConfig.audioTrack === 'auto') && phraseId) {
-      const pick = pickAudioForPhrase(phraseId)
+      const pick = await pickAudioForPhrase(phraseId)
       vidConfig.audioTrack = pick ? pick.filename : undefined
       if (pick) {
         // El AUDIO manda la duración cuando la pista se eligió sola (2026-08-18).
@@ -122,7 +122,7 @@ router.post('/generate', async (req, res) => {
     const { filename, localPath, publicUrl } = await enqueue(() => generateVideo(vidConfig as any, outputName))
 
     const createdAt = new Date().toISOString()
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO videos
         (id, filename, title, description, tags, local_path, public_url,
          phrase_id, viral, font, effect, resolution, config_extra, created_at, estado)
@@ -149,7 +149,7 @@ router.post('/generate', async (req, res) => {
     })
 
     const record = rowToVideoRecord(
-      db.prepare(`SELECT * FROM videos WHERE id = ?`).get(id) as any
+      (await db.prepare(`SELECT * FROM videos WHERE id = ?`).get(id)) as any
     )
 
     logInfo('generate', `Video generado: ${filename}`)
@@ -163,11 +163,11 @@ router.post('/generate', async (req, res) => {
 // POST /api/videos/:id/upload-s3 — subir video a S3
 router.post('/:id/upload-s3', async (req, res) => {
   try {
-    const row = db.prepare(`SELECT * FROM videos WHERE id = ?`).get(req.params.id) as any
+    const row = (await db.prepare(`SELECT * FROM videos WHERE id = ?`).get(req.params.id)) as any
     if (!row) return res.status(404).json({ error: 'Video not found' })
 
     const s3Url = await uploadVideoToS3(row.local_path, row.filename)
-    db.prepare(`UPDATE videos SET s3_url = ? WHERE id = ?`).run(s3Url, req.params.id)
+    await db.prepare(`UPDATE videos SET s3_url = ? WHERE id = ?`).run(s3Url, req.params.id)
 
     logInfo('s3', `Video subido a R2: ${row.filename}`)
     res.json({ success: true, s3Url })
@@ -180,11 +180,11 @@ router.post('/:id/upload-s3', async (req, res) => {
 // POST /api/videos/:id/upload-drive — subir video a Google Drive
 router.post('/:id/upload-drive', async (req, res) => {
   try {
-    const row = db.prepare(`SELECT * FROM videos WHERE id = ?`).get(req.params.id) as any
+    const row = (await db.prepare(`SELECT * FROM videos WHERE id = ?`).get(req.params.id)) as any
     if (!row) return res.status(404).json({ error: 'Video not found' })
 
     const driveUrl = await uploadToDrive(row.local_path, row.filename)
-    db.prepare(`UPDATE videos SET drive_url = ? WHERE id = ?`).run(driveUrl, req.params.id)
+    await db.prepare(`UPDATE videos SET drive_url = ? WHERE id = ?`).run(driveUrl, req.params.id)
 
     // El conteo de uso NO ocurre al subir a Drive (Drive es respaldo, no publicar).
     // Se cuenta al publicar/encolar (bumpUsageForVideo).
@@ -201,7 +201,7 @@ router.post('/:id/upload-drive', async (req, res) => {
 router.post('/:id/publish', async (req, res) => {
   try {
     const { env = 'test' } = req.body
-    const row = db.prepare(`SELECT * FROM videos WHERE id = ?`).get(req.params.id) as any
+    const row = (await db.prepare(`SELECT * FROM videos WHERE id = ?`).get(req.params.id)) as any
     if (!row) return res.status(404).json({ error: 'Video not found' })
 
     const { s3Url, thumbnailUrl } = await ensureR2AndThumbnail(row)
@@ -218,7 +218,7 @@ router.post('/:id/publish', async (req, res) => {
       env
     )
 
-    bumpUsageForVideo(row) // cuenta el uso al publicar (express)
+    await bumpUsageForVideo(row) // cuenta el uso al publicar (express)
     logInfo('publish', `Publicado a n8n (${env}): ${row.filename}`)
     res.json({ success: true, sentTo: env, videoUrl: s3Url })
   } catch (err: any) {
@@ -243,7 +243,7 @@ router.post('/:id/queue', async (req, res) => {
       return res.status(500).json({ error: 'WEBHOOK_APPROVAL_URL no está configurado' })
     }
 
-    const row = db.prepare(`SELECT * FROM videos WHERE id = ?`).get(req.params.id) as any
+    const row = (await db.prepare(`SELECT * FROM videos WHERE id = ?`).get(req.params.id)) as any
     if (!row) return res.status(404).json({ error: 'Video not found' })
 
     const { s3Url, thumbnailUrl } = await ensureR2AndThumbnail(row)
@@ -281,9 +281,9 @@ router.post('/:id/queue', async (req, res) => {
     // Se guarda el `queue_id` porque es el único hilo que une esta pieza con lo
     // que David decida DESPUÉS en Telegram: si allí la descarta, n8n escribe
     // `rejected` en esa fila y `reconciliarRechazos()` devuelve el uso.
-    db.prepare(`UPDATE videos SET estado = 'aprobado', queue_id = ? WHERE id = ?`)
+    await db.prepare(`UPDATE videos SET estado = 'aprobado', queue_id = ? WHERE id = ?`)
       .run(queueRow.id, row.id)
-    bumpUsageForVideo(row) // cuenta el uso al encolar (decisión de sacarlo)
+    await bumpUsageForVideo(row) // cuenta el uso al encolar (decisión de sacarlo)
     logInfo('publish', `Enviado a aprobación: ${row.filename}`)
     res.json({ success: true, queueId: queueRow.id })
   } catch (err: any) {
@@ -294,10 +294,10 @@ router.post('/:id/queue', async (req, res) => {
 
 // GET /api/videos/pendientes — la cola de revisión: lo que produjo un lote y
 // todavía no ha mirado nadie. Ni ha gastado frase ni ha costado copies.
-router.get('/pendientes', (_req, res) => {
-  const rows = db.prepare(
+router.get('/pendientes', async (_req, res) => {
+  const rows = (await db.prepare(
     `SELECT * FROM videos WHERE estado = 'pendiente_revision' ORDER BY created_at ASC`
-  ).all() as any[]
+  ).all()) as any[]
   res.json(rows.map(rowToVideoRecord))
 })
 
@@ -307,14 +307,14 @@ router.get('/pendientes', (_req, res) => {
 // rotación intacta. `motivo` se guarda en el log para poder mirar después por qué
 // se cae lo que se cae; los dos botones del diseño (otra imagen / frase mala) y
 // sus consecuencias son de la Fase 5, aquí solo se marca el estado.
-router.post('/:id/reject', (req, res) => {
-  const row = db.prepare(`SELECT * FROM videos WHERE id = ?`).get(req.params.id) as any
+router.post('/:id/reject', async (req, res) => {
+  const row = (await db.prepare(`SELECT * FROM videos WHERE id = ?`).get(req.params.id)) as any
   if (!row) return res.status(404).json({ error: 'Video not found' })
   if (row.estado === 'aprobado') {
     return res.status(409).json({ error: 'Ya estaba aprobado: rechazarlo no revertiría el contador ni la fila de la cola' })
   }
 
-  db.prepare(`UPDATE videos SET estado = 'rechazado' WHERE id = ?`).run(row.id)
+  await db.prepare(`UPDATE videos SET estado = 'rechazado' WHERE id = ?`).run(row.id)
   const motivo = typeof req.body?.motivo === 'string' ? req.body.motivo : 'sin motivo'
   logInfo('publish', `Rechazado ${row.filename} (${motivo}) — la frase sigue sin usar`)
   res.json({ success: true })
@@ -332,12 +332,12 @@ router.post('/reconciliar', async (_req, res) => {
 })
 
 // DELETE /api/videos/:id — eliminar video
-router.delete('/:id', (req, res) => {
-  const row = db.prepare(`SELECT local_path FROM videos WHERE id = ?`).get(req.params.id) as any
+router.delete('/:id', async (req, res) => {
+  const row = (await db.prepare(`SELECT local_path FROM videos WHERE id = ?`).get(req.params.id)) as any
   if (!row) return res.status(404).json({ error: 'Video not found' })
 
   if (fs.existsSync(row.local_path)) fs.unlinkSync(row.local_path)
-  db.prepare(`DELETE FROM videos WHERE id = ?`).run(req.params.id)
+  await db.prepare(`DELETE FROM videos WHERE id = ?`).run(req.params.id)
 
   res.json({ success: true })
 })

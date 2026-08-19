@@ -34,6 +34,17 @@ export interface Statement {
 export interface DbClient {
   prepare(sql: string): Statement
   exec(sql: string): Promise<void>
+  /**
+   * Ejecuta `fn` dentro de una transacción: o pasa todo o no pasa nada.
+   *
+   * No se puede reusar `better-sqlite3.transaction()` porque exige una función
+   * SÍNCRONA, y aquí todo el cuerpo es `await`. Se hace a mano con BEGIN/COMMIT,
+   * que además es lo que ya habrá que hacer con Postgres.
+   *
+   * ⚠️ No anida: una transacción dentro de otra reventaría con "cannot start a
+   * transaction within a transaction". Hoy ningún sitio lo hace.
+   */
+  transaction<T>(fn: () => Promise<T>): Promise<T>
   /** Cierra el motor. Lo usan los scripts de migración y las pruebas. */
   close(): Promise<void>
 }
@@ -76,6 +87,19 @@ export function clienteSqlite(sqlite: Database.Database): DbClient {
     },
     async exec(sql: string) {
       sqlite.exec(sql)
+    },
+    async transaction<T>(fn: () => Promise<T>): Promise<T> {
+      sqlite.exec('BEGIN')
+      try {
+        const r = await fn()
+        sqlite.exec('COMMIT')
+        return r
+      } catch (e) {
+        // El ROLLBACK va en su propio try: si la transacción ya se deshizo sola
+        // (por ejemplo, tras un error de SQLite), fallaría y taparía el error real.
+        try { sqlite.exec('ROLLBACK') } catch { /* ya estaba deshecha */ }
+        throw e
+      }
     },
     async close() {
       cache.clear()

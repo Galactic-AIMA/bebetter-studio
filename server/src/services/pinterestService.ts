@@ -140,7 +140,7 @@ export async function syncBoardImages(): Promise<SyncResult> {
   }
 
   const downloadedPinIds = new Set(
-    (db.prepare(`SELECT pin_id FROM pinterest_pins`).all() as any[]).map((r) => r.pin_id)
+    ((await db.prepare(`SELECT pin_id FROM pinterest_pins`).all()) as any[]).map((r: any) => r.pin_id)
   )
 
   try {
@@ -159,12 +159,12 @@ export async function syncBoardImages(): Promise<SyncResult> {
 
       // Si el archivo ya existe, registrar sin volver a bajarlo
       if (fs.existsSync(destPath)) {
-        db.prepare(`INSERT OR IGNORE INTO pinterest_pins (pin_id) VALUES (?)`).run(pin.id)
+        await db.prepare(`INSERT OR IGNORE INTO pinterest_pins (pin_id) VALUES (?)`).run(pin.id)
         continue
       }
 
       await downloadImage(imageUrl, destPath)
-      db.prepare(`INSERT OR IGNORE INTO pinterest_pins (pin_id) VALUES (?)`).run(pin.id)
+      await db.prepare(`INSERT OR IGNORE INTO pinterest_pins (pin_id) VALUES (?)`).run(pin.id)
       downloaded++
 
       // Y al banco de R2 (Fase 1). Es la tercera puerta por la que entra una imagen
@@ -174,8 +174,8 @@ export async function syncBoardImages(): Promise<SyncResult> {
       subirMedia(CLAVE_IMAGENES, filename, destPath).catch(() => { /* lo recoge subir-banco-a-r2 */ })
 
       // Analizar en background
-      analyzeImage(destPath).then((tags) => {
-        db.prepare(`
+      analyzeImage(destPath).then(async (tags) => {
+        await db.prepare(`
           INSERT INTO images (filename, tags, analyzed_at)
           VALUES (@filename, @tags, @analyzed_at)
           ON CONFLICT(filename) DO UPDATE SET tags = @tags, analyzed_at = @analyzed_at
@@ -191,9 +191,9 @@ export async function syncBoardImages(): Promise<SyncResult> {
   }
 }
 
-export function getSyncStatus() {
+export async function getSyncStatus() {
   const isConfigured = !!(config.pinterest.appId && config.pinterest.boardId)
-  const lastSyncRow = db.prepare(
+  const lastSyncRow = await db.prepare(
     `SELECT * FROM pinterest_sync_log ORDER BY id DESC LIMIT 1`
   ).get() as any
   const lastSync = lastSyncRow

@@ -6,7 +6,7 @@ import { PRESETS } from '../text/presets'
 const router = Router()
 
 // POST /api/batch/plan  { driver: 'phrases'|'images', count: number, allowRepeat?: boolean }
-router.post('/plan', (req, res) => {
+router.post('/plan', async (req, res) => {
   const driver = req.body?.driver as BatchDriver
   const count = Math.max(1, Math.min(parseInt(req.body?.count) || 0, 50))
   const allowRepeat = req.body?.allowRepeat === true
@@ -29,7 +29,7 @@ router.post('/plan', (req, res) => {
 //
 // Las piezas nacen en `pendiente_revision`: no gastan frase ni copies hasta que
 // alguien las apruebe. Ver `services/batchRunner.ts`.
-router.post('/run', (req, res) => {
+router.post('/run', async (req, res) => {
   const count = Math.max(1, Math.min(parseInt(req.body?.count) || 0, 50))
   const driver = (req.body?.driver ?? 'phrases') as BatchDriver
   if (driver !== 'phrases' && driver !== 'images') {

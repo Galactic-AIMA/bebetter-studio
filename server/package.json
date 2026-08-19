@@ -8,8 +8,7 @@
     "start": "node dist/index.js",
     "authorize:pinterest": "tsx scripts/authorize-pinterest.ts",
     "authorize:google": "tsx scripts/authorize-drive.ts",
-    "setup:queue-sheet": "tsx scripts/setup-queue-sheet.ts",
-    "migrate:data": "tsx src/scripts/migrate.ts"
+    "setup:queue-sheet": "tsx scripts/setup-queue-sheet.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.600.0",

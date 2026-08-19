@@ -51,8 +51,8 @@ function tituloCorto(slides: StoredSlide[], fallback: string): string {
   return (t || fallback).slice(0, 300)
 }
 
-function tituloDeCarousel(carouselId: string, fallback: string): string {
-  const row = db.prepare(`SELECT slides_json FROM carousels WHERE id = ?`).get(carouselId) as any
+async function tituloDeCarousel(carouselId: string, fallback: string): Promise<string> {
+  const row = (await db.prepare(`SELECT slides_json FROM carousels WHERE id = ?`).get(carouselId)) as any
   if (!row) return fallback.slice(0, 300)
   try {
     return tituloCorto(JSON.parse(row.slides_json || '[]') as StoredSlide[], fallback)
@@ -95,7 +95,7 @@ router.post('/script', async (req, res) => {
 
 // POST /api/carousels — crea el registro (draft) con el guion aprobado/editado.
 // Aún NO genera imágenes. Body: { tema, tipo?, aspect?, slides: [{n,rol,texto}] }
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   const { tema, tipo, aspect, slides, fuente } = req.body ?? {}
   if (!tema || !Array.isArray(slides) || slides.length === 0) {
     return res.status(400).json({ error: 'tema y slides requeridos' })
@@ -114,7 +114,7 @@ router.post('/', (req, res) => {
 
   const id = uuidv4()
   const f = cleanFuente(fuente)
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO carousels (id, tema, tipo, aspect, slides_json, fuente_json, status, created_at)
     VALUES (@id, @tema, @tipo, @aspect, @slides_json, @fuente_json, 'draft', @created_at)
   `).run({
@@ -128,14 +128,14 @@ router.post('/', (req, res) => {
   })
 
   logInfo('carousel', `Carrusel creado: "${tema}" (${clean.length} slides)`)
-  res.json(rowToCarousel(db.prepare(`SELECT * FROM carousels WHERE id = ?`).get(id)))
+  res.json(rowToCarousel((await db.prepare(`SELECT * FROM carousels WHERE id = ?`).get(id))))
 })
 
 // POST /api/carousels/:id/slides/:n — genera (o regenera) la slide n con KIE.
 // La portada (n=1) se genera sin referencia; las demás usan la portada como
 // image_input para mantener coherencia → hay que generar la portada primero.
 router.post('/:id/slides/:n', async (req, res) => {
-  const row = db.prepare(`SELECT * FROM carousels WHERE id = ?`).get(req.params.id) as any
+  const row = (await db.prepare(`SELECT * FROM carousels WHERE id = ?`).get(req.params.id)) as any
   if (!row) return res.status(404).json({ error: 'Carrusel no encontrado' })
 
   const carousel = rowToCarousel(row)
@@ -161,7 +161,7 @@ router.post('/:id/slides/:n', async (req, res) => {
       s.n === n ? { ...s, publicUrl: `${generated.publicUrl}?t=${Date.now()}` } : s
     )
     const allDone = updated.every((s) => s.publicUrl)
-    db.prepare(`
+    await db.prepare(`
       UPDATE carousels
       SET slides_json = @slides, status = @status
           ${isCover ? ', cover_kie_url = @cover' : ''}
@@ -233,7 +233,7 @@ async function prepararParaPublicar(carousel: ReturnType<typeof rowToCarousel>) 
 }
 
 router.post('/:id/queue', async (req, res) => {
-  const row = db.prepare(`SELECT * FROM carousels WHERE id = ?`).get(req.params.id) as any
+  const row = (await db.prepare(`SELECT * FROM carousels WHERE id = ?`).get(req.params.id)) as any
   if (!row) return res.status(404).json({ error: 'Carrusel no encontrado' })
   const carousel = rowToCarousel(row)
 
@@ -255,7 +255,7 @@ router.post('/:id/queue', async (req, res) => {
     }
     await appendCarouselQueueRows([queueRow])
 
-    db.prepare(`UPDATE carousels SET status = 'queued' WHERE id = ?`).run(carousel.id)
+    await db.prepare(`UPDATE carousels SET status = 'queued' WHERE id = ?`).run(carousel.id)
     logInfo('carousel', `Carrusel encolado: ${carousel.fuente?.referencia || carousel.tema.slice(0, 40)}`)
     res.json({ success: true, queueId: queueRow.id, imageUrls, caption })
   } catch (err: any) {
@@ -269,7 +269,7 @@ router.post('/:id/queue', async (req, res) => {
 // fila en el Sheet como `published`, para que la cola siga siendo el registro
 // de lo que salió publicado.
 router.post('/:id/publish', async (req, res) => {
-  const row = db.prepare(`SELECT * FROM carousels WHERE id = ?`).get(req.params.id) as any
+  const row = (await db.prepare(`SELECT * FROM carousels WHERE id = ?`).get(req.params.id)) as any
   if (!row) return res.status(404).json({ error: 'Carrusel no encontrado' })
   const carousel = rowToCarousel(row)
 
@@ -312,7 +312,7 @@ router.post('/:id/publish', async (req, res) => {
       },
     ])
 
-    db.prepare(`UPDATE carousels SET status = 'published' WHERE id = ?`).run(carousel.id)
+    await db.prepare(`UPDATE carousels SET status = 'published' WHERE id = ?`).run(carousel.id)
     logInfo('carousel', `Carrusel publicado en IG: ${carousel.fuente?.referencia || carousel.tema.slice(0, 40)}`)
     res.json({ success: true, mediaId, caption })
   } catch (err: any) {
@@ -333,15 +333,19 @@ router.get('/queue/upcoming', async (_req, res) => {
       .sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)))
 
     const slots = nextCarouselSlots(cadence, pendientes.length)
+    const titulos = await Promise.all(pendientes.map((r) => tituloDeCarousel(r.carouselId, r.tema)))
     res.json({
       days: cadence.days,
       times: cadence.times,
       timezone: cadence.timezone,
       count: pendientes.length,
+      // El título necesita una consulta por fila, así que se resuelven ANTES en
+      // paralelo: dejarlo dentro del `map` obligaría a que el map fuera asíncrono
+      // y devolvería un array de promesas al cliente.
       items: pendientes.map((r, i) => ({
         id: r.id,
         carouselId: r.carouselId,
-        tema: tituloDeCarousel(r.carouselId, r.tema),
+        tema: titulos[i],
         referencia: r.referencia,
         firstImage: (() => {
           try {
@@ -406,26 +410,26 @@ router.post('/cadence', async (req, res) => {
 })
 
 // GET /api/carousels — lista (más recientes primero)
-router.get('/', (_req, res) => {
-  const rows = db.prepare(`SELECT * FROM carousels ORDER BY created_at DESC`).all() as any[]
+router.get('/', async (_req, res) => {
+  const rows = (await db.prepare(`SELECT * FROM carousels ORDER BY created_at DESC`).all()) as any[]
   res.json(rows.map(rowToCarousel))
 })
 
 // GET /api/carousels/:id
-router.get('/:id', (req, res) => {
-  const row = db.prepare(`SELECT * FROM carousels WHERE id = ?`).get(req.params.id) as any
+router.get('/:id', async (req, res) => {
+  const row = (await db.prepare(`SELECT * FROM carousels WHERE id = ?`).get(req.params.id)) as any
   if (!row) return res.status(404).json({ error: 'Carrusel no encontrado' })
   res.json(rowToCarousel(row))
 })
 
 // DELETE /api/carousels/:id — borra la fila y las imágenes en disco
-router.delete('/:id', (req, res) => {
-  const row = db.prepare(`SELECT id FROM carousels WHERE id = ?`).get(req.params.id) as any
+router.delete('/:id', async (req, res) => {
+  const row = (await db.prepare(`SELECT id FROM carousels WHERE id = ?`).get(req.params.id)) as any
   if (!row) return res.status(404).json({ error: 'Carrusel no encontrado' })
 
   const dir = carouselDir(req.params.id)
   if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true })
-  db.prepare(`DELETE FROM carousels WHERE id = ?`).run(req.params.id)
+  await db.prepare(`DELETE FROM carousels WHERE id = ?`).run(req.params.id)
 
   res.json({ success: true })
 })

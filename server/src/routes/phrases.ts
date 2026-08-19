@@ -14,12 +14,12 @@ import { EN_NORMA_SQL } from '../utils/norma'
 const router = Router()
 
 // GET /api/phrases   —  ?includeArchived=1 para ver también las retiradas
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   const incluirArchivadas = req.query.includeArchived === '1'
-  const rows = db.prepare(
+  const rows = (await db.prepare(
     `SELECT * FROM phrases ${incluirArchivadas ? '' : 'WHERE archived = 0'}
      ORDER BY sort_order ASC, created_at DESC`
-  ).all() as any[]
+  ).all()) as any[]
   const phrases = rows.map((p) => ({
     id: p.id,
     text: p.text,
@@ -41,14 +41,14 @@ router.get('/', (req, res) => {
 })
 
 // GET /api/phrases/random
-router.get('/random', (_req, res) => {
+router.get('/random', async (_req, res) => {
   // Solo frases EN NORMA (ver `utils/norma.ts`): las de un golpe o en segunda
   // persona no se publican, así que tampoco se proponen.
   // Preferir frases ya vectorizadas para que el matching de imágenes funcione
-  const analyzed = db.prepare(
+  const analyzed = (await db.prepare(
     `SELECT * FROM phrases WHERE embedding IS NOT NULL AND archived = 0 AND ${EN_NORMA_SQL} ORDER BY RANDOM() LIMIT 1`
-  ).get() as any
-  const row = analyzed ?? db.prepare(`SELECT * FROM phrases WHERE archived = 0 AND ${EN_NORMA_SQL} ORDER BY RANDOM() LIMIT 1`).get() as any
+  ).get()) as any
+  const row = analyzed ?? (await db.prepare(`SELECT * FROM phrases WHERE archived = 0 AND ${EN_NORMA_SQL} ORDER BY RANDOM() LIMIT 1`).get()) as any
 
   if (!row) return res.status(404).json({ error: 'No phrases found' })
 
@@ -63,16 +63,16 @@ router.get('/random', (_req, res) => {
 })
 
 // POST /api/phrases
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   const { text, category, author } = req.body
   if (!text) return res.status(400).json({ error: 'text is required' })
 
   const id = uuidv4()
   // Nuevas frases aparecen primero (sort_order menor que el mínimo actual)
-  const minRow = db.prepare(`SELECT MIN(sort_order) as m FROM phrases`).get() as any
+  const minRow = (await db.prepare(`SELECT MIN(sort_order) as m FROM phrases`).get()) as any
   const sortOrder = (minRow?.m ?? 0) - 1
 
-  db.prepare(
+  await db.prepare(
     `INSERT INTO phrases (id, text, category, author, sort_order) VALUES (@id, @text, @category, @author, @sort_order)`
   ).run({ id, text, category: category ?? null, author: author ?? null, sort_order: sortOrder })
 
@@ -80,7 +80,7 @@ router.post('/', (req, res) => {
 })
 
 // POST /api/phrases/bulk — importar múltiples frases a la vez
-router.post('/bulk', (req, res) => {
+router.post('/bulk', async (req, res) => {
   const { phrases: input } = req.body as { phrases: { text: string; author?: string }[] }
   if (!Array.isArray(input) || !input.length)
     return res.status(400).json({ error: 'phrases array is required' })
@@ -91,43 +91,47 @@ router.post('/bulk', (req, res) => {
 
   if (!newPhrases.length) return res.status(400).json({ error: 'No valid phrases' })
 
-  const minRow = db.prepare(`SELECT MIN(sort_order) as m FROM phrases`).get() as any
+  const minRow = (await db.prepare(`SELECT MIN(sort_order) as m FROM phrases`).get()) as any
   const baseOrder = (minRow?.m ?? 0) - newPhrases.length
 
   const insert = db.prepare(
     `INSERT INTO phrases (id, text, author, sort_order) VALUES (@id, @text, @author, @sort_order)`
   )
 
-  db.transaction(() => {
-    newPhrases.forEach((p, idx) => insert.run({ ...p, sort_order: baseOrder + idx }))
-  })()
+  await db.transaction(async () => {
+    // `for` y no `forEach`: con `await` dentro, `forEach` lanzaría todas a la vez y
+    // el COMMIT llegaría antes de que ninguna hubiera terminado.
+    for (const [idx, p] of newPhrases.entries()) {
+      await insert.run({ ...p, sort_order: baseOrder + idx })
+    }
+  })
 
   res.status(201).json(newPhrases.map((p) => ({ ...p, usageCount: 0 })))
 })
 
 // PUT /api/phrases/reorder — reordena todas las frases según el array de IDs recibido
-router.put('/reorder', (req, res) => {
+router.put('/reorder', async (req, res) => {
   const { ids } = req.body as { ids: string[] }
   if (!Array.isArray(ids)) return res.status(400).json({ error: 'ids array is required' })
 
   const updateOrder = db.prepare(`UPDATE phrases SET sort_order = @order WHERE id = @id`)
-  db.transaction(() => {
-    ids.forEach((id, idx) => updateOrder.run({ order: idx, id }))
-  })()
+  await db.transaction(async () => {
+    for (const [idx, id] of ids.entries()) await updateOrder.run({ order: idx, id })
+  })
 
   res.json({ ok: true })
 })
 
 // PUT /api/phrases/:id
-router.put('/:id', (req, res) => {
+router.put('/:id', async (req, res) => {
   const { text, category, author } = req.body
-  const result = db.prepare(
+  const result = (await db.prepare(
     `UPDATE phrases SET text = @text, category = @category, author = @author WHERE id = @id`
-  ).run({ text, category: category ?? null, author: author ?? null, id: req.params.id })
+  ).run({ text, category: category ?? null, author: author ?? null, id: req.params.id }))
 
   if (result.changes === 0) return res.status(404).json({ error: 'Phrase not found' })
 
-  const updated = db.prepare(`SELECT * FROM phrases WHERE id = ?`).get(req.params.id) as any
+  const updated = (await db.prepare(`SELECT * FROM phrases WHERE id = ?`).get(req.params.id)) as any
   res.json({
     id: updated.id,
     text: updated.text,
@@ -138,8 +142,8 @@ router.put('/:id', (req, res) => {
 })
 
 // DELETE /api/phrases/:id
-router.delete('/:id', (req, res) => {
-  const result = db.prepare(`DELETE FROM phrases WHERE id = ?`).run(req.params.id)
+router.delete('/:id', async (req, res) => {
+  const result = (await db.prepare(`DELETE FROM phrases WHERE id = ?`).run(req.params.id))
   if (result.changes === 0) return res.status(404).json({ error: 'Phrase not found' })
   res.json({ success: true })
 })
@@ -150,18 +154,18 @@ router.post('/recommend', async (req, res) => {
   if (!imageFilename) return res.status(400).json({ error: 'imageFilename required' })
   const limit = Math.min(topN ?? 20, 200)
 
-  const imgRow = db.prepare(
+  const imgRow = (await db.prepare(
     `SELECT embedding, analysis_json FROM images WHERE filename = ?`
-  ).get(imageFilename) as any
+  ).get(imageFilename)) as any
   if (!imgRow?.embedding) return res.json({ recommendations: [] })
 
   const imgEmbedding = new Float32Array((imgRow.embedding as Buffer).buffer)
   let imgAnalysis: ImageAnalysis | null = null
   try { imgAnalysis = imgRow.analysis_json ? JSON.parse(imgRow.analysis_json) : null } catch (_) { /* ignore */ }
 
-  const phrases = db.prepare(
+  const phrases = (await db.prepare(
     `SELECT id, embedding, nivel_energia, paleta FROM phrases WHERE embedding IS NOT NULL AND archived = 0 AND ${EN_NORMA_SQL}`
-  ).all() as any[]
+  ).all()) as any[]
 
   const scores = phrases
     .map((p) => {
@@ -189,9 +193,9 @@ router.post('/recommend', async (req, res) => {
 // mood, energía y paleta— para conseguir un vector que no depende del análisis.
 router.post('/embed-texto', async (req, res) => {
   const force: boolean = req.body?.force === true
-  const rows = db.prepare(
+  const rows = (await db.prepare(
     `SELECT id, text FROM phrases${force ? '' : ' WHERE embedding_texto IS NULL'}`
-  ).all() as { id: string; text: string }[]
+  ).all()) as { id: string; text: string }[]
 
   const update = db.prepare(`UPDATE phrases SET embedding_texto = ? WHERE id = ?`)
   let processed = 0
@@ -222,7 +226,7 @@ router.post('/embed-all', async (req, res) => {
   } else if (!force) {
     query += ` WHERE embedding IS NULL OR descripcion_mood IS NULL`
   }
-  const phrases = (only ? db.prepare(query).all(...only) : db.prepare(query).all()) as any[]
+  const phrases = (only ? (await db.prepare(query).all(...only)) : (await db.prepare(query).all())) as any[]
 
   const update = db.prepare(`
     UPDATE phrases SET descripcion_mood = @descripcion_mood, nivel_energia = @nivel_energia,
@@ -277,9 +281,9 @@ router.post('/embed-all', async (req, res) => {
   // de 139 al intentarlo (por eso existe la clasificación a mano). Se marca
   // aparte, y mientras tanto la frase se queda fuera del pool. Se informa para
   // que el agujero sea visible en vez de silencioso.
-  const sinEstructura = (db.prepare(
+  const sinEstructura = ((await db.prepare(
     `SELECT COUNT(*) n FROM phrases WHERE archived = 0 AND estructura IS NULL`
-  ).get() as any).n as number
+  ).get()) as any).n as number
 
   res.json({ processed, total: phrases.length, errors, sinEstructura })
 })

@@ -26,11 +26,11 @@ function getImageFiles(): string[] {
 // Cache en memoria de embeddings de imágenes
 let embeddingCache: Map<string, { embedding: Float32Array; analysis: ImageAnalysis }> | null = null
 
-function loadEmbeddingCache(): Map<string, { embedding: Float32Array; analysis: ImageAnalysis }> {
-  const rows = db.prepare(`
+async function loadEmbeddingCache(): Promise<Map<string, { embedding: Float32Array; analysis: ImageAnalysis }>> {
+  const rows = (await db.prepare(`
     SELECT filename, analysis_json, embedding FROM images
     WHERE analysis_json IS NOT NULL AND embedding IS NOT NULL
-  `).all() as any[]
+  `).all()) as any[]
 
   const cache = new Map<string, { embedding: Float32Array; analysis: ImageAnalysis }>()
   for (const row of rows) {
@@ -43,8 +43,8 @@ function loadEmbeddingCache(): Map<string, { embedding: Float32Array; analysis: 
   return cache
 }
 
-function getCache(): Map<string, { embedding: Float32Array; analysis: ImageAnalysis }> {
-  if (!embeddingCache) embeddingCache = loadEmbeddingCache()
+async function getCache(): Promise<Map<string, { embedding: Float32Array; analysis: ImageAnalysis }>> {
+  if (!embeddingCache) embeddingCache = await loadEmbeddingCache()
   return embeddingCache
 }
 
@@ -91,7 +91,7 @@ router.post('/analyze-all', async (req, res) => {
   if (only) files = files.filter((f) => only.includes(f))
 
   const analyzedSet = new Set(
-    (db.prepare(`SELECT filename FROM images WHERE analysis_json IS NOT NULL`).all() as any[])
+    ((await db.prepare(`SELECT filename FROM images WHERE analysis_json IS NOT NULL`).all()) as any[])
       .map((r) => r.filename)
   )
 
@@ -182,9 +182,9 @@ router.post('/recommend', async (req, res) => {
 
     // Usar embedding + señales pre-computadas si existen
     if (phraseId) {
-      const row = db.prepare(
+      const row = (await db.prepare(
         `SELECT embedding, descripcion_mood, nivel_energia, paleta FROM phrases WHERE id = ?`
-      ).get(phraseId) as any
+      ).get(phraseId)) as any
       if (row?.embedding) {
         phraseEmbedding = new Float32Array((row.embedding as Buffer).buffer)
         descripcionMood = row.descripcion_mood ?? ''
@@ -204,7 +204,7 @@ router.post('/recommend', async (req, res) => {
       phraseEmbedding = await embedText(buildPhraseDocument(analysis))
     }
 
-    const cache = getCache()
+    const cache = await getCache()
     if (cache.size === 0) return res.json({ descripcionMood, recommendations: [] })
 
     const scores: { imageId: string; score: number }[] = []

@@ -29,19 +29,19 @@ import { logInfo, logError } from './logService'
  */
 
 /** Resta uno a los contadores de la pieza, con suelo en 0. */
-function devolverUso(row: any) {
+async function devolverUso(row: any) {
   if (row.phrase_id) {
-    db.prepare(
+    await db.prepare(
       `UPDATE phrases SET usage_count = MAX(0, usage_count - 1) WHERE id = ?`
     ).run(row.phrase_id)
   }
   const cfg = row.config_extra ? JSON.parse(row.config_extra) : {}
   if (cfg.imageId) {
-    db.prepare(
+    await db.prepare(
       `UPDATE images SET usage_count = MAX(0, usage_count - 1) WHERE filename = ?`
     ).run(cfg.imageId)
   }
-  if (cfg.audioTrack && cfg.audioTrack !== 'auto') bumpAudioUsage(cfg.audioTrack, -1)
+  if (cfg.audioTrack && cfg.audioTrack !== 'auto') await bumpAudioUsage(cfg.audioTrack, -1)
 }
 
 export interface ResultadoReconcile {
@@ -64,22 +64,22 @@ export async function reconciliarRechazos(filasDadas?: QueueRow[]): Promise<Resu
   let sinVinculo = 0
 
   for (const fila of rechazadas) {
-    const video = db.prepare(
+    const video = (await db.prepare(
       `SELECT * FROM videos WHERE queue_id = ? AND (estado IS NULL OR estado <> 'rechazado')`
-    ).get(fila.id) as any
+    ).get(fila.id)) as any
 
     if (!video) {
       // O ya se reconcilió, o es una fila anterior a que existiera `queue_id`
       // (nada que devolver: no se sabe a qué pieza pertenece).
-      const existe = db.prepare(`SELECT 1 FROM videos WHERE queue_id = ?`).get(fila.id)
+      const existe = await db.prepare(`SELECT 1 FROM videos WHERE queue_id = ?`).get(fila.id)
       if (!existe) sinVinculo++
       continue
     }
 
-    db.transaction(() => {
-      devolverUso(video)
-      db.prepare(`UPDATE videos SET estado = 'rechazado' WHERE id = ?`).run(video.id)
-    })()
+    await db.transaction(async () => {
+      await devolverUso(video)
+      await db.prepare(`UPDATE videos SET estado = 'rechazado' WHERE id = ?`).run(video.id)
+    })
 
     detalle.push({ videoId: video.id, filename: video.filename, queueId: fila.id })
     logInfo('publish', `Rechazo en Telegram reconciliado: ${video.filename} — uso devuelto`)

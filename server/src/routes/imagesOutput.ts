@@ -15,8 +15,8 @@ import db from '../db'
 const router = Router()
 
 // GET /api/images-output — listar imágenes generadas
-router.get('/', (_req, res) => {
-  const rows = db.prepare(`SELECT * FROM images_output ORDER BY created_at DESC`).all() as any[]
+router.get('/', async (_req, res) => {
+  const rows = (await db.prepare(`SELECT * FROM images_output ORDER BY created_at DESC`).all()) as any[]
   res.json(rows.map(rowToImageRecord))
 })
 
@@ -55,7 +55,7 @@ router.post('/generate', async (req, res) => {
     const id = uuidv4()
     const createdAt = new Date().toISOString()
 
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO images_output
         (id, filename, local_path, public_url, phrase_id, variant,
          viral, font, resolution, config_extra, created_at)
@@ -76,7 +76,7 @@ router.post('/generate', async (req, res) => {
     })
 
     const record = rowToImageRecord(
-      db.prepare(`SELECT * FROM images_output WHERE id = ?`).get(id) as any
+      (await db.prepare(`SELECT * FROM images_output WHERE id = ?`).get(id)) as any
     )
 
     logInfo('generate', `Imagen generada: ${result.filename}`)
@@ -90,18 +90,18 @@ router.post('/generate', async (req, res) => {
 // POST /api/images-output/:id/upload-drive
 router.post('/:id/upload-drive', async (req, res) => {
   try {
-    const row = db.prepare(`SELECT * FROM images_output WHERE id = ?`).get(req.params.id) as any
+    const row = (await db.prepare(`SELECT * FROM images_output WHERE id = ?`).get(req.params.id)) as any
     if (!row) return res.status(404).json({ error: 'Image not found' })
 
     const driveUrl = await uploadToDrive(row.local_path, row.filename)
-    db.prepare(`UPDATE images_output SET drive_url = ? WHERE id = ?`).run(driveUrl, req.params.id)
+    await db.prepare(`UPDATE images_output SET drive_url = ? WHERE id = ?`).run(driveUrl, req.params.id)
 
     if (row.phrase_id) {
-      db.prepare(`UPDATE phrases SET usage_count = usage_count + 1 WHERE id = ?`).run(row.phrase_id)
+      await db.prepare(`UPDATE phrases SET usage_count = usage_count + 1 WHERE id = ?`).run(row.phrase_id)
     }
     const cfg = row.config_extra ? JSON.parse(row.config_extra) : {}
     if (cfg.imageId) {
-      db.prepare(`
+      await db.prepare(`
         INSERT INTO images (filename, usage_count) VALUES (@f, 1)
         ON CONFLICT(filename) DO UPDATE SET usage_count = usage_count + 1
       `).run({ f: cfg.imageId })
@@ -116,12 +116,12 @@ router.post('/:id/upload-drive', async (req, res) => {
 })
 
 // DELETE /api/images-output/:id
-router.delete('/:id', (req, res) => {
-  const row = db.prepare(`SELECT local_path FROM images_output WHERE id = ?`).get(req.params.id) as any
+router.delete('/:id', async (req, res) => {
+  const row = (await db.prepare(`SELECT local_path FROM images_output WHERE id = ?`).get(req.params.id)) as any
   if (!row) return res.status(404).json({ error: 'Image not found' })
 
   if (fs.existsSync(row.local_path)) fs.unlinkSync(row.local_path)
-  db.prepare(`DELETE FROM images_output WHERE id = ?`).run(req.params.id)
+  await db.prepare(`DELETE FROM images_output WHERE id = ?`).run(req.params.id)
 
   res.json({ success: true })
 })

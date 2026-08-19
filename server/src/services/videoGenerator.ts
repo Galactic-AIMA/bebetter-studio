@@ -118,9 +118,9 @@ async function resolveImagePath(imagePath: string): Promise<string> {
  * Segundo por el que debe empezar a sonar la pista. Ver `audioSegment.ts`: con
  * temas largos, arrancar en 0 se lleva la intro en vez del estribillo.
  */
-function resolveAudioOffset(audioTrack?: string): number {
+async function resolveAudioOffset(audioTrack?: string): Promise<number> {
   if (!audioTrack) return 0
-  const row = db.prepare(`SELECT offset_seg FROM audio_tracks WHERE filename = ?`).get(audioTrack) as any
+  const row = (await db.prepare(`SELECT offset_seg FROM audio_tracks WHERE filename = ?`).get(audioTrack)) as any
   const off = Number(row?.offset_seg ?? 0)
   return Number.isFinite(off) && off > 0 ? off : 0
 }
@@ -185,6 +185,9 @@ export async function generateVideo(
   const { text, transition, transitionDuration, duration } = cfg
   const audioPath = await resolveAudioPath(cfg.audioTrack)
   const imagePath = await resolveImagePath(cfg.imagePath)
+  // Se resuelve AQUÍ y no donde se usa: allí abajo estamos dentro del callback que
+  // arma la orden de FFmpeg, que no puede ser asíncrono.
+  const offsetAudio = await resolveAudioOffset(cfg.audioTrack)
 
   const maxW = Math.round((text.maxWidth / 100) * width)
   const centerY = Math.round((text.position.y / 100) * height)
@@ -339,7 +342,7 @@ export async function generateVideo(
       // todo lo anterior. Con `-stream_loop -1` la pista sigue repitiéndose si el
       // reel dura más que lo que queda desde el offset.
       const inOpts = ['-stream_loop -1']
-      const off = resolveAudioOffset(cfg.audioTrack)
+      const off = offsetAudio
       if (off > 0) inOpts.push(`-ss ${off}`)
       cmd.input(audioPath).inputOptions(inOpts)
       if (!audioInComplex) cmd.audioFilters(audioFilterChain(duration))

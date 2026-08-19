@@ -70,14 +70,12 @@ async function subirNuevasAR2(): Promise<void> {
   }
 }
 
-function analyzeNewImages() {
+async function analyzeNewImages() {
   const dir = config.paths.images
   if (!fs.existsSync(dir)) return
 
-  const analyzedSet = new Set(
-    (db.prepare(`SELECT filename FROM images WHERE tags IS NOT NULL AND tags != '[]'`).all() as any[])
-      .map((r: any) => r.filename)
-  )
+  const filas = (await db.prepare(`SELECT filename FROM images WHERE tags IS NOT NULL AND tags != '[]'`).all()) as any[]
+  const analyzedSet = new Set(filas.map((r: any) => r.filename))
 
   const unanalyzed = fs.readdirSync(dir).filter(
     (f) => SUPPORTED.includes(path.extname(f).toLowerCase()) && !analyzedSet.has(f)
@@ -87,7 +85,7 @@ function analyzeNewImages() {
     for (const filename of unanalyzed) {
       try {
         const tags = await analyzeImage(path.join(dir, filename))
-        db.prepare(`
+        await db.prepare(`
           INSERT INTO images (filename, tags, analyzed_at)
           VALUES (@filename, @tags, @analyzed_at)
           ON CONFLICT(filename) DO UPDATE SET tags = @tags, analyzed_at = @analyzed_at

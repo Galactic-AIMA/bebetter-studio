@@ -33,8 +33,8 @@ export interface Publication {
 }
 
 /** Inserta o actualiza una publicación. No pisa un vínculo existente con uno vacío. */
-export function recordPublication(p: Publication): void {
-  db.prepare(
+export async function recordPublication(p: Publication): Promise<void> {
+  await db.prepare(
     `INSERT INTO publications
        (media_id, platform, permalink, media_type, published_at, video_id, carousel_id, queue_id, phrase_id, caption, match_source)
      VALUES
@@ -63,11 +63,9 @@ export function recordPublication(p: Publication): void {
   })
 }
 
-export function getPublicationsByCarousel(carouselId: string): Publication[] {
-  return db
-    .prepare(`SELECT * FROM publications WHERE carousel_id = ?`)
-    .all(carouselId)
-    .map(rowToPublication)
+export async function getPublicationsByCarousel(carouselId: string): Promise<Publication[]> {
+  const filas = await db.prepare(`SELECT * FROM publications WHERE carousel_id = ?`).all(carouselId)
+  return filas.map(rowToPublication)
 }
 
 function rowToPublication(r: any): Publication {
@@ -110,7 +108,7 @@ export async function syncPublicationsFromSheet(): Promise<number> {
   // Mismo patrón que el bug de `mediaType` documentado abajo: un campo que existe,
   // que se conoce justo aquí, y que no se pasaba.
   const videosByUrl = new Map<string, { id: string; phraseId: string | null }>()
-  for (const v of db.prepare(`SELECT id, s3_url, phrase_id FROM videos WHERE s3_url IS NOT NULL`).all() as any[]) {
+  for (const v of (await db.prepare(`SELECT id, s3_url, phrase_id FROM videos WHERE s3_url IS NOT NULL`).all()) as any[]) {
     videosByUrl.set(v.s3_url, { id: v.id, phraseId: v.phrase_id ?? null })
   }
 
@@ -236,21 +234,21 @@ export async function reconcile(media: PublishedMedia[]): Promise<ReconcileRepor
 
   // videos.s3_url → videos.id, para resolver la fila de la cola a una pieza real.
   const videosByUrl = new Map<string, string>()
-  for (const v of db.prepare(`SELECT id, s3_url FROM videos WHERE s3_url IS NOT NULL`).all() as any[]) {
+  for (const v of (await db.prepare(`SELECT id, s3_url FROM videos WHERE s3_url IS NOT NULL`).all()) as any[]) {
     videosByUrl.set(v.s3_url, v.id)
   }
 
   // Frase de cada video, para el emparejamiento por caption.
   const phraseByVideo = new Map<string, string>()
-  for (const r of db
+  for (const r of (await db
     .prepare(`SELECT v.id, p.text FROM videos v JOIN phrases p ON p.id = v.phrase_id`)
-    .all() as any[]) {
+    .all()) as any[]) {
     phraseByVideo.set(r.id, r.text)
   }
 
   // Texto de la portada de cada carrusel (slide 1), que es lo que lleva el caption.
   const coverByCarousel = new Map<string, string>()
-  for (const c of db.prepare(`SELECT id, slides_json FROM carousels`).all() as any[]) {
+  for (const c of (await db.prepare(`SELECT id, slides_json FROM carousels`).all()) as any[]) {
     try {
       const slides = JSON.parse(c.slides_json ?? '[]')
       const portada = slides.find((s: any) => s.rol === 'portada') ?? slides[0]
@@ -412,13 +410,13 @@ export async function refineWithEmbeddings(
   usedVideoIds: Set<string> = new Set()
 ): Promise<{ rescued: ReconcileCandidate[]; stillOrphan: ReconcileCandidate[] }> {
   const frases = (
-    db.prepare(`SELECT id, text, embedding FROM phrases WHERE embedding IS NOT NULL`).all() as any[]
-  ).map((p) => ({ id: p.id as string, text: p.text as string, vec: toF32(p.embedding as Buffer) }))
+    (await db.prepare(`SELECT id, text, embedding FROM phrases WHERE embedding IS NOT NULL`).all()) as any[]
+  ).map((p: any) => ({ id: p.id as string, text: p.text as string, vec: toF32(p.embedding as Buffer) }))
 
   const videosByPhrase = new Map<string, { id: string; createdAt: string }[]>()
-  for (const v of db
+  for (const v of (await db
     .prepare(`SELECT id, phrase_id, created_at FROM videos WHERE phrase_id IS NOT NULL ORDER BY created_at`)
-    .all() as any[]) {
+    .all()) as any[]) {
     const arr = videosByPhrase.get(v.phrase_id) ?? []
     arr.push({ id: v.id, createdAt: v.created_at })
     videosByPhrase.set(v.phrase_id, arr)
@@ -502,12 +500,12 @@ export async function refineWithVision(
   ocr: (buf: Buffer) => Promise<string>,
   usedVideoIds: Set<string> = new Set()
 ): Promise<{ rescued: ReconcileCandidate[]; phraseOnly: ReconcileCandidate[]; stillOrphan: ReconcileCandidate[] }> {
-  const frases = db.prepare(`SELECT id, text FROM phrases`).all() as { id: string; text: string }[]
+  const frases = (await db.prepare(`SELECT id, text FROM phrases`).all()) as { id: string; text: string }[]
 
   const videosByPhrase = new Map<string, { id: string; createdAt: string }[]>()
-  for (const v of db
+  for (const v of (await db
     .prepare(`SELECT id, phrase_id, created_at FROM videos WHERE phrase_id IS NOT NULL ORDER BY created_at`)
-    .all() as any[]) {
+    .all()) as any[]) {
     const arr = videosByPhrase.get(v.phrase_id) ?? []
     arr.push({ id: v.id, createdAt: v.created_at })
     videosByPhrase.set(v.phrase_id, arr)
@@ -587,11 +585,11 @@ export async function refineWithVision(
 }
 
 /** Persiste los vínculos de un informe de reconciliación. Devuelve cuántos guardó. */
-export function persistReconcile(report: ReconcileReport, includeOrphans = true): number {
+export async function persistReconcile(report: ReconcileReport, includeOrphans = true): Promise<number> {
   const filas = [...report.matched, ...(includeOrphans ? report.orphanMedia : [])]
-  const tx = db.transaction((items: ReconcileCandidate[]) => {
-    for (const c of items) {
-      recordPublication({
+  await db.transaction(async () => {
+    for (const c of filas) {
+      await recordPublication({
         mediaId: c.media.id,
         platform: 'instagram',
         permalink: c.media.permalink,
@@ -606,7 +604,6 @@ export function persistReconcile(report: ReconcileReport, includeOrphans = true)
       })
     }
   })
-  tx(filas)
   return filas.length
 }
 
@@ -648,8 +645,8 @@ export async function identifyBackgroundImage(
   analyze: (url: string) => Promise<Float32Array>,
   cosine: (a: Float32Array, b: Float32Array) => number
 ): Promise<ImageMatch> {
-  const banco = (db.prepare(`SELECT filename, embedding FROM images WHERE embedding IS NOT NULL`).all() as any[]).map(
-    (r) => {
+  const banco = ((await db.prepare(`SELECT filename, embedding FROM images WHERE embedding IS NOT NULL`).all()) as any[]).map(
+    (r: any) => {
       const b = r.embedding as Buffer
       return { filename: r.filename as string, vec: new Float32Array(b.buffer, b.byteOffset, b.byteLength / 4) }
     }
@@ -690,9 +687,9 @@ export async function identifyBackgroundImage(
   }
 }
 
-export function saveImageMatch(m: ImageMatch): void {
+export async function saveImageMatch(m: ImageMatch): Promise<void> {
   if (!m.filename) return
-  db.prepare(`UPDATE publications SET image_filename = ?, image_match_score = ? WHERE media_id = ?`).run(
+  await db.prepare(`UPDATE publications SET image_filename = ?, image_match_score = ? WHERE media_id = ?`).run(
     m.filename,
     m.score,
     m.mediaId

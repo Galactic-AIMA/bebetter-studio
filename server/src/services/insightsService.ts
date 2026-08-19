@@ -100,8 +100,8 @@ export function fechaLocal(d = new Date()): string {
   return `${d.getFullYear()}-${mes}-${dia}`
 }
 
-export function saveSnapshot(mediaId: string, metrics: Record<string, number>, capturedAt?: string): void {
-  db.prepare(
+export async function saveSnapshot(mediaId: string, metrics: Record<string, number>, capturedAt?: string): Promise<void> {
+  await db.prepare(
     `INSERT INTO media_insights (media_id, captured_at, metrics_json)
      VALUES (?, ?, ?)
      ON CONFLICT(media_id, captured_at) DO UPDATE SET metrics_json = excluded.metrics_json`
@@ -144,13 +144,13 @@ export async function collectInsights(soloRecientes = false): Promise<CollectRes
   }
 
   const desde = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString()
-  const filas = db
+  const filas = (await db
     .prepare(
       soloRecientes
         ? `SELECT media_id, media_type FROM publications WHERE published_at >= ? ORDER BY published_at DESC`
         : `SELECT media_id, media_type FROM publications ORDER BY published_at DESC`
     )
-    .all(...(soloRecientes ? [desde] : [])) as { media_id: string; media_type: string | null }[]
+    .all(...(soloRecientes ? [desde] : []))) as { media_id: string; media_type: string | null }[]
 
   const res: CollectResult = { total: filas.length, ok: 0, fallidas: [] }
 
@@ -227,8 +227,8 @@ export interface PieceStats {
 }
 
 /** Último snapshot de cada publicación, ya cruzado con su receta. */
-export function pieceStats(): PieceStats[] {
-  const filas = db
+export async function pieceStats(): Promise<PieceStats[]> {
+  const filas = (await db
     .prepare(
       `SELECT
          r.media_id, r.permalink, r.published_at, r.media_type, r.recipe_status,
@@ -255,7 +255,7 @@ export function pieceStats(): PieceStats[] {
        ) i ON i.media_id = r.media_id
        ORDER BY r.published_at DESC`
     )
-    .all() as any[]
+    .all()) as any[]
 
   return filas.map((f) => {
     const m = f.metrics_json ? JSON.parse(f.metrics_json) : {}
@@ -356,7 +356,10 @@ export function rangoEnergia(n?: number): string | undefined {
   return 'máxima (9-10)'
 }
 
-export function summaryByDimension(stats: PieceStats[] = pieceStats()): DimensionSummary[] {
+export async function summaryByDimension(stats?: PieceStats[]): Promise<DimensionSummary[]> {
+  // El valor por defecto ya no puede ir en la firma: cargarlo sería una llamada
+  // asíncrona, y un `await` no cabe ahí.
+  const piezas = stats ?? (await pieceStats())
   const dims: [string, (s: PieceStats) => string | undefined][] = [
     ['mood', (s) => s.moodCategory],
     ['formato', (s) => (s.mediaType === 'CAROUSEL_ALBUM' ? 'carrusel' : 'reel')],
@@ -375,7 +378,7 @@ export function summaryByDimension(stats: PieceStats[] = pieceStats()): Dimensio
 
   const out: DimensionSummary[] = []
   // Solo piezas con métricas: una sin snapshot no aporta, solo diluye la media.
-  const conDatos = stats.filter((s) => s.reach != null)
+  const conDatos = piezas.filter((s) => s.reach != null)
 
   for (const [dimension, get] of dims) {
     const grupos = new Map<string, PieceStats[]>()
