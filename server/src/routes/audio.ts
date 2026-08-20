@@ -45,7 +45,7 @@ export interface TrackSource {
   confirmada: boolean
 }
 
-/** Lista los archivos de audio en data/audio (ordenados). */
+/** Lista los archivos de audio que hay EN DISCO (ordenados). */
 function listAudioFiles(dir: string): string[] {
   if (!fs.existsSync(dir)) return []
   return fs
@@ -54,12 +54,32 @@ function listAudioFiles(dir: string): string[] {
     .sort((a, b) => a.localeCompare(b))
 }
 
+/**
+ * Qué pistas existen: la BASE manda, el disco solo añade.
+ *
+ * Listar por `readdirSync` a secas funcionaba mientras el banco vivía en la
+ * carpeta local. Desde la Fase 1 vive en R2 y `mediaStore` baja los ficheros solo
+ * cuando hacen falta, así que en la VM el directorio está VACÍO y el panel salía
+ * sin una sola pista — con 68 filas en `audio_tracks`. Es la misma corrección que
+ * la Fase 1 hizo para imágenes, que no llegó a audio.
+ *
+ * Se UNEN las dos fuentes en vez de sustituir una por otra: la base es la verdad,
+ * pero un fichero recién dejado en `data/audio` y todavía sin registrar sigue
+ * viéndose en local. Quitar eso convertiría "aún no está en la base" en
+ * "no existe", que es justo el fallo silencioso que se quiere evitar.
+ */
+function nombresDePistas(dir: string, enBase: Iterable<string>): string[] {
+  const nombres = new Set<string>(enBase)
+  for (const f of listAudioFiles(dir)) nombres.add(f)
+  return [...nombres].sort((a, b) => a.localeCompare(b))
+}
+
 // GET /api/audio — lista las pistas con su metadata (energía/mood si ya se analizó)
 router.get('/', async (_req, res) => {
   const dir = path.resolve(config.paths.audio)
   const meta = await getAllAudioMeta()
   const fuentes = await getSourcesByTrack()
-  const tracks: AudioTrack[] = listAudioFiles(dir).map((filename) => {
+  const tracks: AudioTrack[] = nombresDePistas(dir, meta.keys()).map((filename) => {
     const m = meta.get(filename)
     const src = fuentes.get(filename) ?? []
     return {
