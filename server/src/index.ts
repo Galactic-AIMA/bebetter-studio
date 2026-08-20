@@ -113,6 +113,25 @@ initDb().then(() => arrancar()).catch((e: any) => {
   process.exit(1)
 })
 
+/**
+ * Si esta instancia ejecuta las tareas programadas que TOCAN EL MUNDO DE FUERA:
+ * recoger insights de la Graph API, reconciliar rechazos contra el Google Sheet y
+ * sincronizar Pinterest.
+ *
+ * Existe porque puede haber DOS instancias vivas a la vez —la de casa y la de la
+ * nube— y estas tareas no son inocuas por duplicado: gastan cuota de la Graph API
+ * dos veces y, sobre todo, cada una escribe en SU base. Dos historiales de `videos`
+ * distintos son dos rotaciones de frases distintas, y ahí es donde se acaba
+ * publicando dos veces la misma frase sin que nada avise.
+ *
+ * La limpieza de ficheros viejos NO entra aquí: es higiene del disco local y cada
+ * instancia debe hacer la suya.
+ *
+ * Ponerlo a `false` deja la instancia como banco de pruebas: sirve, genera y
+ * renderiza, pero no toca nada compartido.
+ */
+const TAREAS_EXTERNAS = process.env.TAREAS_EXTERNAS !== 'false'
+
 function arrancar() {
 app.listen(config.port, () => {
   logInfo('system', `Servidor iniciado en http://localhost:${config.port}`)
@@ -127,22 +146,30 @@ app.listen(config.port, () => {
   // sondeo y no por aviso porque n8n (EC2) no puede alcanzar esta app (local).
   // Se corre al arrancar además de cada 2 h: el PC no está siempre encendido, y
   // los rechazos se acumulan mientras tanto.
-  reconciliarRechazosSeguro()
-  cron.schedule('15 */2 * * *', () => { reconciliarRechazosSeguro() })
-  console.log('Reconciliación de rechazos: activa (al arrancar y cada 2 horas)')
+  if (TAREAS_EXTERNAS) {
+    reconciliarRechazosSeguro()
+    cron.schedule('15 */2 * * *', () => { reconciliarRechazosSeguro() })
+    console.log('Reconciliación de rechazos: activa (al arrancar y cada 2 horas)')
+  } else {
+    console.log('Reconciliación de rechazos: DESACTIVADA (TAREAS_EXTERNAS=false)')
+  }
 
   // Snapshot diario de insights. De madrugada porque no compite con nada y la
   // granularidad de la serie es el día. Best-effort: si el token o la red fallan,
   // se pierde un punto de la serie, no la app.
-  cron.schedule('30 4 * * *', async () => {
-    try {
-      const r = await collectInsights(true)
-      console.log(`Insights: snapshot de ${r.ok}/${r.total} publicaciones`)
-    } catch (err: any) {
-      console.error('Insights: fallo al recoger —', err.message)
-    }
-  })
-  console.log('Insights: activo (snapshot diario 4:30)')
+  if (TAREAS_EXTERNAS) {
+    cron.schedule('30 4 * * *', async () => {
+      try {
+        const r = await collectInsights(true)
+        console.log(`Insights: snapshot de ${r.ok}/${r.total} publicaciones`)
+      } catch (err: any) {
+        console.error('Insights: fallo al recoger —', err.message)
+      }
+    })
+    console.log('Insights: activo (snapshot diario 4:30)')
+  } else {
+    console.log('Insights: DESACTIVADO (TAREAS_EXTERNAS=false)')
+  }
 
   // Red de seguridad del cron: n8n publica con el PC apagado, pero el recolector
   // vive aquí — si la máquina no estaba encendida a las 4:30, ese día no habría
@@ -151,7 +178,7 @@ app.listen(config.port, () => {
   // repetiría ~60 llamadas a la Graph API sin añadir nada a la serie.
   // Encadenado y no `await`: el callback de `app.listen` es síncrono, y volverlo
   // async convertiría cualquier fallo de aquí dentro en un rechazo sin dueño.
-  haySnapshotDeHoy()
+  if (TAREAS_EXTERNAS) haySnapshotDeHoy()
     .then((hay) => {
       if (hay) {
         console.log('Insights: ya hay snapshot de hoy, no se repite al arrancar')
@@ -164,7 +191,7 @@ app.listen(config.port, () => {
 
   // gallery-dl retirado (2026-07-26): duplicaba imágenes que la Pinterest API ya
   // baja. La sincronización queda solo por la Pinterest API v5 (abajo).
-  if (config.pinterest.appId && config.pinterest.boardId) {
+  if (TAREAS_EXTERNAS && config.pinterest.appId && config.pinterest.boardId) {
     console.log('Pinterest API: sincronizando al arranque...')
     syncBoardImages().then((r) => {
       console.log(`Pinterest API sync: ${r.newImages} nuevas imágenes de ${r.totalChecked} pines`)
