@@ -43,7 +43,17 @@ COPY . .
 # server: `tsc`               → server/dist
 # El cliente importa `@shared` desde `server/src/text`, así que las dos partes
 # tienen que estar presentes en el mismo contexto de build. Lo están.
-RUN npm run build
+#
+# ⚠️ EL HEAP, A MANO. V8 dimensiona su heap por defecto a partir de la RAM que ve,
+# y en la VM (t3.small, 1,9 GB) le sale tan pequeño que el `vite build` del
+# cliente muere con "Reached heap limit — JavaScript heap out of memory".
+# Verificado el 2026-08-19: sin esto el build falla en la VM con exit code 134,
+# y en el portátil pasa sin enterarse — el fallo solo aparece donde importa.
+# Ojo al detalle que despista: el swap NO lo salva. V8 se mata al llegar a SU
+# tope lógico, no cuando se acaba la RAM física, así que el swap ni se toca
+# (14 MB usados de 2 GB en el intento fallido). Lo que hace falta es subir el
+# tope; el swap solo sirve para que subirlo no reviente la máquina.
+RUN NODE_OPTIONS=--max-old-space-size=1536 npm run build
 
 # Fuera las dependencias de desarrollo ANTES de copiar node_modules al runtime.
 # Se poda aquí y no allí porque los binarios nativos ya están compilados contra
