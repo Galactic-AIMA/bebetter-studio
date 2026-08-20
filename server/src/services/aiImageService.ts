@@ -152,7 +152,14 @@ export async function generarFondoParaFrase(
     // esta columna existe para hacer.
     let modelo: string
     if (config.imageBackend === 'vertex') {
-      const r = await generateImageVertex({ prompt, aspectRatio: ASPECTO })
+      // Flash primero y el de carruseles como respaldo: un fondo de reel no lleva
+      // texto dentro, así que no pide el Pro — y con 30 piezas la diferencia entre
+      // 7 s y 430 s por imagen decide si el lote tarda minutos u horas.
+      const r = await generateImageVertex({
+        prompt,
+        aspectRatio: ASPECTO,
+        modelos: [config.google.vertex.imageModelReels, config.google.vertex.imageModel],
+      })
       fs.writeFileSync(outPath, r.buffer)
       modelo = r.modelo
     } else {

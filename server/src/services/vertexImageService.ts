@@ -33,6 +33,15 @@ export interface VertexImageOptions {
    * referencia y sin avisar==, perdiendo la coherencia en silencio.
    */
   imageInput?: string | string[]
+  /**
+   * Cadena de modelos a probar, en orden. Sustituye a la de `config`.
+   *
+   * Existe porque las dos cosas que generamos NO piden lo mismo: la slide de un
+   * carrusel lleva **el texto integrado en la imagen** y ahí el Pro se gana su
+   * sitio; el fondo de un reel es solo fondo —el texto lo pinta FFmpeg después—
+   * y el flash cumple igual. Ver la nota de tiempos más abajo.
+   */
+  modelos?: string[]
 }
 
 export interface VertexImageResult {
@@ -125,7 +134,11 @@ export async function generateImage(opts: VertexImageOptions): Promise<VertexIma
   // **7,2 s**. Sesenta veces. Y la calidad no es de otra categoría — el Pro sale más
   // minimalista y el flash con más textura, pero los dos cumplen la norma de marca y
   // ninguno mete texto.
-  const cadena = [config.google.vertex.imageModel, config.google.vertex.imageModelRespaldo]
+  //
+  // Y por eso `opts.modelos` puede sustituir esta cadena: los fondos de reel piden
+  // el flash primero (no llevan texto dentro, lo pinta FFmpeg), y los carruseles
+  // siguen pidiendo el Pro, porque su slide SÍ lleva el texto integrado.
+  const cadena = (opts.modelos ?? [config.google.vertex.imageModel, config.google.vertex.imageModelRespaldo])
     .filter((m, i, a): m is string => !!m && a.indexOf(m) === i)
 
   let json: any

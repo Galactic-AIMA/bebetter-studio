@@ -73,6 +73,13 @@ export const config = {
       // A quién se le pide cuando el principal no da hueco (429 de la cuota
       // compartida). Vaciarlo desactiva el respaldo y el fallo sube tal cual.
       imageModelRespaldo: process.env.VERTEX_IMAGE_MODEL_FALLBACK ?? 'gemini-2.5-flash-image',
+      // Modelo para los FONDOS DE REEL. Distinto del de carruseles a propósito
+      // (2026-08-20): el fondo de un reel no lleva texto —lo pinta FFmpeg encima—,
+      // así que no necesita el Pro. Y la diferencia no es de matiz: medido el
+      // 2026-08-18 con el mismo prompt, el Pro tardó 430,5 s y el flash 7,2 s.
+      // En un lote de 30 eso es la diferencia entre horas y minutos.
+      // El Pro queda de respaldo por si el flash no da hueco.
+      imageModelReels: process.env.VERTEX_IMAGE_MODEL_REELS || 'gemini-2.5-flash-image',
       // Los modelos de texto 3.x tampoco están en us-central1: solo en `global`.
       // Los embeddings sí (y ahí es donde se validó que los vectores coinciden),
       // por eso son dos `location` distintas y no una.
