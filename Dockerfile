@@ -104,7 +104,13 @@ COPY --from=build /app/data/watermark ./data/watermark
 # `data/` debe existir y ser escribible: db.ts abre ahí el fichero SQLite aunque
 # el motor real sea Postgres, y mediaStore baja a disco lo que FFmpeg necesita
 # como fichero real.
-RUN mkdir -p /app/data /app/output /app/credentials \
+# ⚠️ Los puntos de montaje se CREAN AQUÍ, y con su dueño puesto.
+# Un volumen nombrado hereda dueño y permisos del directorio que encuentra en la
+# imagen; si el directorio NO existe, Docker lo crea como ROOT y el contenedor
+# —que corre como 'node'— no puede escribir en él. Pasó con data/images:
+#   [Pinterest] Error en sync: EACCES: permission denied, open '/app/data/images/...'
+# El fallo no aparece al arrancar, sino la primera vez que algo intenta escribir.
+RUN mkdir -p /app/data/images /app/data/audio /app/output /app/credentials \
  && chown -R node:node /app/data /app/output /app/credentials
 
 # Sin root. El proceso no necesita privilegios y un contenedor con FFmpeg
