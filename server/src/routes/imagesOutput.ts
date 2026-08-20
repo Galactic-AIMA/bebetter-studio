@@ -103,7 +103,9 @@ router.post('/:id/upload-drive', async (req, res) => {
     if (cfg.imageId) {
       await db.prepare(`
         INSERT INTO images (filename, usage_count) VALUES (@f, 1)
-        ON CONFLICT(filename) DO UPDATE SET usage_count = usage_count + 1
+        -- `images.usage_count` cualificado: sin el nombre de la tabla, Postgres
+        -- no sabe si es la fila existente o `excluded` y falla con 42702.
+        ON CONFLICT(filename) DO UPDATE SET usage_count = images.usage_count + 1
       `).run({ f: cfg.imageId })
     }
 

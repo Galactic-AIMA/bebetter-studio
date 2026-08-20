@@ -39,15 +39,21 @@ export async function recordPublication(p: Publication): Promise<void> {
        (media_id, platform, permalink, media_type, published_at, video_id, carousel_id, queue_id, phrase_id, caption, match_source)
      VALUES
        (@mediaId, @platform, @permalink, @mediaType, @publishedAt, @videoId, @carouselId, @queueId, @phraseId, @caption, @matchSource)
+     -- ⚠️ La fila existente SE CUALIFICA con el nombre de la tabla.
+     -- En SQLite, un `permalink` a secas aquí dentro significa "la fila que ya
+     -- estaba". En Postgres NO: `excluded` expone TODAS las columnas de la tabla,
+     -- así que la referencia sin cualificar es ambigua entre las dos y falla con
+     -- `42702 column reference "permalink" is ambiguous`. Tumbó la app en su
+     -- primer arranque real contra Postgres (2026-08-19).
      ON CONFLICT(media_id) DO UPDATE SET
-       permalink    = COALESCE(excluded.permalink, permalink),
-       media_type   = COALESCE(excluded.media_type, media_type),
-       video_id     = COALESCE(excluded.video_id, video_id),
-       carousel_id  = COALESCE(excluded.carousel_id, carousel_id),
-       queue_id     = COALESCE(excluded.queue_id, queue_id),
-       phrase_id    = COALESCE(excluded.phrase_id, phrase_id),
-       caption      = COALESCE(excluded.caption, caption),
-       match_source = COALESCE(excluded.match_source, match_source)`
+       permalink    = COALESCE(excluded.permalink,    publications.permalink),
+       media_type   = COALESCE(excluded.media_type,   publications.media_type),
+       video_id     = COALESCE(excluded.video_id,     publications.video_id),
+       carousel_id  = COALESCE(excluded.carousel_id,  publications.carousel_id),
+       queue_id     = COALESCE(excluded.queue_id,     publications.queue_id),
+       phrase_id    = COALESCE(excluded.phrase_id,    publications.phrase_id),
+       caption      = COALESCE(excluded.caption,      publications.caption),
+       match_source = COALESCE(excluded.match_source, publications.match_source)`
   ).run({
     mediaId: p.mediaId,
     platform: p.platform ?? 'instagram',
