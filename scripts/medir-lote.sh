@@ -42,10 +42,35 @@ CONTADORES_ANTES=$(docker compose exec -T postgres psql -U bebetter -d bebetter 
   "SELECT (SELECT sum(usage_count) FROM phrases), (SELECT sum(usage_count) FROM images), (SELECT sum(usage_count) FROM audio_tracks), (SELECT count(*) FROM videos);")
 echo "    contadores antes (frases|imagenes|audio|videos): $CONTADORES_ANTES"
 
-echo "[0] Configuración vigente:"
+echo "[0] Configuración vigente — LA QUE VE LA APP, no la del fichero:"
+# ⚠️ Se lee de DENTRO del contenedor a propósito, y se compara con el .env.
+# `env_file` se lee al CREAR el contenedor, no al vuelo: editar el .env y lanzar
+# la prueba sin recrear deja la app con la configuración ANTERIOR, y la medición
+# sale perfectamente plausible... del sistema equivocado. Pasó el 2026-08-20 con
+# IA_PRIMERO: el disco decía true, el contenedor false, y la "prueba con IA"
+# generó las 30 piezas del banco. Mismo molde que el motor equivocado de la
+# tanda D: un valor por defecto que no falla, elige — y elige mal en silencio.
+DISCREPA=0
 for V in IA_PRIMERO IA_PROPORCION IMAGE_BACKEND VERTEX_IMAGE_MODEL VERTEX_IMAGE_MODEL_REELS; do
-  printf '    %-26s %s\n' "$V" "$( { grep -m1 "^$V=" .env || echo "$V=(por defecto)"; } | cut -d= -f2- )"
+  EN_APP=$(docker compose exec -T app sh -c "printenv $V" 2>/dev/null | tr -d "")
+  EN_DISCO=$( { grep -m1 "^$V=" .env || true; } | cut -d= -f2- | tr -d "")
+  if [ "$EN_APP" = "$EN_DISCO" ] || [ -z "$EN_DISCO" ]; then
+    printf "    %-26s %s
+" "$V" "${EN_APP:-(por defecto)}"
+  else
+    printf "    %-26s app=%-22s disco=%s   <-- DISCREPA
+" "$V" "${EN_APP:-vacio}" "$EN_DISCO"
+    DISCREPA=1
+  fi
 done
+if [ "$DISCREPA" = "1" ]; then
+  echo "" >&2
+  echo "ABORTADO: la app NO tiene la configuración del .env." >&2
+  echo "Recrea el contenedor y vuelve a lanzar:" >&2
+  echo "    docker compose up -d --force-recreate app" >&2
+  rm -f "$BASE.antes.dump"
+  exit 1
+fi
 
 # ─── 1 · Muestreo de recursos en segundo plano ──────────────────────────────
 # Cada 3 s. El muestreo es lo que distingue "tardó 40 min" de "tardó 40 min
