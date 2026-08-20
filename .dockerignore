@@ -1,0 +1,43 @@
+# Lo que NO entra en el contexto de build.
+#
+# Importa por dos motivos: el contexto se envía entero al daemon (y `data/` pesa),
+# y todo lo que entra puede acabar en una capa. Un `.env` en el contexto es un
+# secreto a un `COPY . .` de distancia de quedar horneado en la imagen.
+
+node_modules
+**/node_modules
+client/dist
+server/dist
+
+# ─── Secretos: NUNCA en la imagen ───────────────────────────────────────────
+.env
+.env.*
+!.env.example
+!.env.production.example
+credentials/
+server/credentials/
+*.pem
+.n8n-key
+
+# ─── Datos de runtime ───────────────────────────────────────────────────────
+# El banco (imágenes y audio) vive en R2 desde la Fase 1 y mediaStore lo baja
+# cuando hace falta: hornearlo serían cientos de MB inútiles.
+# `data/fonts` y `data/watermark` SÍ entran — son excepciones a propósito.
+data/*
+!data/fonts
+!data/watermark
+output/
+*.db
+*.db-shm
+*.db-wal
+*.db.bak-*
+
+# ─── Ruido ──────────────────────────────────────────────────────────────────
+.git
+.gitignore
+.vscode
+.claude
+docs/
+scripts/
+**/*.log
+C:Temp*

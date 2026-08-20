@@ -74,6 +74,38 @@ app.get('/api/watermark', (req, res) => {
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }))
 
+// ─── El build de React, servido por el propio Express (Fase 3) ───────────────
+//
+// Cliente y API en el MISMO origen ⇒ el `baseURL: '/api'` del cliente deja de
+// cruzar orígenes y **CORS desaparece**: no hay preflight que configurar ni una
+// lista de orígenes que mantener a mano cada vez que cambia el dominio.
+//
+// Va DESPUÉS de todas las rutas `/api` a propósito: montado antes, el comodín se
+// las tragaría y la API devolvería el HTML del index.
+//
+// Si no hay build (desarrollo, con Vite aparte en el 5173) no se monta nada y la
+// app sigue sirviendo solo la API. Así el mismo `index.ts` vale en los dos sitios.
+const CLIENT_DIST = process.env.CLIENT_DIST_PATH || path.join(__dirname, '../../client/dist')
+
+if (fs.existsSync(path.join(CLIENT_DIST, 'index.html'))) {
+  app.use(express.static(CLIENT_DIST))
+
+  // Comodín para el enrutado del lado del cliente: recargar en una ruta interna
+  // tiene que devolver el index, no un 404. Se excluyen los prefijos que sirve el
+  // servidor de verdad, porque un 404 de la API debe seguir siendo un 404 y no
+  // una página HTML que el cliente no sabe interpretar.
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api') || req.path.startsWith('/output') || req.path === '/health') {
+      return next()
+    }
+    res.sendFile(path.join(CLIENT_DIST, 'index.html'))
+  })
+
+  console.log(`Cliente: sirviendo el build desde ${CLIENT_DIST}`)
+} else {
+  console.log('Cliente: sin build, se sirve solo la API (modo desarrollo)')
+}
+
 // El esquema ANTES de escuchar: si la base no está lista, es mejor no arrancar que
 // aceptar peticiones que van a fallar una por una.
 initDb().then(() => arrancar()).catch((e: any) => {

@@ -1,0 +1,53 @@
+# Caddy, no nginx+certbot (decisión 8 del diseño 2026-08-16).
+#
+# Saca el certificado solo y lo renueva solo. No hay timer que se caiga en
+# silencio ni un `certbot renew` que falle sin que nadie mire hasta que el
+# navegador enseña el aviso rojo.
+#
+# El desafío ACME entra por el 80 desde fuera, así que ese puerto tiene que
+# seguir abierto en el security group aunque todo el tráfico útil vaya por 443.
+
+bebetter.itsciro.com {
+	# Dónde avisa Let's Encrypt si un certificado va a caducar sin renovarse.
+	# Por variable y no a fuego: este repo es PÚBLICO, y un correo personal en
+	# claro dentro de un fichero indexable es una invitación al spam.
+	# Se define como ACME_EMAIL en el .env (lo pasa el compose).
+	tls {$ACME_EMAIL}
+
+	encode zstd gzip
+
+	# Cabeceras de seguridad. La app es privada (OAuth restringido a un correo),
+	# pero el dominio es público: cualquiera puede enumerarlo en los logs de
+	# Certificate Transparency, así que la puerta tiene que estar bien puesta.
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	# Todo a la app: Express sirve el build de React Y la API en el mismo origen,
+	# que es lo que hace desaparecer CORS (el cliente ya usa `baseURL: '/api'`).
+	reverse_proxy app:3001 {
+		# Un lote de 30 reels tarda minutos, y la generación de una imagen por IA
+		# midió 69–178 s. Con el timeout por defecto, Caddy cortaría la respuesta
+		# a mitad de render y el fallo parecería del generador.
+		transport http {
+			read_timeout 30m
+			write_timeout 30m
+		}
+	}
+
+	# Los MP4 son grandes: sin esto, una subida se corta al llegar al tope.
+	request_body {
+		max_size 512MB
+	}
+
+	log {
+		output file /data/access.log {
+			roll_size 10MB
+			roll_keep 3
+		}
+	}
+}

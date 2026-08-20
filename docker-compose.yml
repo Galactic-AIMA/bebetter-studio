@@ -1,0 +1,124 @@
+# beBetterStudio en producción — app + Postgres + Caddy.
+#
+# Se levanta en la VM de AWS (i-0b691511386e18c99, t3.small, us-east-2) contra
+# bebetter.itsciro.com. Arranque:  docker compose up -d --build
+#
+# ⚠️ LA MÁQUINA VA JUSTA DE RAM, Y ESO CONDICIONA ESTE FICHERO.
+# Medido el 2026-08-19: el sistema con Docker y CERO contenedores gasta 444 de
+# 1.905 MiB. La proyección vieja del vault decía "53 % de ocupación", pero salía
+# de dividir `app/total` olvidándose del SO: la cifra real con este stack ronda el
+# 77 %. Hay 2 GB de swap (`swappiness=10`) como red de seguridad.
+#
+# Los `mem_limit` de abajo son TECHOS, no reservas: su suma puede pasar de la RAM
+# a propósito. Están para que un contenedor desbocado no se lleve por delante a
+# los otros dos —que es exactamente lo que pasó el 2026-08-15 y costó 7 horas—,
+# no para repartir la memoria.
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: bebetter-pg
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-bebetter}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?falta POSTGRES_PASSWORD en el .env}
+      POSTGRES_DB: ${POSTGRES_DB:-bebetter}
+    # NO se publica ningún puerto. Postgres solo existe dentro de la red de
+    # compose: el diseño dice que no se expone, y el Cloud Run Job no lo toca
+    # (le pide el trabajo a la app, no a la base).
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # Postgres se dimensiona solo pensando que la máquina es suya. No lo es.
+    command: >
+      postgres
+      -c shared_buffers=96MB
+      -c effective_cache_size=256MB
+      -c work_mem=4MB
+      -c maintenance_work_mem=48MB
+      -c max_connections=40
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-bebetter} -d ${POSTGRES_DB:-bebetter}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    mem_limit: 384m
+    logging: { driver: json-file, options: { max-size: "10m", max-file: "3" } }
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: bebetter-studio:local
+    container_name: bebetter-app
+    restart: unless-stopped
+    depends_on:
+      postgres: { condition: service_healthy }
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      PORT: "3001"
+      DB_ENGINE: postgres
+      DATABASE_URL: postgres://${POSTGRES_USER:-bebetter}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-bebetter}
+      PUBLIC_BASE_URL: https://bebetter.itsciro.com
+      CLIENT_URL: https://bebetter.itsciro.com
+      # Rutas DENTRO del contenedor. Las de Windows del .env de David no existen aquí.
+      FONTS_PATH: /app/data/fonts
+      WATERMARK_PATH: /app/data/watermark/Watermark.png
+      OUTPUT_PATH: /app/output
+      IMAGES_PATH: /app/data/images
+      AUDIO_PATH: /app/data/audio
+      # Vacío = ADC. En la VM NO hay SA adjunta, así que aquí sí se monta el
+      # fichero (abajo) y esta variable apunta al punto de montaje.
+      VERTEX_CREDENTIALS: /app/credentials/vertex-service-account.json
+    volumes:
+      # Los secretos se MONTAN, nunca se hornean: una clave dentro de la imagen
+      # viaja a donde viaje la imagen y no se rota sin reconstruir.
+      # El directorio entero y NO solo el JSON de Vertex, por dos motivos: si se
+      # monta un fichero que aún no existe, Docker crea un DIRECTORIO con ese
+      # nombre y el arranque falla de forma confusa; y aquí viven también los
+      # tokens de Pinterest y Google OAuth. Sin `:ro` precisamente por eso: el
+      # token de OAuth se reescribe solo al refrescarse.
+      # (`node` es uid 1000 dentro, igual que `ubuntu` fuera ⇒ los permisos casan.)
+      - ./credentials:/app/credentials
+      # ⚠️ NO montar `/app/data` entero: taparía `data/fonts` y `data/watermark`,
+      # que van HORNEADOS a propósito. Solo los subdirectorios de datos vivos.
+      # mediaStore baja aquí lo que FFmpeg necesita como fichero real
+      # (orden disco → caché → R2), así que el volumen ahorra descargas.
+      - appimages:/app/data/images
+      - appaudio:/app/data/audio
+      # Las piezas suben a R2 al renderizarse (Fase 1): esto es espacio de
+      # trabajo temporal, no el almacén.
+      - appoutput:/app/output
+    mem_limit: 1g
+    logging: { driver: json-file, options: { max-size: "10m", max-file: "3" } }
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: bebetter-caddy
+    restart: unless-stopped
+    depends_on: [app]
+    environment:
+      # El Caddyfile lo lee como {$ACME_EMAIL}. Va por variable porque el repo
+      # es público y un correo en claro en un fichero indexable atrae spam.
+      ACME_EMAIL: ${ACME_EMAIL:?falta ACME_EMAIL en el .env}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Los certificados TIENEN que sobrevivir a un `down`: Let's Encrypt limita a
+      # 5 emisiones por dominio y semana, y sin volumen cada reinicio pediría uno
+      # nuevo hasta agotar la cuota y quedarse sin HTTPS.
+      - caddydata:/data
+      - caddyconfig:/config
+    mem_limit: 96m
+    logging: { driver: json-file, options: { max-size: "10m", max-file: "3" } }
+
+volumes:
+  pgdata:
+  appimages:
+  appaudio:
+  appoutput:
+  caddydata:
+  caddyconfig:

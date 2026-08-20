@@ -6,6 +6,11 @@ server/.env
 # `.env` a secas no las cubre (2026-08-18).
 .env.*
 server/.env.*
+# Las plantillas SIN valores sí van al repo: son documentación de qué hace falta
+# configurar. La negación tiene que ir DESPUÉS de `.env.*` — gana la última regla
+# que coincide. (`.env.example` se libraba solo por estar trackeado de antes.)
+!.env.example
+!.env.production.example
 
 # Generated videos
 output/
@@ -133,3 +138,5 @@ server/scripts/reparar-vinculo-tanda2.ts
 # dentro el runtime del visor). Se rehacen con:
 #   node <skills>/archify/bin/archify.mjs deliver <tipo> <spec>.json <salida>.html --quality showcase
 docs/diagramas/*.html
+
+beBetterStudio-app.pem
