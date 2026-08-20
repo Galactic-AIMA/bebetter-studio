@@ -63,7 +63,9 @@ echo "[1] Arrancando el muestreo de recursos (cada 3 s)…"
     APPM=$(echo "$STATS" | awk -F';' '/bebetter-app/{split($2,a,"MiB");print a[1]}' | tr -d ' ')
     APPC=$(echo "$STATS" | awk -F';' '/bebetter-app/{gsub(/%/,"",$3);print $3}' | tr -d ' ')
     PGM=$(echo "$STATS"  | awk -F';' '/bebetter-pg/{split($2,a,"MiB");print a[1]}'  | tr -d ' ')
-    NFF=$(docker exec bebetter-app sh -c 'ps -eo comm 2>/dev/null | grep -c ffmpeg' 2>/dev/null || echo 0)
+    # `docker top` desde el HOST: la imagen slim no trae `ps` dentro, y el
+    # `grep -c` sobre un "command not found" devolvia 0 siempre.
+    NFF=$(docker top bebetter-app 2>/dev/null | grep -c ffmpeg || echo 0)
     echo "$AHORA,${MU:-},${MD:-},${SW:-},${LOAD:-},${APPM:-},${APPC:-},${PGM:-},${NFF:-0}"
     sleep 3
   done
@@ -107,12 +109,19 @@ http.get('http://127.0.0.1:3001/api/batch/run/$ID',r=>{let d='';r.on('data',c=>d
   # Se parsea el JSON de verdad y no con sed: `errores` es un ARRAY de objetos
   # ({phraseId, error}), no un numero, y un sed ingenuo devolveria vacio siempre,
   # dando por bueno un lote lleno de fallos.
-  LEIDO=$(printf '%s' "$P" | node -e "
-let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{
-  try{const j=JSON.parse(d);
-    console.log((j.hechas??0),(j.planificadas??0),(Array.isArray(j.errores)?j.errores.length:0),(j.estado??'?'));
-  }catch(e){console.log('0 0 0 ?')}
-})" 2>/dev/null)
+  # Con python3 y NO con node: node solo existe DENTRO del contenedor, no en el
+  # host de la VM. La primera version llamaba a `node` aqui, el 2>/dev/null se
+  # tragaba el "command not found" y el sondeo devolvia 0,0,0,? mientras el lote
+  # iba perfectamente. Un instrumento roto que dice "no pasa nada".
+  # Y `errores` es un ARRAY de objetos, no un numero: hay que contar su longitud.
+  LEIDO=$(printf '%s' "$P" | python3 -c "
+import sys, json
+try:
+    j = json.load(sys.stdin)
+    e = j.get('errores') or []
+    print(j.get('hechas',0), j.get('planificadas',0), len(e) if isinstance(e,list) else 0, j.get('estado','?'))
+except Exception:
+    print(0, 0, 0, '?')",  2>/dev/null)
   read -r HECHAS TOTAL ERRORES ESTADO <<< "$LEIDO"
   echo "$REL,${HECHAS:-0},${TOTAL:-0},${ERRORES:-0},${ESTADO:-?}" >> "$BASE.progreso.csv"
   if [ "${HECHAS:-0}" != "$ULTIMAS" ]; then
