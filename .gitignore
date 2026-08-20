@@ -58,8 +58,13 @@ server/scripts/wf_*.json
 server/scripts/__pycache__/
 scripts/__pycache__/
 
-# Lockfile
-package-lock.json
+# Lockfile: VA AL REPO a propósito (2026-08-19).
+# Estuvo ignorado y eso rompía dos cosas a la vez. `npm ci` —el que usa el
+# Dockerfile— EXIGE el lockfile y falla sin él. Y sin fijar las versiones, dos
+# builds del mismo commit pueden traer dependencias distintas por los rangos `^`,
+# lo que contradice la decisión 6 del diseño: *una sola imagen con dos entrypoints
+# al MISMO digest*. Esa garantía necesita que el build sea reproducible.
+# Ignorar el lockfile tiene sentido en una librería. Esto es una aplicación.
 
 # Claude Code local config
 .claude/
