@@ -40,10 +40,10 @@ export async function recordPublication(p: Publication): Promise<void> {
      VALUES
        (@mediaId, @platform, @permalink, @mediaType, @publishedAt, @videoId, @carouselId, @queueId, @phraseId, @caption, @matchSource)
      -- ⚠️ La fila existente SE CUALIFICA con el nombre de la tabla.
-     -- En SQLite, un `permalink` a secas aquí dentro significa "la fila que ya
-     -- estaba". En Postgres NO: `excluded` expone TODAS las columnas de la tabla,
+     -- En SQLite, un 'permalink' a secas aquí dentro significa "la fila que ya
+     -- estaba". En Postgres NO: 'excluded' expone TODAS las columnas de la tabla,
      -- así que la referencia sin cualificar es ambigua entre las dos y falla con
-     -- `42702 column reference "permalink" is ambiguous`. Tumbó la app en su
+     -- '42702 column reference "permalink" is ambiguous'. Tumbó la app en su
      -- primer arranque real contra Postgres (2026-08-19).
      ON CONFLICT(media_id) DO UPDATE SET
        permalink    = COALESCE(excluded.permalink,    publications.permalink),

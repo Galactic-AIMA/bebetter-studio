@@ -70,7 +70,7 @@ async function bumpUsageForVideo(row: any) {
     await db.prepare(
       `INSERT INTO images (filename, usage_count) VALUES (@f, 1)
        -- Cualificado con la tabla: sin eso Postgres lo ve ambiguo frente a
-       -- `excluded.usage_count` y falla con 42702.
+       -- 'excluded.usage_count' y falla con 42702.
        ON CONFLICT(filename) DO UPDATE SET usage_count = images.usage_count + 1`
     ).run({ f: cfg.imageId })
   }
