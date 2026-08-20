@@ -1,0 +1,15 @@
+# Los scripts de shell van SIEMPRE con LF, se editen donde se editen.
+#
+# Sin esto, un fichero editado en Windows llega a la VM con \r al final de cada
+# línea y bash lo rechaza con `$'\r': command not found` — un error que no apunta
+# en absoluto a la causa. Pasó el 2026-08-20 con medir-lote.sh: el script abortó
+# entero tras una edición inofensiva.
+*.sh text eol=lf
+
+# Igual para lo que interpreta un shell o un contenedor Linux.
+Dockerfile  text eol=lf
+Caddyfile   text eol=lf
+*.yml       text eol=lf
+*.yaml       text eol=lf
+.env.example            text eol=lf
+.env.production.example text eol=lf
