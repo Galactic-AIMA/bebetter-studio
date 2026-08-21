@@ -28,7 +28,11 @@ export const config = {
     test: process.env.WEBHOOK_TEST_URL || '',
     prod: process.env.WEBHOOK_PROD_URL || '',
     secret: process.env.WEBHOOK_SECRET || '',
-    approval: process.env.WEBHOOK_APPROVAL_URL || '',  // n8n "Aprobación bebetter" (Fase 4) — manda el paquete a Telegram
+    approval: process.env.WEBHOOK_APPROVAL_URL || '',
+    // Avisos de progreso de un lote hacia n8n → Telegram. Vacío = no se avisa a
+    // nadie, que es lo correcto en local: los avisos son para quien lanza el lote
+    // a distancia y no tiene la barra de progreso delante.
+    lote: process.env.WEBHOOK_LOTE_URL || '',  // n8n "Aprobación bebetter" (Fase 4) — manda el paquete a Telegram
   },
 
   watermark: {

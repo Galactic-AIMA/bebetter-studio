@@ -8,6 +8,7 @@ import { PRESETS } from '../text/presets'
 import { config as appConfig } from '../config'
 import { logInfo, logError } from './logService'
 import { uploadVideoToS3 } from './s3Service'
+import { avisar, tocaAvisar } from './avisoLote'
 
 /**
  * Genera un lote ENTERO en el servidor, sin navegador.
@@ -62,6 +63,9 @@ export function trabajosRecientes(n = 10): TrabajoLote[] {
 
 export interface OpcionesLote {
   count: number
+  /** Quién lo pidió ('telegram', 'app'…). Solo viaja en los avisos, para que el
+   *  mensaje diga de dónde salió el lote. */
+  origen?: string
   driver?: BatchDriver
   allowRepeat?: boolean
   /** Preset de marca con el que renderizar. Por defecto, `bebetter`. */
@@ -135,6 +139,9 @@ export async function lanzarLote(opts: OpcionesLote): Promise<TrabajoLote> {
   if (!pares.length) {
     trabajo.terminado = new Date().toISOString()
     logInfo('generate', `Lote ${trabajo.id}: 0 piezas — no hay frases en norma disponibles`)
+    // Se avisa igual, y como 'fin': quien lo pidió desde fuera necesita saber que
+    // no hay nada en marcha. El silencio se leería como «va rodando».
+    avisar(trabajo, 'fin', opts.origen)
     return trabajo
   }
 
@@ -142,15 +149,18 @@ export async function lanzarLote(opts: OpcionesLote): Promise<TrabajoLote> {
     logInfo('generate', `Lote ${trabajo.id}: se pidieron ${opts.count} y el pool en norma da para ${pares.length}`)
   }
 
+  avisar(trabajo, 'inicio', opts.origen)
+
   // Sin await: el trabajo sigue por su cuenta y se consulta por su id.
-  void generarTodas(trabajo, pares, { estilo, duracion, resolucion })
+  void generarTodas(trabajo, pares, { estilo, duracion, resolucion }, opts.origen)
   return trabajo
 }
 
 async function generarTodas(
   trabajo: TrabajoLote,
   pares: PlannedPair[],
-  opts: Required<Pick<OpcionesLote, 'estilo' | 'duracion' | 'resolucion'>>
+  opts: Required<Pick<OpcionesLote, 'estilo' | 'duracion' | 'resolucion'>>,
+  origen?: string
 ): Promise<void> {
   // Reparto IA/banco del lote entero, decidido ANTES de empezar: necesita ver todos
   // los scores para saber cuáles son los mejores emparejamientos del banco.
@@ -224,6 +234,8 @@ async function generarTodas(
 
       trabajo.videoIds.push(id)
       trabajo.hechas++
+
+      if (tocaAvisar(trabajo.hechas, trabajo.planificadas)) avisar(trabajo, 'progreso', origen)
     } catch (err: any) {
       trabajo.errores.push({ phraseId: par.phraseId, error: err.message })
       logError('generate', `Lote ${trabajo.id}: falló ${par.phraseId}`, err.message)
@@ -233,4 +245,5 @@ async function generarTodas(
   trabajo.estado = trabajo.hechas > 0 ? 'terminado' : 'error'
   trabajo.terminado = new Date().toISOString()
   logInfo('generate', `Lote ${trabajo.id} terminado: ${trabajo.hechas}/${trabajo.planificadas} · ${trabajo.errores.length} error(es)`)
+  avisar(trabajo, 'fin', origen)
 }

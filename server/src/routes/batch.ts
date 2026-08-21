@@ -47,6 +47,12 @@ router.post('/run', async (req, res) => {
       estilo,
       duracion: req.body?.duracion,
       resolucion: req.body?.resolucion,
+      // De dónde salió la petición. Una máquina se identifica sola: si entró con
+      // el token de servicio no hay una persona delante mirando la barra, y ese
+      // es justo el caso que necesita los avisos.
+      origen: typeof req.body?.origen === 'string'
+        ? req.body.origen.slice(0, 24)
+        : (req.identidad?.tipo === 'maquina' ? 'maquina' : 'app'),
     })
     res.status(202).json(trabajo)
   } catch (err: any) {
