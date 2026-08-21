@@ -9,8 +9,13 @@
  * lista blanca tampoco — que es lo que hace que quitar un correo eche a esa
  * sesión en el acto y no dentro de 30 días.
  *
- * Necesita el build del servidor (`npm run build` en server/). Vale igual en la
- * VM: comprueba la lógica, no la configuración real, así que no toca el .env.
+ * Comprueba la LÓGICA, no la configuración real: no lee el .env ni toca la base.
+ *
+ * Necesita el build del servidor. En el PC basta con `npm run build` en server/.
+ * En la VM **no hay build en el host** — se hace dentro de la imagen —, así que
+ * ahí se corre pasándoselo a node DENTRO del contenedor:
+ *
+ *     docker compose exec -T app node < scripts/probar-puerta.js
  */
 process.env.AUTH_ENABLED = 'true'
 process.env.AUTH_GOOGLE_CLIENT_ID = 'x.apps.googleusercontent.com'
@@ -20,7 +25,28 @@ process.env.AUTH_ALLOWED_EMAILS = 'David.CiroOrtiz06@Gmail.com , otro@ejemplo.co
 process.env.SESSION_SECRET = 'a'.repeat(64)
 process.env.SERVICE_TOKEN = 'b'.repeat(64)
 
-const a = require('../server/dist/middleware/auth')
+// El módulo está en un sitio distinto según dónde se corra: desde scripts/ en el
+// PC, desde /app cuando node lo lee por stdin dentro del contenedor. Se prueban
+// las tres y se dice cuál valió, en vez de fallar con un MODULE_NOT_FOUND que no
+// explica que lo que falta es el build.
+const CANDIDATAS = [
+  '../server/dist/middleware/auth',
+  './server/dist/middleware/auth',
+  '/app/server/dist/middleware/auth',
+]
+let a = null
+for (const ruta of CANDIDATAS) {
+  try { a = require(ruta); console.log(`(modulo cargado de ${ruta})`); break } catch (e) {
+    if (e.code !== 'MODULE_NOT_FOUND') throw e
+  }
+}
+if (!a) {
+  console.error('No encuentro el build del middleware. Probadas:')
+  CANDIDATAS.forEach((r) => console.error('  ' + r))
+  console.error('En el PC:  cd server && npm run build')
+  console.error('En la VM:  docker compose exec -T app node < scripts/probar-puerta.js')
+  process.exit(2)
+}
 
 let fallos = 0
 const comprobar = (nombre, real, esperado) => {
