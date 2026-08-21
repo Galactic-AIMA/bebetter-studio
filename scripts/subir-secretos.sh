@@ -33,7 +33,12 @@ fi
 
 # Las claves que producción necesita. Deliberadamente NO están:
 #   · las que fija el compose (DATABASE_URL, rutas, PUBLIC_BASE_URL…)
-#   · las generadas dentro de la VM (POSTGRES_PASSWORD, BASIC_AUTH_HASH)
+#   · las generadas dentro de la VM (POSTGRES_PASSWORD, SESSION_SECRET,
+#     SERVICE_TOKEN) y las de la puerta (AUTH_GOOGLE_CLIENT_*), que se ponen allí
+#     con `scripts/montar-puerta.sh`. El rol de la instancia solo puede LEER de
+#     Parameter Store, así que lo que nace en la VM se queda en la VM — igual que
+#     la contraseña de Postgres. Por eso `bajar-secretos.sh` hace copia del .env
+#     antes de tocarlo.
 #   · las de la cosecha de audio (GALLERY_DL_*, YTDLP_*), que se queda en local
 CLAVES="
 R2_ACCESS_KEY_ID

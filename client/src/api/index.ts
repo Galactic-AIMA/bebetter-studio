@@ -3,6 +3,28 @@ import { Phrase, ImageItem, VideoRecord, VideoConfig, ImageRecord, ImageVariant,
 
 const api = axios.create({ baseURL: '/api' })
 
+// La sesión caduca, y cuando lo hace el servidor devuelve 401 a TODO. Sin esto,
+// la app se llenaría de errores sueltos que no explican nada mientras la causa
+// real —hay que volver a entrar— no aparece por ninguna parte. `Puerta` escucha
+// este aviso y vuelve a pintar el login.
+// El error se sigue rechazando: quien llamó tiene que enterarse igual.
+api.interceptors.response.use(
+  (r) => r,
+  (err) => {
+    if (err?.response?.status === 401) window.dispatchEvent(new Event('bb:sin-sesion'))
+    return Promise.reject(err)
+  }
+)
+
+/** El login no cuelga de `/api`, así que no usa esta instancia. */
+export const authApi = {
+  quienSoy: () =>
+    axios
+      .get<{ autenticado: boolean; puertaActiva: boolean; email?: string; nombre?: string }>('/auth/me')
+      .then((r) => r.data),
+  salir: () => axios.post('/auth/logout').then(() => window.location.reload()),
+}
+
 export const imagesApi = {
   list: () => api.get<ImageItem[]>('/images').then((r) => r.data),
   random: () => api.get<ImageItem>('/images/random').then((r) => r.data),

@@ -138,4 +138,36 @@ export const config = {
     cookiesFromBrowser: process.env.YTDLP_COOKIES_FROM_BROWSER || '',
     cookiesFile: process.env.YTDLP_COOKIES_FILE || '',
   },
+
+  // ─── La puerta (2026-08-20) ────────────────────────────────────────────────
+  //
+  // Hasta hoy la app no tenía autenticación NINGUNA: las 16 rutas `/api` abiertas
+  // y un `basic_auth` de Caddy como tapón. Esto lo sustituye por login de Google
+  // restringido a una lista blanca de correos.
+  //
+  // De Google solo se usa el `id_token` UNA VEZ, para saber quién eres. No se
+  // guarda ni el access token ni el refresh token: la sesión que viaja después es
+  // nuestra, firmada con `SESSION_SECRET`. Eso evita de golpe la caducidad de
+  // refresh tokens a 7 días del modo «Testing» y quita un secreto que custodiar.
+  auth: {
+    // Apagado por defecto: en local David trabaja sin puerta y así sigue. Se
+    // enciende en la VM con AUTH_ENABLED=true.
+    activo: process.env.AUTH_ENABLED === 'true',
+    clientId: process.env.AUTH_GOOGLE_CLIENT_ID || '',
+    clientSecret: process.env.AUTH_GOOGLE_CLIENT_SECRET || '',
+    // De dónde cuelga /auth/google/callback. Explícita y no deducida de la
+    // petición: detrás de un proxy, Host y protocolo son lo que el proxy diga, y
+    // una redirect_uri que no case EXACTAMENTE con la registrada da error 400.
+    baseUrl: (process.env.AUTH_BASE_URL || '').replace(/\/$/, ''),
+    // Quién puede entrar. Se comparan en minúsculas y sin espacios.
+    correos: (process.env.AUTH_ALLOWED_EMAILS || '')
+      .split(',').map((c) => c.trim().toLowerCase()).filter(Boolean),
+    // Con qué se firma la cookie de sesión. Cambiarlo cierra todas las sesiones.
+    sessionSecret: process.env.SESSION_SECRET || '',
+    // La puerta de las máquinas: n8n y el futuro Job de Cloud Run no pueden pasar
+    // por un login pensado para un humano. Va en la cabecera `X-API-Key`.
+    tokenServicio: process.env.SERVICE_TOKEN || '',
+    // 30 días. Es una app de una persona en su propio dominio, no un banco.
+    duracionSesionSeg: parseInt(process.env.SESSION_MAX_AGE || '2592000'),
+  },
 }

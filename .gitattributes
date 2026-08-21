@@ -13,3 +13,9 @@ Caddyfile   text eol=lf
 *.yaml       text eol=lf
 .env.example            text eol=lf
 .env.production.example text eol=lf
+
+# Los scripts sueltos de scripts/ llevan shebang y se ejecutan en la VM, así que
+# les pasa exactamente lo mismo que a los .sh: con CRLF, el núcleo intenta lanzar
+# el intérprete con un  pegado al nombre y falla sin explicar por qué.
+scripts/*.js text eol=lf
+scripts/*.py text eol=lf

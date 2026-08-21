@@ -26,15 +26,23 @@ import { runCleanup } from './services/cleanupService'
 import { reconciliarRechazosSeguro } from './services/queueReconcile'
 import { logInfo } from './services/logService'
 import { initDb } from './db'
+import authRouter from './routes/auth'
+import { exigirSesion, revisarPuerta } from './middleware/auth'
 
 const app = express()
 
 app.use(cors({ origin: config.clientUrl }))
 app.use(express.json())
 
-// Servir videos generados como archivos estáticos (URL pública directa para n8n/Meta)
-app.use('/output', express.static(path.resolve(config.paths.output)))
+// ─── La puerta ───────────────────────────────────────────────────────────────
+// El login va FUERA del guardia: es la puerta, y no puede estar cerrada por
+// dentro. Todo lo demás queda detrás.
+app.use('/auth', authRouter)
 
+// Las tipografías quedan FUERA del guardia, y a propósito: son los TTF de Google
+// Fonts, redistribuibles y sin nada que proteger. Y protegerlas rompería la propia
+// pantalla de login, que las carga por CSS con `font-display: block` — un 401 ahí
+// deja el texto invisible hasta que vence el tiempo de espera.
 // Las tipografías salen de aquí, no del CDN de Google: el navegador tiene que
 // medir el MISMO TTF que pinta FFmpeg o el corte de línea del preview y el del
 // vídeo no pueden coincidir. De paso, la app deja de depender de una red externa
@@ -43,6 +51,14 @@ app.use('/api/fonts', express.static(path.resolve(config.paths.fonts), {
   maxAge: '30d',
   setHeaders: (res) => res.setHeader('Access-Control-Allow-Origin', '*'),
 }))
+
+// El guardia sobre `/api` y `/output`, montado ANTES que nada de lo que protege:
+// Express ejecuta en orden de registro, y puesto después no vería esas peticiones.
+app.use('/api', exigirSesion)
+app.use('/output', exigirSesion)
+
+// Servir videos generados como archivos estáticos (URL pública directa para n8n/Meta)
+app.use('/output', express.static(path.resolve(config.paths.output)))
 
 app.use('/api/videos', videosRouter)
 app.use('/api/images', imagesRouter)
@@ -105,6 +121,23 @@ if (fs.existsSync(path.join(CLIENT_DIST, 'index.html'))) {
 } else {
   console.log('Cliente: sin build, se sirve solo la API (modo desarrollo)')
 }
+
+// La puerta ANTES de escuchar, por el mismo motivo que el esquema: una variable
+// que falta aquí no falla, ELIGE — y elegiría dejar la app abierta en silencio.
+// Es la lección del «motor equivocado»: arrancar mal es peor que no arrancar.
+const fallosPuerta = revisarPuerta()
+if (fallosPuerta.length > 0) {
+  console.error('[auth] AUTH_ENABLED=true pero la puerta está mal montada:')
+  fallosPuerta.forEach((f) => console.error(`  · ${f}`))
+  console.error('[auth] Se aborta el arranque en vez de servir la app sin protección.')
+  process.exit(1)
+}
+console.log(
+  config.auth.activo
+    ? `Puerta: login de Google activo (${config.auth.correos.length} correo(s) autorizado(s))`
+      + (config.auth.tokenServicio ? ' + token de servicio' : ' — SIN token de servicio')
+    : 'Puerta: DESACTIVADA (AUTH_ENABLED != true) — solo para local'
+)
 
 // El esquema ANTES de escuchar: si la base no está lista, es mejor no arrancar que
 // aceptar peticiones que van a fallar una por una.

@@ -1,4 +1,4 @@
-import { Film, Image, GalleryHorizontalEnd, HardDrive, Send, RotateCcw, ChevronDown, ScrollText, Clock, ListPlus, Music, BarChart3, ClipboardCheck, MoreVertical } from 'lucide-react'
+import { Film, Image, GalleryHorizontalEnd, HardDrive, Send, RotateCcw, ChevronDown, ScrollText, Clock, ListPlus, Music, BarChart3, ClipboardCheck, MoreVertical, LogOut } from 'lucide-react'
 import { useRef, useEffect, useState } from 'react'
 import { useVideoStore } from '../../store/videoStore'
 import { ContentMode } from '../../store/videoStore'
@@ -6,7 +6,8 @@ import LogsModal from '../Logs/LogsModal'
 import CadenceModal from '../Cadence/CadenceModal'
 import AudioTagsPanel from '../Audio/AudioTagsPanel'
 import ReviewPanel from '../Review/ReviewPanel'
-import { videosApi } from '../../api'
+import { videosApi, authApi } from '../../api'
+import { useSesion } from '../Puerta'
 
 interface Props {
   lastVideoId: string | null
@@ -20,6 +21,8 @@ interface Props {
 
 export default function Header({ lastVideoId, lastImageId, isGenerating, toast, onUploadDrive, onPublish, onQueue }: Props) {
   const { mode, setMode, reset } = useVideoStore()
+  // null en local (no hay puerta) ⇒ no se pinta el botón de salir.
+  const sesion = useSesion()
   const [showEnvMenu, setShowEnvMenu] = useState(false)
   const [showLogs, setShowLogs] = useState(false)
   const [showCadence, setShowCadence] = useState(false)
@@ -211,6 +214,16 @@ export default function Header({ lastVideoId, lastImageId, isGenerating, toast, 
           <RotateCcw size={14} />
         </button>
 
+        {sesion?.puertaActiva && (
+          <button
+            onClick={() => authApi.salir()}
+            className="hidden lg:block p-1.5 text-bone-700 hover:text-bone-500 transition-colors"
+            title={`Salir (${sesion.email ?? ''})`}
+          >
+            <LogOut size={14} />
+          </button>
+        )}
+
         {/* Lo mismo de arriba, plegado, para pantallas estrechas. */}
         <div ref={masMenuRef} className="relative lg:hidden">
           <button
@@ -228,6 +241,9 @@ export default function Header({ lastVideoId, lastImageId, isGenerating, toast, 
                 { icon: Clock,       label: 'Cadencia',   onClick: () => setShowCadence(true), disabled: false },
                 { icon: ScrollText,  label: 'Registro',   onClick: () => setShowLogs(true),    disabled: false },
                 { icon: RotateCcw,   label: 'Reiniciar',  onClick: reset,                      disabled: isGenerating },
+                ...(sesion?.puertaActiva
+                  ? [{ icon: LogOut, label: 'Salir', onClick: () => authApi.salir(), disabled: false }]
+                  : []),
               ] as const).map(({ icon: Icon, label, onClick, disabled }) => (
                 <button
                   key={label}

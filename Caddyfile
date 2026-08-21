@@ -27,27 +27,19 @@ bebetter.itsciro.com {
 		-Server
 	}
 
-	# ─── LA PUERTA ───────────────────────────────────────────────────────────
-	# La app NO tiene autenticación propia: ni OAuth, ni sesión, ni token. Sin
-	# esto, cualquiera podría generar reels (gastando créditos de Vertex),
-	# PUBLICAR en Instagram y YouTube por los webhooks de n8n, y leer y escribir
-	# la base entera por la API.
+	# ─── LA PUERTA ─────────────────────────────────────────────
+	# Ya no está aquí. El `basic_auth` que ocupaba este sitio hasta el 2026-08-20
+	# era un tapón: una contraseña compartida que no distingue quién entra, no se
+	# revoca sin cambiarla para todos, y no sirve para que n8n o el Job de Cloud Run
+	# llamen a la API.
 	#
-	# Y el dominio no es un secreto: en cuanto Caddy saca el certificado,
-	# bebetter.itsciro.com aparece en los logs públicos de Certificate
-	# Transparency y es consultable en crt.sh a los minutos. "Nadie sabe la URL"
-	# no es una defensa.
+	# Lo sustituye el login de Google DENTRO de la app (`AUTH_ENABLED=true`),
+	# restringido a una lista blanca de correos, más un token de servicio en la
+	# cabecera `X-API-Key` para las máquinas. Ver server/src/middleware/auth.ts.
 	#
-	# Esto es un TAPÓN, no la solución. La solución es el Google OAuth
-	# restringido al correo de David que pide el Roadmap. Cuando exista, este
-	# bloque se borra.
-	#
-	# Usuario y hash por variable porque el repo es PÚBLICO: un hash bcrypt no
-	# revela la contraseña, pero regala un objetivo para romperla sin prisa y
-	# sin que nadie se entere.
-	basic_auth {
-		{$BASIC_AUTH_USER} {$BASIC_AUTH_HASH}
-	}
+	# ⚠️ Que esto esté vacío significa que Caddy YA NO PROTEGE NADA: si la app
+	# arrancara con AUTH_ENABLED=false, quedaría abierta a internet. Por eso el
+	# servidor aborta el arranque si la puerta está mal montada, en vez de servir.
 
 	# Todo a la app: Express sirve el build de React Y la API en el mismo origen,
 	# que es lo que hace desaparecer CORS (el cliente ya usa `baseURL: '/api'`).

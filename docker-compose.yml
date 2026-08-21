@@ -102,11 +102,6 @@ services:
       # El Caddyfile lo lee como {$ACME_EMAIL}. Va por variable porque el repo
       # es público y un correo en claro en un fichero indexable atrae spam.
       ACME_EMAIL: ${ACME_EMAIL:?falta ACME_EMAIL en el .env}
-      # La puerta. La app no tiene autenticación propia: sin esto el dominio
-      # queda abierto, y aparece en los logs de Certificate Transparency en
-      # cuanto se emite el certificado. Tapón hasta que exista el Google OAuth.
-      BASIC_AUTH_USER: ${BASIC_AUTH_USER:?falta BASIC_AUTH_USER en el .env}
-      BASIC_AUTH_HASH: ${BASIC_AUTH_HASH:?falta BASIC_AUTH_HASH en el .env}
     ports:
       - "80:80"
       - "443:443"
