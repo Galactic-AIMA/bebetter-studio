@@ -148,3 +148,4 @@ beBetterStudio-app.pem
 # La URL del webhook de avisos de lote. Semisecreta: quien la tenga puede
 # mandarte un mensaje falso de Telegram. El repo es publico.
 .webhook-lote-url
+.n8n-cred-id
