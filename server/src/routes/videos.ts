@@ -263,7 +263,14 @@ router.post('/:id/queue', async (req, res) => {
       phrase,
       captionIG: copies.captionIG,
       ytMeta: copies.ytMeta,
-      status: 'pending',
+      // 'approved' y no 'pending' desde el 2026-08-20: aprobar en la pantalla de
+      // revisión YA ES la decisión, y el gate de Telegram que venía después solo
+      // añadía un paso que podía olvidarse — y una pieza olvidada ahí no se
+      // publica nunca, sin que nada avise. Mismo criterio que los carruseles,
+      // donde encolar equivale a aprobar desde el principio.
+      // El aviso de Telegram se queda, pero informa en vez de preguntar, y
+      // conserva un botón de cancelar por si hay arrepentimiento.
+      status: 'approved',
       createdAt: new Date().toISOString(),
     }
     await appendQueueRows([queueRow])
