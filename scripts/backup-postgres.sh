@@ -87,7 +87,21 @@ if [ "$BYTES" -lt 100000 ]; then
   exit 1
 fi
 
-TABLAS=$(docker exec -i "$PG" pg_restore --list < "$FICHERO" 2>/dev/null | grep -c "TABLE DATA" || true)
+# El índice se saca UNA vez a un fichero, y las comprobaciones se hacen sobre él.
+#
+# ⚠️ Antes cada comprobación pedía su propio `pg_restore --list` y lo pasaba por
+# `grep -q`. Eso tenía una CARRERA: `grep -q` termina en cuanto encuentra la línea
+# y cierra el pipe, `docker exec` muere con SIGPIPE y el pipeline devuelve error —
+# que el `if !` lee como «la tabla no está». Fallaba sobre todo con `audio_tracks`,
+# que es la PRIMERA del índice: cuanto antes casa el grep, antes se rompe el pipe.
+#
+# Salió el 2026-08-20 al activar el timer en la VM: 10 MB de volcado correcto
+# rechazados por una tabla que sí estaba. Y con el timer apagado, llevaba ahí desde
+# el principio sin que nadie lo viera.
+LISTA="$TMP/indice.txt"
+docker exec -i "$PG" pg_restore --list < "$FICHERO" > "$LISTA" 2>/dev/null
+
+TABLAS=$(grep -c "TABLE DATA" "$LISTA" || true)
 echo "  $TABLAS tablas con datos"
 if [ "${TABLAS:-0}" -lt 8 ]; then
   echo "ERROR: solo $TABLAS tablas con datos (se esperan 8 o más). No se sube." >&2
@@ -95,7 +109,7 @@ if [ "${TABLAS:-0}" -lt 8 ]; then
 fi
 
 for T in phrases images audio_tracks videos; do
-  if ! docker exec -i "$PG" pg_restore --list < "$FICHERO" 2>/dev/null | grep -q " $T "; then
+  if ! grep -q " $T " "$LISTA"; then
     echo "ERROR: falta la tabla '$T' en el volcado. No se sube." >&2
     exit 1
   fi
