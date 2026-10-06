@@ -573,7 +573,7 @@ export default function BatchGenerator() {
                       selected ? 'border-neon-red' : 'border-transparent hover:border-carbon-600'
                     }`}
                   >
-                    <img src={img.url} alt={img.filename} className="w-full h-full object-cover" />
+                    <img src={img.url} alt={img.filename} className="w-full h-full object-cover" loading="lazy" decoding="async" />
                     {(img.usageCount ?? 0) > 0 && (
                       <span className="absolute top-0.5 right-0.5 text-[9px] bg-carbon-900/80 text-bone-700 rounded px-1">×{img.usageCount}</span>
                     )}
@@ -781,7 +781,7 @@ export default function BatchGenerator() {
                     style={{ aspectRatio: '9 / 16' }}
                     className="relative w-full overflow-hidden rounded border-2 border-transparent hover:border-gold-500 transition-all"
                   >
-                    <img src={img.url} alt={img.filename} className="absolute inset-0 w-full h-full object-cover" />
+                    <img src={img.url} alt={img.filename} className="absolute inset-0 w-full h-full object-cover" loading="lazy" decoding="async" />
                     {(img.usageCount ?? 0) > 0 && (
                       <span className="absolute top-0.5 right-0.5 text-[9px] bg-carbon-900/80 text-bone-700 rounded px-1">×{img.usageCount}</span>
                     )}

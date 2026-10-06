@@ -1,6 +1,7 @@
 import { X, Clock, Check, AlertCircle, CalendarClock } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { cadenceApi, ScheduleResult, UpcomingItem } from '../../api'
+import { cadenceApi, ScheduleResult } from '../../api'
+import { dayLabel } from '../../lib/cola'
 
 interface Props {
   onClose: () => void
@@ -23,16 +24,6 @@ function suggest(n: number): string[] {
 
 const hhmm = (h: number) => String(h).padStart(2, '0') + ':00'
 const hourOf = (t: string) => Number(t.split(':')[0])
-
-/** Etiqueta legible del día proyectado: "Hoy" / "Mañana" / "Vie 8". */
-function dayLabel(item: UpcomingItem, tz: string): string {
-  if (item.dayOffset === 0) return 'Hoy'
-  if (item.dayOffset === 1) return 'Mañana'
-  if (!item.etaIso) return ''
-  const d = new Date(item.etaIso)
-  const s = d.toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', timeZone: tz })
-  return s.charAt(0).toUpperCase() + s.slice(1)
-}
 
 export default function CadenceModal({ onClose }: Props) {
   const [times, setTimes] = useState<string[]>([])

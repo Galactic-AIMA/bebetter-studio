@@ -301,7 +301,7 @@ export default function ImageBank() {
                     : 'border-transparent hover:border-carbon-600'
                 }`}
               >
-                <img src={img.url} alt={img.filename} className="w-full h-full object-cover" />
+                <img src={img.url} alt={img.filename} className="w-full h-full object-cover" loading="lazy" decoding="async" />
 
                 {/* Badge de uso */}
                 {(img.usageCount ?? 0) > 0 && (

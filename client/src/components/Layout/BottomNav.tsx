@@ -1,4 +1,4 @@
-import { Library, Eye, SlidersHorizontal } from 'lucide-react'
+import { Books, Eye, SlidersHorizontal, type Icon } from '@phosphor-icons/react'
 
 export type Seccion = 'banco' | 'vista' | 'ajustes'
 
@@ -7,9 +7,9 @@ interface Props {
   onSeccion: (s: Seccion) => void
 }
 
-const SECCIONES: { id: Seccion; icon: typeof Eye; label: string }[] = [
-  { id: 'banco',   icon: Library,          label: 'Banco'  },
-  { id: 'vista',   icon: Eye,              label: 'Vista'  },
+const SECCIONES: { id: Seccion; icon: Icon; label: string }[] = [
+  { id: 'banco', icon: Books, label: 'Banco' },
+  { id: 'vista', icon: Eye, label: 'Vista' },
   { id: 'ajustes', icon: SlidersHorizontal, label: 'Ajustes' },
 ]
 
@@ -31,21 +31,19 @@ const SECCIONES: { id: Seccion; icon: typeof Eye; label: string }[] = [
  */
 export default function BottomNav({ seccion, onSeccion }: Props) {
   return (
-    <nav className="lg:hidden shrink-0 flex bg-carbon-700 border-t border-carbon-600 pb-[env(safe-area-inset-bottom)]">
-      {SECCIONES.map(({ id, icon: Icon, label }) => (
+    <nav aria-label="Secciones" className="flex shrink-0 border-t border-linea bg-s1 pb-[env(safe-area-inset-bottom)] lg:hidden">
+      {SECCIONES.map(({ id, icon: Icono, label }) => (
         <button
           key={id}
           onClick={() => onSeccion(id)}
-          // h-14: objetivo táctil cómodo. Los iconos de 13 px del escritorio se
-          // pulsan con ratón; con el pulgar hacen falta ~44 px de alto real.
-          className={`flex-1 h-14 flex flex-col items-center justify-center gap-1 text-[10px] transition-colors ${
-            seccion === id
-              ? 'text-bone-500 border-t-2 border-neon-red -mt-px'
-              : 'text-bone-700 border-t-2 border-transparent -mt-px hover:text-bone-500'
+          aria-current={seccion === id ? 'page' : undefined}
+          // h-14: objetivo táctil cómodo para el pulgar (~44 px de alto real).
+          className={`flex h-14 flex-1 flex-col items-center justify-center gap-1 transition-colors duration-rapido ease-mesa ${
+            seccion === id ? 'text-hueso' : 'text-hueso-2 hover:text-hueso'
           }`}
         >
-          <Icon size={17} />
-          <span className="font-medium tracking-wide">{label}</span>
+          <Icono size={20} className={seccion === id ? 'text-oro' : ''} weight={seccion === id ? 'fill' : 'regular'} />
+          <span className="font-cond text-label font-medium uppercase">{label}</span>
         </button>
       ))}
     </nav>

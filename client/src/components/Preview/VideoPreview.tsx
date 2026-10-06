@@ -21,16 +21,15 @@ export default function VideoPreview({ config }: Props) {
 
     const W = config.resolution.width
     const H = config.resolution.height
-    canvas.width = W
-    canvas.height = H
+    // Un `config` más nuevo invalida este dibujo: sin esto, una imagen lenta
+    // terminaba pintándose encima de la elegida después.
+    let vigente = true
 
-    ctx.fillStyle = '#000'
-    ctx.fillRect(0, 0, W, H)
-
+    // Sin `crossOrigin`: el canvas nunca se exporta, así que no importa que quede
+    // «tainted», y sin él el navegador reutiliza la miniatura ya descargada del banco.
     const loadImg = (src: string): Promise<HTMLImageElement | null> =>
       new Promise((resolve) => {
         const img = new Image()
-        img.crossOrigin = 'anonymous'
         img.src = src
         img.onload = () => resolve(img)
         img.onerror = () => resolve(null)
@@ -51,13 +50,19 @@ export default function VideoPreview({ config }: Props) {
 
     Promise.all(tasks).then(async ([bg, wm]) => {
       await document.fonts.load(fontSpec)
+      if (!vigente) return
+      // Las dimensiones se fijan aquí y no antes de cargar: cambiar `width` borra el
+      // canvas, y el fotograma anterior se queda en pantalla mientras llega el nuevo.
+      if (canvas.width !== W) canvas.width = W
+      if (canvas.height !== H) canvas.height = H
       if (bg) {
         const scale = Math.max(W / bg.width, H / bg.height)
         const sw = bg.width * scale
         const sh = bg.height * scale
         ctx.drawImage(bg, (W - sw) / 2, (H - sh) / 2, sw, sh)
       } else {
-        ctx.fillStyle = '#1a1a2e'
+        // Sin imagen elegida: el carbón de la sala, no un azul ajeno a la marca.
+        ctx.fillStyle = '#1A1815'
         ctx.fillRect(0, 0, W, H)
       }
       // Degradado de carbón entre la imagen y el texto (mismo perfil que el render).
@@ -69,6 +74,7 @@ export default function VideoPreview({ config }: Props) {
         drawImageWatermark(ctx, wm, config.watermark!, W, H)
       }
     })
+    return () => { vigente = false }
   }, [config])
 
   return (
@@ -79,8 +85,10 @@ export default function VideoPreview({ config }: Props) {
           maxHeight: '100%',
           maxWidth: '100%',
           aspectRatio: `${config.resolution.width}/${config.resolution.height}`,
-          borderRadius: '8px',
+          borderRadius: '14px',
           objectFit: 'contain',
+          // La pantalla de la sala: sombra profunda + anillo de 1 px (DESIGN.md §6).
+          boxShadow: '0 40px 120px -20px rgb(0 0 0 / .9), 0 0 0 1px rgb(232 228 220 / .06)',
         }}
       />
     </div>

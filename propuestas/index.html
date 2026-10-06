@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cuatro direcciones · bebetter Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Anton&display=swap" rel="stylesheet">
+<style>
+  :root { --bg: #0E0D0C; --s1: #171614; --l: #2A2824; --t1: #ECE8E1; --t2: #A8A39A; --t3: #7C786F; --oro: #C9A35E; }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--bg); color: var(--t1); font: 400 15px/1.6 'IBM Plex Sans', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 56px 32px 96px; }
+  h1 { font: 400 56px/1 'Anton'; text-transform: uppercase; letter-spacing: .01em; }
+  .lead { max-width: 68ch; margin-top: 16px; color: var(--t2); font-size: 16.5px; }
+  .brief { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--l); margin-top: 32px; border: 1px solid var(--l); }
+  .brief div { background: var(--bg); padding: 16px 18px; }
+  .brief dt { font: 500 11px/1 'IBM Plex Mono'; letter-spacing: .1em; text-transform: uppercase; color: var(--t3); }
+  .brief dd { margin-top: 8px; font-size: 14.5px; }
+  h2 { font: 600 22px/1.2 'IBM Plex Sans'; margin: 64px 0 18px; }
+  .paleta-diag { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  .paleta-diag p { color: var(--t2); }
+  .paleta-diag b { color: var(--t1); font-weight: 500; }
+  .dir { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 40px; padding: 48px 0; border-top: 1px solid var(--l); }
+  .dir a.shot { align-self: start; display: block; border-radius: 10px; overflow: hidden; box-shadow: 0 0 0 1px var(--l), 0 30px 60px -30px rgba(0,0,0,.9); transition: transform .4s cubic-bezier(.22,.8,.2,1); }
+  .dir a.shot:hover { transform: translateY(-4px); }
+  .dir img { display: block; width: 100%; height: auto; }
+  .n { font: 500 12px/1 'IBM Plex Mono'; color: var(--oro); letter-spacing: .1em; }
+  .dir h3 { font: 400 40px/1 'Anton'; text-transform: uppercase; margin-top: 10px; }
+  .concepto { margin-top: 12px; font-size: 17px; line-height: 1.5; }
+  dl.f { margin-top: 20px; display: grid; grid-template-columns: 112px 1fr; gap: 10px 16px; font-size: 14px; }
+  dl.f dt { color: var(--t3); }
+  dl.f dd { color: var(--t2); }
+  dl.f dd b { color: var(--t1); font-weight: 500; }
+  .swatches { display: flex; gap: 6px; margin-top: 2px; flex-wrap: wrap; }
+  .sw { display: flex; flex-direction: column; width: 74px; font: 400 10.5px/1.3 'IBM Plex Mono'; color: var(--t3); }
+  .sw i { height: 34px; border-radius: 5px; margin-bottom: 5px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); }
+  .encaje { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--l); font-size: 14px; color: var(--t2); }
+  .encaje p + p { margin-top: 8px; }
+  .encaje strong { color: var(--t1); font-weight: 500; }
+  .abrir { display: inline-block; margin-top: 18px; color: var(--t1); font-weight: 500; text-decoration: none; border-bottom: 1px solid var(--oro); padding-bottom: 2px; }
+  .nota { margin-top: 56px; padding-top: 24px; border-top: 1px solid var(--l); color: var(--t3); font-size: 13.5px; max-width: 80ch; }
+  @media (max-width: 900px) { .wrap { padding: 32px 16px 64px; } h1 { font-size: 40px; } .brief, .paleta-diag, .dir { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Cuatro direcciones</h1>
+  <p class="lead" style="color:var(--t1)"><b>Elegida el 2026-10-05: la mezcla «Sala de montaje»</b> (atmósfera de 1, estructura de 2 y el giro de 3 en Revisión). <a href="05-sala-de-montaje.html" style="color:var(--oro)">Abrir la vista de referencia</a>. El sistema está en <code>DESIGN.md</code>.</p>
+  <p class="lead">Rediseño de beBetterStudio. La misma pantalla (el editor de reels) con el mismo contenido real, interpretada de cuatro formas. Abre cada una: todas responden al clic, y la frase entra en dos tiempos como en el render.</p>
+  <dl class="brief">
+    <div><dt>Para quién</dt><dd>Para el uso diario y como escaparate de Galactic AIMA</dd></div>
+    <div><dt>Marca</dt><dd>bebetter al 100 %</dd></div>
+    <div><dt>Sensación</dt><dd>Cine con disciplina</dd></div>
+    <div><dt>Referencias</dt><dd>Villeneuve, Nolan, A24 · Apple, Linear, Notion</dd></div>
+  </dl>
+
+  <h2>Qué cambia en la paleta (las cuatro lo corrigen)</h2>
+  <div class="paleta-diag">
+    <p><b>El rojo sangre no se lee sobre carbón: 2,1:1.</b> Por eso la app acabó usando <code>#FF3B3B</code>, un rojo neón que está fuera de marca. Las propuestas lo resuelven de dos maneras: usarlo solo como relleno con hueso encima (7,3:1), o derivar del mismo tono un rojo con luz (Lacre <code>#D9534A</code>, Señal <code>#FF4A3D</code>).</p>
+    <p><b>Los carbones actuales son grises puros (croma 0) y el hueso es cálido (tono 85°),</b> así que no casan. Las cuatro paletas tiñen los carbones con el tono del hueso. <b>El dorado deja de ser «botón premium»</b> y vuelve a su papel de marca: luz y metadatos. Todos los pares de texto pasan WCAG AA, comprobados uno por uno.</p>
+  </div>
+
+  <article class="dir">
+    <a class="shot" href="01-sala-de-proyeccion.html"><img src="capturas/01.jpg" alt="Captura de la dirección Sala de proyección" loading="lazy"></a>
+    <div>
+      <span class="n">Dirección 1 · la más segura</span>
+      <h3>Sala de proyección</h3>
+      <p class="concepto">El reel es la pantalla y la app es la sala a oscuras. Todo lo demás se retira.</p>
+      <dl class="f">
+        <dt>Referencias</dt><dd><b>Villeneuve:</b> la luz cálida que entra en la oscuridad. <b>Apple:</b> la interfaz desaparece para que hable el producto. <b>Runway:</b> la imagen es la interfaz.</dd>
+        <dt>Paleta</dt><dd><div class="swatches"><span class="sw"><i style="background:#0C0B0A"></i>sala</span><span class="sw"><i style="background:#1A1815"></i>humo</span><span class="sw"><i style="background:#E8E4DC"></i>hueso 15,5</span><span class="sw"><i style="background:#9C968C"></i>hueso-2 6,7</span><span class="sw"><i style="background:#D4B072"></i>luz 9,6</span><span class="sw"><i style="background:#8B1A1A"></i>sangre*</span></div></dd>
+        <dt>Tipografía</dt><dd><b>IBM Plex Sans</b> (el cuerpo de tu marca) más Plex Condensed en versalitas espaciadas para las etiquetas. La frase, en Inter Bold, igual que el render.</dd>
+        <dt>Movimiento</dt><dd>Lento y de luz: la sala se enciende al abrir (0,9 s), la frase llega en dos tiempos con su respiro y, al generar, <b>la sala baja la luz</b> y solo queda la pantalla.</dd>
+      </dl>
+      <div class="encaje"><p><strong>Por qué encaja:</strong> es la traducción más directa de «cine» y la más vistosa en una captura para Galactic AIMA. Mantiene tu flujo de tres zonas.</p><p><strong>Por qué no:</strong> sacrifica densidad. Con 30 piezas de un lote, el aire se vuelve scroll.</p></div>
+      <a class="abrir" href="01-sala-de-proyeccion.html">Abrir la Sala de proyección</a>
+    </div>
+  </article>
+
+  <article class="dir">
+    <a class="shot" href="02-mesa-de-montaje.html"><img src="capturas/02.jpg" alt="Captura de la dirección Mesa de montaje" loading="lazy"></a>
+    <div>
+      <span class="n">Dirección 2 · la más disciplinada</span>
+      <h3>Mesa de montaje</h3>
+      <p class="concepto">El banco es material con propiedades. La norma de marca se ve como columnas, no hay que creérsela.</p>
+      <dl class="f">
+        <dt>Referencias</dt><dd><b>Linear:</b> escalera de superficies, un solo acento y teclado (j/k, G para generar). <b>Notion:</b> las propiedades como datos legibles. <b>DaVinci:</b> el material ordenado y el visor a un lado.</dd>
+        <dt>Paleta</dt><dd><div class="swatches"><span class="sw"><i style="background:#0E0E0D"></i>lienzo</span><span class="sw"><i style="background:#1B1A18"></i>s2</span><span class="sw"><i style="background:#ECE8E1"></i>tinta 15,8</span><span class="sw"><i style="background:#A8A39A"></i>tinta-2 7,7</span><span class="sw"><i style="background:#D9534A"></i>lacre 4,9</span><span class="sw"><i style="background:#C9A35E"></i>oro 8,2</span></div></dd>
+        <dt>Tipografía</dt><dd><b>Geist</b> y <b>Geist Mono</b> para cifras y atajos. Neutra y precisa, sin personalidad propia: la personalidad la pone el contenido.</dd>
+        <dt>Movimiento</dt><dd>Casi invisible: 120 ms, sin adornos. La selección es instantánea y el visor se actualiza con un fundido de 160 ms. La velocidad es la estética.</dd>
+      </dl>
+      <div class="encaje"><p><strong>Por qué encaja:</strong> es la que mejor escala con 118 frases, 238 imágenes y lotes de 30. El «//» en lacre enseña el corte entre tiempos en cada fila.</p><p><strong>Por qué no:</strong> es la menos cinematográfica. Si se pasa de sobria, puede parecer «otra app tipo Linear».</p></div>
+      <a class="abrir" href="02-mesa-de-montaje.html">Abrir la Mesa de montaje</a>
+    </div>
+  </article>
+
+  <article class="dir">
+    <a class="shot" href="03-cartel.html"><img src="capturas/03.jpg" alt="Captura de la dirección Cartel" loading="lazy"></a>
+    <div>
+      <span class="n">Dirección 3 · la más de autor</span>
+      <h3>Cartel</h3>
+      <p class="concepto">Cada frase es un cartel de película. El giro, en rojo sangre.</p>
+      <dl class="f">
+        <dt>Referencias</dt><dd><b>A24:</b> una idea por cartel, tipografía enorme y aire. <b>Nolan:</b> títulos en mayúsculas condensadas con peso. <b>Edición impresa:</b> filetes, créditos y la cartelera.</dd>
+        <dt>Paleta</dt><dd><div class="swatches"><span class="sw"><i style="background:#E8E4DC"></i>papel</span><span class="sw"><i style="background:#DCD6CA"></i>papel-2</span><span class="sw"><i style="background:#141210"></i>tinta 14,7</span><span class="sw"><i style="background:#5C574F"></i>tinta-2 5,7</span><span class="sw"><i style="background:#8B1A1A"></i>sangre 7,3</span><span class="sw"><i style="background:#7A5A1E"></i>oro osc. 5,0</span></div></dd>
+        <dt>Tipografía</dt><dd><b>Anton</b>, la display de tu marca, que hoy la app no usa en ningún sitio. Con <b>IBM Plex Sans</b> y Plex Mono para los créditos.</dd>
+        <dt>Movimiento</dt><dd>Tipográfico, como unos títulos de crédito: el primer tiempo sube desde una máscara, se traza el filete (el respiro) y entra el giro. El cartel se posa detrás.</dd>
+      </dl>
+      <div class="encaje"><p><strong>Por qué encaja:</strong> es la única que pone tu estructura de dos tiempos en el centro del diseño, y el rojo sangre por fin se lee (sobre papel da 7,3:1). Es la más memorable como escaparate.</p><p><strong>Por qué no:</strong> es clara, y tus piezas son oscuras. Trabajar de noche en ella cansa más, y en las tareas densas (lotes, analítica) Anton grande no sirve.</p></div>
+      <a class="abrir" href="03-cartel.html">Abrir el Cartel</a>
+    </div>
+  </article>
+
+  <article class="dir">
+    <a class="shot" href="04-bitacora.html"><img src="capturas/04.jpg" alt="Captura de la dirección Bitácora" loading="lazy"></a>
+    <div>
+      <span class="n">Dirección 4 · la más radical</span>
+      <h3>Bitácora</h3>
+      <p class="concepto">Un centro de control. La app ya opera sola; esta dirección lo enseña en vez de esconderlo.</p>
+      <dl class="f">
+        <dt>Referencias</dt><dd><b>Nolan:</b> las salas de control de <i>Interstellar</i>. <b>SpaceX:</b> negro, mayúsculas, ingeniería. <b>Telemetría brutalista:</b> rejilla visible, radio cero y monoespaciada para todo dato.</dd>
+        <dt>Paleta</dt><dd><div class="swatches"><span class="sw"><i style="background:#0B0B0A"></i>fondo</span><span class="sw"><i style="background:#2A2925"></i>rejilla</span><span class="sw"><i style="background:#E8E4DC"></i>fósforo 15,5</span><span class="sw"><i style="background:#8E8A82"></i>fósforo-2 5,7</span><span class="sw"><i style="background:#FF4A3D"></i>señal 5,9</span></div></dd>
+        <dt>Tipografía</dt><dd><b>Archivo</b> condensada (ancho 62) para las cifras grandes y <b>JetBrains Mono</b> para todo lo demás.</dd>
+        <dt>Movimiento</dt><dd>Mecánico, por pasos y sin curvas: los contadores suben como un instrumento, la cuenta atrás hasta la próxima franja corre de verdad, el registro se escribe línea a línea y al generar un barrido rojo recorre el visor.</dd>
+      </dl>
+      <div class="encaje"><p><strong>Por qué encaja:</strong> enseña tus números reales (755.151 reproducciones, pico de 127.404) y el sistema que hay detrás. Para vender el trabajo técnico de Galactic AIMA es la más elocuente.</p><p><strong>Por qué no:</strong> se aleja del «cine». Es más Nolan ingeniero que Villeneuve poeta, y las mayúsculas mono cansan en sesiones largas.</p></div>
+      <a class="abrir" href="04-bitacora.html">Abrir la Bitácora</a>
+    </div>
+  </article>
+
+  <p class="nota">Todo el contenido es real: frases en norma del banco, fondos generados por IA del banco y métricas del snapshot del 2026-09-12. Lo que es de ejemplo (la cola, el lote en curso, el registro) va marcado así en cada página. * Rojo sangre solo como relleno, nunca como texto sobre carbón. Las cifras al lado de cada color son su contraste WCAG sobre el fondo de esa dirección.</p>
+</div>
+</body>
+</html>

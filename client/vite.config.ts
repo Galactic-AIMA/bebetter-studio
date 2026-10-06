@@ -19,6 +19,9 @@ export default defineConfig({
     proxy: {
       '/api': 'http://localhost:3001',
       '/output': 'http://localhost:3001',
+      // Sin esto `/auth/me` caía en Vite, Puerta lo leía como error y pintaba el
+      // login en desarrollo aunque la puerta estuviera desactivada.
+      '/auth': 'http://localhost:3001',
     },
   },
 })
