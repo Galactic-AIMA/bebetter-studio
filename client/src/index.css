@@ -221,6 +221,41 @@
   ::-webkit-scrollbar-thumb:hover { background: theme('colors.borde-control'); }
 }
 
+/* Piezas de la MESA (DESIGN.md §6). Una sola definición para banco, lotes e
+   inspector: si cambia el botón secundario, cambia en todas partes. */
+@layer components {
+  .btn-sec {
+    @apply inline-flex h-8 items-center justify-center gap-1.5 rounded-control border border-borde-control px-3 text-ui text-hueso
+      transition-colors duration-rapido ease-mesa hover:bg-s2 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent;
+  }
+  /* Encendido: el secundario que está activo (un panel abierto, una opción elegida). */
+  .btn-sec[aria-pressed='true'] {
+    @apply border-oro/60 bg-s2;
+  }
+  .btn-fantasma {
+    @apply inline-flex items-center gap-1.5 rounded-control text-ui text-hueso-2
+      transition-colors duration-rapido ease-mesa hover:text-hueso disabled:cursor-not-allowed disabled:opacity-40;
+  }
+  .btn-destructivo {
+    @apply btn-sec text-lacre;
+  }
+  /* Chip de filtro: discontinuo apagado, sólido encendido. */
+  .chip {
+    @apply inline-flex h-[26px] items-center gap-1.5 whitespace-nowrap rounded-control border border-dashed border-borde-control px-2.5 text-ui text-hueso-2
+      transition-colors duration-rapido ease-mesa hover:text-hueso;
+  }
+  .chip[aria-pressed='true'] {
+    @apply border-solid border-linea-2 bg-s2 text-hueso;
+  }
+  .campo {
+    @apply w-full rounded-control border border-borde-control bg-sala px-2.5 py-1.5 text-body text-hueso placeholder:text-hueso-3
+      transition-colors duration-rapido ease-mesa focus:border-oro focus:outline-none;
+  }
+  .kbd {
+    @apply inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-[4px] border border-linea-2 bg-s2 px-1 font-mono text-label font-medium normal-case tracking-normal text-hueso-2;
+  }
+}
+
 @layer utilities {
   /* Etiqueta de sección: versalitas condensadas. Máximo una por grupo. */
   .rotulo {

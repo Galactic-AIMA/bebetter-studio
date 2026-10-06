@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react'
-import { Shuffle, Upload, RefreshCw, Sparkles, Wand2 } from 'lucide-react'
+import { Shuffle, UploadSimple, ArrowsClockwise, Sparkle, MagicWand, Check, WarningCircle } from '@phosphor-icons/react'
 import { imagesApi, phrasesApi, pinterestApi, PinterestStatus } from '../../api'
 import { ImageItem, ImageRecommendation } from '../../types'
 import { useVideoStore } from '../../store/videoStore'
@@ -173,7 +173,7 @@ export default function ImageBank() {
   const unanalyzedCount = images.filter((img) => !img.analyzedAt).length
 
   return (
-    <div className="flex flex-col gap-3 p-4">
+    <div className="flex flex-col">
       {showAIModal && (
         <AIImageModal
           phrase={phrase}
@@ -183,154 +183,139 @@ export default function ImageBank() {
           onGenerated={handleAIGenerated}
         />
       )}
-      {pinterest?.pinterestApiConfigured && (
-        <div className="flex flex-col gap-1.5 text-xs bg-carbon-700/50 rounded-lg px-3 py-2 border border-carbon-600/50">
-          <div className="flex items-center justify-between">
-            <span className="flex items-center gap-1.5 text-bone-700">
-              <span className="text-neon-red">◈</span>
+
+      <div className="flex flex-col gap-3 border-b border-linea px-5 pb-4 pt-4 lg:pt-3">
+        {!loading && images.length > 0 && (
+          <p className="text-ui text-hueso-2">
+            <span className="font-mono">{images.length}</span> fondos
+            {unanalyzedCount > 0 && <> · <span className="font-mono">{unanalyzedCount}</span> sin analizar</>}
+          </p>
+        )}
+
+        {pinterest?.pinterestApiConfigured && (
+          <div className="flex items-center justify-between gap-2 font-mono text-meta text-hueso-3">
+            <span>
+              Pinterest ·{' '}
               {pinterest.lastSync
                 ? `${formatTimeAgo(pinterest.lastSync.timestamp)} · ${pinterest.lastSync.newImages} nuevas`
-                : 'Sin sincronizar aún'}
+                : 'sin sincronizar'}
             </span>
-          </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              onClick={handlePinterestApiSync}
-              disabled={syncingApi}
-              className="flex items-center gap-1 text-gold-500 hover:text-gold-400 transition-colors disabled:opacity-50"
-            >
-              <RefreshCw size={11} className={syncingApi ? 'animate-spin' : ''} />
-              {syncingApi ? 'Sincronizando...' : 'Pinterest API'}
+            <button onClick={handlePinterestApiSync} disabled={syncingApi} className="btn-fantasma font-sans">
+              <ArrowsClockwise size={16} className={syncingApi ? 'text-oro' : ''} />
+              {syncingApi ? 'Sincronizando…' : 'Sincronizar'}
             </button>
           </div>
+        )}
+
+        {hasUsed && (
+          <div className="flex flex-wrap gap-1.5">
+            <button className="chip" aria-pressed={hideUsed} onClick={() => setHideUsed(!hideUsed)}>
+              Sin usar
+            </button>
+          </div>
+        )}
+
+        <div className="flex flex-wrap gap-2">
+          <button onClick={pickRandom} className="btn-sec">
+            <Shuffle size={16} /> Otro fondo
+          </button>
+          <button onClick={() => fileRef.current?.click()} className="btn-sec">
+            <UploadSimple size={16} /> Subir
+          </button>
+          <button onClick={() => setShowAIModal(true)} className="btn-sec">
+            <MagicWand size={16} /> Generar con IA
+          </button>
+          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleUpload} />
         </div>
-      )}
 
-      <div className="flex gap-2 flex-wrap">
         <button
-          onClick={pickRandom}
-          className="flex items-center gap-1.5 text-xs bg-carbon-700 hover:bg-carbon-600 border border-carbon-600 rounded-lg px-3 py-2 text-bone-500 transition-colors"
+          onClick={handleAnalyzeAll}
+          disabled={analyzing}
+          className="btn-fantasma self-start"
+          title="Etiqueta los fondos con IA para emparejarlos con las frases"
         >
-          <Shuffle size={13} /> Aleatoria
-        </button>
-        <button
-          onClick={() => fileRef.current?.click()}
-          className="flex items-center gap-1.5 text-xs bg-carbon-700 hover:bg-carbon-600 border border-carbon-600 rounded-lg px-3 py-2 text-bone-500 transition-colors"
-        >
-          <Upload size={13} /> Subir imagen
-        </button>
-        <button
-          onClick={() => setShowAIModal(true)}
-          className="flex items-center gap-1.5 text-xs bg-gold-500/10 hover:bg-gold-500/20 border border-gold-500/40 rounded-lg px-3 py-2 text-gold-500 transition-colors"
-        >
-          <Wand2 size={13} /> Generar con IA
-        </button>
-        <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleUpload} />
-      </div>
-
-      {/* Botón Analizar */}
-      <button
-        onClick={handleAnalyzeAll}
-        disabled={analyzing}
-        className="flex items-center justify-between gap-2 text-xs bg-carbon-700/50 hover:bg-carbon-700 border border-carbon-600/50 rounded-lg px-3 py-2 text-bone-700 hover:text-bone-500 transition-colors disabled:opacity-50"
-      >
-        <span className="flex items-center gap-1.5">
-          <Sparkles size={11} className={analyzing ? 'animate-pulse text-gold-500' : ''} />
+          <Sparkle size={16} className={analyzing ? 'text-oro' : ''} />
           {analyzing
             ? analyzeProg && analyzeProg.total > 0
-              ? `Analizando… ${analyzeProg.done}/${analyzeProg.total} (faltan ${Math.max(0, analyzeProg.total - analyzeProg.done)})`
-              : 'Analizando… (preparando)'
+              ? <>Analizando… <span className="font-mono">{analyzeProg.done}/{analyzeProg.total}</span></>
+              : 'Analizando…'
             : 'Analizar banco con IA'}
-        </span>
-        {unanalyzedCount > 0 && !analyzing && (
-          <span className="text-[10px] bg-gold-500/10 text-gold-500 px-1.5 py-0.5 rounded">
-            {unanalyzedCount} sin analizar
-          </span>
+        </button>
+
+        {/* Progreso: scaleX y no width, que solo se animan transform y opacity. */}
+        {analyzing && analyzeProg && analyzeProg.total > 0 && (
+          <div className="h-0.5 w-full overflow-hidden rounded-full bg-s3" role="progressbar" aria-valuemin={0} aria-valuemax={analyzeProg.total} aria-valuenow={analyzeProg.done}>
+            <div
+              className="h-full origin-left bg-oro transition-transform duration-base ease-mesa"
+              style={{ transform: `scaleX(${Math.min(1, analyzeProg.done / analyzeProg.total)})` }}
+            />
+          </div>
         )}
-      </button>
 
-      {/* Barra de progreso del análisis */}
-      {analyzing && analyzeProg && analyzeProg.total > 0 && (
-        <div className="w-full bg-carbon-700 rounded-full h-1.5 -mt-1">
-          <div
-            className="bg-gold-500 h-1.5 rounded-full transition-all"
-            style={{ width: `${Math.min(100, (analyzeProg.done / analyzeProg.total) * 100)}%` }}
-          />
-        </div>
-      )}
-
-      {analyzeResult && (
-        <p className={`text-[11px] px-1 ${analyzeResult.startsWith('Error') ? 'text-neon-red' : 'text-gold-500'}`}>
-          {analyzeResult}
-        </p>
-      )}
+        {analyzeResult && (
+          <p role="status" className={`flex items-center gap-1.5 text-ui ${analyzeResult.startsWith('Error') ? 'text-lacre' : 'text-hueso-2'}`}>
+            {analyzeResult.startsWith('Error') ? <WarningCircle size={16} /> : <Check size={16} />}
+            {analyzeResult}
+          </p>
+        )}
+      </div>
 
       {hasRecommendations && (
-        <p className="text-[10px] text-gold-500/70 px-1">
-          ✦ Ordenadas por compatibilidad con la frase
+        <p className="flex items-center gap-1.5 border-b border-linea px-5 py-2 font-mono text-meta text-hueso-3">
+          <Sparkle size={14} className="text-oro" /> Ordenadas por afinidad con la frase
         </p>
-      )}
-
-      {hasUsed && (
-        <button
-          onClick={() => setHideUsed(!hideUsed)}
-          className="text-xs text-bone-700 hover:text-bone-500 transition-colors text-left"
-        >
-          {hideUsed ? '+ Mostrar todas' : '○ Ocultar usadas'}
-        </button>
       )}
 
       {loading ? (
-        <p className="text-xs text-bone-700">Cargando imágenes...</p>
+        <p className="px-5 py-6 text-ui text-hueso-3">Cargando fondos…</p>
+      ) : images.length === 0 ? (
+        <div className="flex flex-col items-start gap-3 px-5 py-10">
+          <p className="pt-[.16em] font-display text-display uppercase text-hueso">Sin fondos</p>
+          <p className="text-body text-hueso-2">El banco de imágenes está vacío. Sube una o genera la primera con IA.</p>
+          <button onClick={() => fileRef.current?.click()} className="btn-sec">
+            <UploadSimple size={16} /> Subir imagen
+          </button>
+        </div>
       ) : (
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-3 gap-2 p-5" role="listbox" aria-label="Banco de imágenes">
           {visible.map((img) => {
-            const score = scoreMap.get(img.id) ?? 0
-            const isCompatible = score > 0
+            const isCompatible = (scoreMap.get(img.id) ?? 0) > 0
             const isSelected = config.imageId === img.id
+            const usos = img.usageCount ?? 0
 
             return (
               <button
                 key={img.id}
+                role="option"
+                aria-selected={isSelected}
+                aria-label={`${img.filename}${usos ? `, ${usos} usos` : ', sin usar'}${isCompatible ? ', afín' : ''}`}
                 onClick={() => selectImage(img)}
-                className={`relative aspect-[9/16] overflow-hidden rounded-lg border-2 transition-all ${
+                className={`group relative aspect-[9/16] overflow-hidden rounded-control border transition-colors duration-rapido ease-mesa ${
                   isSelected
-                    ? 'border-neon-red'
-                    : isCompatible
-                    ? 'border-gold-500/60 hover:border-gold-500'
-                    : 'border-transparent hover:border-carbon-600'
+                    ? 'border-oro ring-1 ring-oro'
+                    : 'border-linea-2 hover:border-borde-control'
                 }`}
               >
-                <img src={img.url} alt={img.filename} className="w-full h-full object-cover" loading="lazy" decoding="async" />
+                <img src={img.url} alt="" className="h-full w-full object-cover" loading="lazy" decoding="async" />
 
-                {/* Badge de uso */}
-                {(img.usageCount ?? 0) > 0 && (
-                  <span className="absolute top-1 right-1 text-xs bg-black/70 text-gold-500 rounded px-1 py-0.5 font-medium leading-none">
-                    ×{img.usageCount}
+                {(img.origen === 'ia' || usos > 0) && (
+                  <span className="absolute inset-x-1 top-1 flex justify-between font-mono text-meta leading-none">
+                    {img.origen === 'ia' ? <span className="rounded-[4px] bg-velo px-1 py-0.5 text-hueso">IA</span> : <span />}
+                    {usos > 0 && <span className="rounded-[4px] bg-velo px-1 py-0.5 text-hueso-2">×{usos}</span>}
                   </span>
                 )}
 
-                {/* Badge compatible */}
-                {isCompatible && !isSelected && (
-                  <span className="absolute bottom-1 left-1 text-[9px] bg-gold-500/90 text-carbon-900 rounded px-1 py-0.5 font-bold leading-none">
-                    ✦
-                  </span>
-                )}
-
-                {/* Badge origen IA */}
-                {img.origen === 'ia' && (
-                  <span className="absolute top-1 left-1 text-[8px] bg-gold-500/90 text-carbon-900 rounded px-1 py-0.5 font-bold leading-none tracking-wide">
-                    IA
+                {(isSelected || isCompatible) && (
+                  <span className={`absolute bottom-1 left-1 rounded-[4px] bg-velo px-1 py-0.5 font-mono text-meta leading-none ${isSelected ? 'text-oro' : 'text-hueso-2'}`}>
+                    {isSelected ? 'en pantalla' : 'afín'}
                   </span>
                 )}
               </button>
             )
           })}
           {visible.length === 0 && (
-            <p className="col-span-3 text-xs text-bone-700 text-center py-8">
-              No hay imágenes en el banco.
-              <br />
-              Sube una o revisa la carpeta configurada.
+            <p className="col-span-3 py-8 text-center text-ui text-hueso-3">
+              Todos los fondos se han usado ya. Quita el filtro «Sin usar» para verlos.
             </p>
           )}
         </div>
