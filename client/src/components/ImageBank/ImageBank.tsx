@@ -4,6 +4,7 @@ import { imagesApi, phrasesApi, pinterestApi, PinterestStatus } from '../../api'
 import { ImageItem, ImageRecommendation } from '../../types'
 import { useVideoStore } from '../../store/videoStore'
 import AIImageModal from './AIImageModal'
+import { Progreso } from '../ui/mesa'
 
 function formatTimeAgo(timestamp: string): string {
   const diffMs = Date.now() - new Date(timestamp).getTime()
@@ -242,14 +243,8 @@ export default function ImageBank() {
             : 'Analizar banco con IA'}
         </button>
 
-        {/* Progreso: scaleX y no width, que solo se animan transform y opacity. */}
         {analyzing && analyzeProg && analyzeProg.total > 0 && (
-          <div className="h-0.5 w-full overflow-hidden rounded-full bg-s3" role="progressbar" aria-valuemin={0} aria-valuemax={analyzeProg.total} aria-valuenow={analyzeProg.done}>
-            <div
-              className="h-full origin-left bg-oro transition-transform duration-base ease-mesa"
-              style={{ transform: `scaleX(${Math.min(1, analyzeProg.done / analyzeProg.total)})` }}
-            />
-          </div>
+          <Progreso actual={analyzeProg.done} total={analyzeProg.total} label="Progreso del análisis" />
         )}
 
         {analyzeResult && (

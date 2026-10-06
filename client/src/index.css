@@ -225,7 +225,7 @@
    inspector: si cambia el botón secundario, cambia en todas partes. */
 @layer components {
   .btn-sec {
-    @apply inline-flex h-8 items-center justify-center gap-1.5 rounded-control border border-borde-control px-3 text-ui text-hueso
+    @apply inline-flex h-10 items-center justify-center gap-1.5 rounded-control border border-borde-control px-3 lg:h-8 text-ui text-hueso
       transition-colors duration-rapido ease-mesa hover:bg-s2 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent;
   }
   /* Encendido: el secundario que está activo (un panel abierto, una opción elegida). */
@@ -241,7 +241,7 @@
   }
   /* Chip de filtro: discontinuo apagado, sólido encendido. */
   .chip {
-    @apply inline-flex h-[26px] items-center gap-1.5 whitespace-nowrap rounded-control border border-dashed border-borde-control px-2.5 text-ui text-hueso-2
+    @apply inline-flex h-9 items-center gap-1.5 whitespace-nowrap lg:h-[26px] rounded-control border border-dashed border-borde-control px-2.5 text-ui text-hueso-2
       transition-colors duration-rapido ease-mesa hover:text-hueso;
   }
   .chip[aria-pressed='true'] {
