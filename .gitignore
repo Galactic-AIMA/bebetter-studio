@@ -149,3 +149,6 @@ beBetterStudio-app.pem
 # mandarte un mensaje falso de Telegram. El repo es publico.
 .webhook-lote-url
 .n8n-cred-id
+
+# Referencias visuales descargadas (no versionar)
+referencias/
