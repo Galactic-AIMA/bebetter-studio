@@ -20,8 +20,19 @@ type ToastState = { state: 'loading' | 'success' | 'error'; loadingText?: string
 const BTN_SECUNDARIO =
   'inline-flex h-8 items-center gap-2 rounded-control border border-borde-control px-3 text-ui text-hueso transition-colors duration-rapido ease-mesa hover:bg-s2 disabled:opacity-40'
 
+/** El encendido (DESIGN.md §7.1) ocurre una vez por carga de la app. Sin esto se
+ *  repetía cada vez que se volvía al editor desde Carrusel o Analítica, que
+ *  desmontan el escenario. Fuera del componente por si la puerta lo desmonta. */
+let yaEncendida = false
+
 export default function Editor() {
   const { config, selectedPhraseId, isGenerating, setGenerating, mode } = useVideoStore()
+  // La clase se quita cuando la animación TERMINA de verdad (`animationend`), no
+  // con un temporizador: al cargar, el hilo principal va cargado (fuentes,
+  // miniaturas) y un temporizador de 900 ms la cortaba a medias, con salto de luz.
+  // El estado final es el mismo, y un escenario que se vuelve a montar ya no lo repite.
+  const [encender, setEncender] = useState(() => !yaEncendida)
+  const encendida = () => { yaEncendida = true; setEncender(false) }
   const [lastVideo, setLastVideo] = useState<VideoRecord | null>(null)
   const [lastImage, setLastImage] = useState<ImageRecord | null>(null)
   const [imageVariant, setImageVariant] = useState<ImageVariant>('combined')
@@ -173,7 +184,11 @@ export default function Editor() {
             <main
               className={`${seccion === 'vista' ? 'flex' : 'hidden'} relative min-w-0 flex-1 flex-col overflow-hidden lg:flex`}
             >
-              <div className="luz-proyector encender pointer-events-none absolute inset-0" aria-hidden />
+              <div
+                className={`luz-proyector pointer-events-none absolute inset-0 ${encender ? 'encender' : ''}`}
+                onAnimationEnd={encender ? encendida : undefined}
+                aria-hidden
+              />
               <div className="grano absolute inset-0" aria-hidden />
 
               <div className="relative z-10 flex min-h-0 flex-1 flex-col items-center justify-center gap-4 px-4 pb-3 pt-4 lg:px-6 lg:pt-6">
@@ -196,10 +211,10 @@ export default function Editor() {
 
                 {/* El preview: una promesa sobre el MP4 (DESIGN.md §6). */}
                 <div
-                  className="encender min-h-0 w-full max-w-full flex-1 lg:max-h-[620px]"
+                  className={`min-h-0 w-full max-w-full flex-1 lg:max-h-[620px] ${encender ? 'encender' : ''}`}
                   style={{ aspectRatio: `${config.resolution.width}/${config.resolution.height}`, maxWidth: '100%' }}
                 >
-                  <VideoPreview config={config} />
+                  <VideoPreview config={config} fraseKey={selectedPhraseId} />
                 </div>
 
                 {/* Generar: el único botón relleno de la pantalla. `relative z-10` para

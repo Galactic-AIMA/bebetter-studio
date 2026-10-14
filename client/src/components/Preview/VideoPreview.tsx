@@ -1,17 +1,43 @@
 import { useRef, useEffect } from 'react'
 import { VideoConfig, WatermarkConfig } from '../../types'
 import { buildFontMap, fontToCSS, parseFontKey } from '../../config/fonts'
-import { wrapText } from '../../lib/wrapText'
+import { wrapText, BLOCK_SEPARATOR } from '../../lib/wrapText'
 import { drawTextScrim } from '../../lib/textScrim'
 
 interface Props {
   config: VideoConfig
+  /**
+   * Identidad de la frase elegida. Cuando cambia, el texto entra en dos tiempos
+   * (DESIGN.md §7.2). Escribir en el campo de texto NO la cambia, así que teclear
+   * no repite la coreografía.
+   */
+  fraseKey?: string | null
 }
 
 const FONT_MAP = buildFontMap()
 
-export default function VideoPreview({ config }: Props) {
+/* Dos tiempos (DESIGN.md §7.2): el primero entra en 200 ms, respiro de 450 ms y
+   entra el giro. Es lo que hace el reel. */
+const T_ENTRA = 200
+const T_RESPIRO = 450
+const T_TOTAL = T_ENTRA + T_RESPIRO + T_ENTRA
+
+/** Aproxima la curva `mesa` (cubic-bezier(.2,.8,.2,1)): sale rápido y se posa. */
+const posarse = (x: number) => 1 - Math.pow(1 - Math.min(1, Math.max(0, x)), 3)
+
+/** Opacidad de [primer tiempo, giro] a `t` ms del inicio. */
+function alfas(t: number): [number, number] {
+  return [posarse(t / T_ENTRA), posarse((t - T_ENTRA - T_RESPIRO) / T_ENTRA)]
+}
+
+export default function VideoPreview({ config, fraseKey }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  // La coreografía va por RELOJ, no por render: al elegir una frase el `config`
+  // cambia varias veces seguidas (texto, fondo afín, pista…) y cada cambio
+  // relanza el dibujo. Guardando cuándo empezó, cada redibujo retoma la
+  // animación donde iba en vez de cortarla o empezarla de nuevo.
+  const anim = useRef<{ key: string | null | undefined; inicio: number | null }>({ key: fraseKey, inicio: null })
+  if (anim.current.key !== fraseKey) anim.current = { key: fraseKey, inicio: null }
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -48,6 +74,8 @@ export default function VideoPreview({ config }: Props) {
     const italic = entry.italic ? 'italic ' : ''
     const fontSpec = `${italic}${entry.weight} ${config.text.fontSize}px ${entry.family}`
 
+    let cuadro = 0
+
     Promise.all(tasks).then(async ([bg, wm]) => {
       await document.fonts.load(fontSpec)
       if (!vigente) return
@@ -55,26 +83,45 @@ export default function VideoPreview({ config }: Props) {
       // canvas, y el fotograma anterior se queda en pantalla mientras llega el nuevo.
       if (canvas.width !== W) canvas.width = W
       if (canvas.height !== H) canvas.height = H
-      if (bg) {
-        const scale = Math.max(W / bg.width, H / bg.height)
-        const sw = bg.width * scale
-        const sh = bg.height * scale
-        ctx.drawImage(bg, (W - sw) / 2, (H - sh) / 2, sw, sh)
-      } else {
-        // Sin imagen elegida: el carbón de la sala, no un azul ajeno a la marca.
-        ctx.fillStyle = '#1A1815'
-        ctx.fillRect(0, 0, W, H)
+
+      const pintar = (alfa: [number, number]) => {
+        if (bg) {
+          const scale = Math.max(W / bg.width, H / bg.height)
+          const sw = bg.width * scale
+          const sh = bg.height * scale
+          ctx.drawImage(bg, (W - sw) / 2, (H - sh) / 2, sw, sh)
+        } else {
+          // Sin imagen elegida: el carbón de la sala, no un azul ajeno a la marca.
+          ctx.fillStyle = '#1A1815'
+          ctx.fillRect(0, 0, W, H)
+        }
+        // Degradado de carbón entre la imagen y el texto (mismo perfil que el render).
+        drawTextScrim(ctx, W, H, config.text.position.y)
+        drawText(ctx, config, W, H, alfa)
+        if (wmEnabled && wmType === 'text') {
+          drawTextWatermark(ctx, config.watermark!, W, H)
+        } else if (wmEnabled && wm) {
+          drawImageWatermark(ctx, wm, config.watermark!, W, H)
+        }
       }
-      // Degradado de carbón entre la imagen y el texto (mismo perfil que el render).
-      drawTextScrim(ctx, W, H, config.text.position.y)
-      drawText(ctx, config, W, H)
-      if (wmEnabled && wmType === 'text') {
-        drawTextWatermark(ctx, config.watermark!, W, H)
-      } else if (wmEnabled && wm) {
-        drawImageWatermark(ctx, wm, config.watermark!, W, H)
+
+      // Sin frase elegida, o con movimiento reducido: el texto entero, sin más.
+      const reducido = matchMedia('(prefers-reduced-motion: reduce)').matches
+      if (!anim.current.key || reducido) { pintar([1, 1]); return }
+
+      // El reloj arranca en el PRIMER fotograma pintado de esta frase, no al
+      // elegirla: si el fondo tarda en llegar, la coreografía no se pierde a ciegas.
+      if (anim.current.inicio === null) anim.current.inicio = performance.now()
+      const inicio = anim.current.inicio
+      const paso = () => {
+        if (!vigente) return
+        const t = performance.now() - inicio
+        pintar(alfas(t))
+        if (t < T_TOTAL) cuadro = requestAnimationFrame(paso)
       }
+      paso()
     })
-    return () => { vigente = false }
+    return () => { vigente = false; cancelAnimationFrame(cuadro) }
   }, [config])
 
   return (
@@ -99,7 +146,9 @@ function drawText(
   ctx: CanvasRenderingContext2D,
   config: VideoConfig,
   W: number,
-  H: number
+  H: number,
+  /** Opacidad de [primer tiempo, giro]. Las líneas tras el respiro son el giro. */
+  alfa: [number, number] = [1, 1]
 ) {
   const { text } = config
   if (!text.content) return
@@ -143,6 +192,10 @@ function drawText(
   const totalH = lines.length * lineH
   const startY = y - totalH / 2 + lineH / 2
 
+  // Qué tiempo es cada línea: todo lo que va tras el primer respiro es el giro.
+  const corte = lines.indexOf(BLOCK_SEPARATOR)
+  const alfaDe = (i: number) => (corte >= 0 && i > corte ? alfa[1] : alfa[0])
+
   const strokeW = text.strokeWidth ?? 0
   if (strokeW > 0) {
     ctx.lineWidth = strokeW * 2
@@ -150,6 +203,7 @@ function drawText(
     ctx.lineJoin = 'round'
     ctx.shadowColor = 'transparent'
     lines.forEach((line, i) => {
+      ctx.globalAlpha = alfaDe(i)
       ctx.strokeText(line, x, startY + i * lineH)
     })
     if (text.shadow) {
@@ -161,8 +215,10 @@ function drawText(
   }
 
   lines.forEach((line, i) => {
+    ctx.globalAlpha = alfaDe(i)
     ctx.fillText(line, x, startY + i * lineH)
   })
+  ctx.globalAlpha = 1
 
   ctx.shadowColor = 'transparent'
   if ('letterSpacing' in ctx) {
@@ -180,7 +236,8 @@ function drawText(
       : `${sourceFontSize}px ${FONT_MAP[text.font]?.family ?? 'sans-serif'}, sans-serif`
     ctx.font = sourceCss
     ctx.fillStyle = text.color
-    ctx.globalAlpha = 0.8
+    // La fuente cierra la frase: entra con el giro.
+    ctx.globalAlpha = 0.8 * alfa[1]
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     const sourceY = startY + lines.length * lineH + sourceFontSize * 2
