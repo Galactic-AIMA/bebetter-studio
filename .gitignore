@@ -128,3 +128,6 @@ server/scripts/reparar-vinculo-tanda2.ts
 # dentro el runtime del visor). Se rehacen con:
 #   node <skills>/archify/bin/archify.mjs deliver <tipo> <spec>.json <salida>.html --quality showcase
 docs/diagramas/*.html
+
+# Referencias visuales descargadas (no versionar)
+referencias/
