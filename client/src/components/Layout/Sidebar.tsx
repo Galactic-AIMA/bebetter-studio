@@ -69,11 +69,14 @@ export default function Sidebar({ bancoTab, onBancoTab, isGenerating, atenuada }
     return () => removeEventListener('keydown', esc)
   }, [menuMovil])
 
-  const editando = mode === 'video' || mode === 'image'
+  // Revisión es una pantalla completa encima del editor: mientras está abierta,
+  // nada más de la barra se marca como activo.
+  const enRevision = modal === 'revision'
+  const editando = (mode === 'video' || mode === 'image') && !enRevision
   // Las entradas del banco abren su lista en el editor; desde carrusel o
   // analítica, primero se vuelve al editor de video.
   const abrirBanco = (tab: BancoTab) => {
-    if (!editando) setMode('video')
+    if (mode !== 'video' && mode !== 'image') setMode('video')
     onBancoTab(tab)
   }
   const modo = (m: ContentMode) => () => setMode(m)
@@ -81,9 +84,9 @@ export default function Sidebar({ bancoTab, onBancoTab, isGenerating, atenuada }
   const grupos: { titulo?: string; entradas: Entrada[] }[] = [
     {
       entradas: [
-        { id: 'video', label: 'Video', icon: VideoCamera, activo: mode === 'video', onClick: modo('video') },
-        { id: 'image', label: 'Imagen', icon: ImageSquare, activo: mode === 'image', onClick: modo('image') },
-        { id: 'carousel', label: 'Carrusel', icon: Cards, activo: mode === 'carousel', onClick: modo('carousel') },
+        { id: 'video', label: 'Video', icon: VideoCamera, activo: mode === 'video' && !enRevision, onClick: modo('video') },
+        { id: 'image', label: 'Imagen', icon: ImageSquare, activo: mode === 'image' && !enRevision, onClick: modo('image') },
+        { id: 'carousel', label: 'Carrusel', icon: Cards, activo: mode === 'carousel' && !enRevision, onClick: modo('carousel') },
       ],
     },
     {
@@ -106,7 +109,7 @@ export default function Sidebar({ bancoTab, onBancoTab, isGenerating, atenuada }
     {
       titulo: 'Datos',
       entradas: [
-        { id: 'analytics', label: 'Analítica', icon: ChartLineUp, activo: mode === 'analytics', onClick: modo('analytics') },
+        { id: 'analytics', label: 'Analítica', icon: ChartLineUp, activo: mode === 'analytics' && !enRevision, onClick: modo('analytics') },
         { id: 'logs', label: 'Registro', icon: Scroll, activo: modal === 'logs', onClick: () => setModal('logs') },
       ],
     },
@@ -121,7 +124,12 @@ export default function Sidebar({ bancoTab, onBancoTab, isGenerating, atenuada }
         {g.entradas.map((e) => (
           <button
             key={e.id}
-            onClick={() => { e.onClick(); setMenuMovil(false) }}
+            onClick={() => {
+              e.onClick()
+              // Cualquier otra entrada saca de Revisión (si no abrió ella otro panel).
+              if (e.id !== 'revision') setModal((m) => (m === 'revision' ? null : m))
+              setMenuMovil(false)
+            }}
             aria-current={e.activo ? 'page' : undefined}
             aria-label={e.cuenta ? `${e.label}, ${e.cuenta} esperando` : e.label}
             title={riel ? e.label : undefined}
