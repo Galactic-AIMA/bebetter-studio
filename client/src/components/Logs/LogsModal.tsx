@@ -1,6 +1,7 @@
-import { X, RotateCw, Trash2 } from 'lucide-react'
+import { ArrowsClockwise, Trash } from '@phosphor-icons/react'
 import { useEffect, useState, useCallback } from 'react'
 import { logsApi, LogEntry, LogLevel } from '../../api'
+import PanelDeslizante from '../ui/PanelDeslizante'
 
 interface Props {
   onClose: () => void
@@ -12,6 +13,8 @@ const CATEGORY_LABEL: Record<string, string> = {
   publish: 'Publicar',
   s3: 'R2',
   system: 'Sistema',
+  carousel: 'Carrusel',
+  insights: 'Analítica',
 }
 
 function formatTime(iso: string) {
@@ -21,6 +24,7 @@ function formatTime(iso: string) {
   })
 }
 
+/** Registro de actividad. Es la única pantalla donde se admite jerga técnica (DESIGN.md §8). */
 export default function LogsModal({ onClose }: Props) {
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [filter, setFilter] = useState<'all' | LogLevel>('all')
@@ -52,95 +56,75 @@ export default function LogsModal({ onClose }: Props) {
   const errorCount = logs.filter((l) => l.level === 'error').length
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-2 sm:p-4"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+    <PanelDeslizante
+      titulo="Registro"
+      onClose={onClose}
+      meta={errorCount > 0 && (
+        <span className="shrink-0 font-mono text-meta tabular-nums text-lacre">
+          {errorCount} error{errorCount !== 1 ? 'es' : ''}
+        </span>
+      )}
+      acciones={
+        <>
+          <button
+            onClick={() => setAutoRefresh((v) => !v)}
+            aria-pressed={autoRefresh}
+            aria-label={autoRefresh ? 'Pausar el refresco automático' : 'Reanudar el refresco automático'}
+            title={autoRefresh ? 'Se refresca cada 3 s' : 'Refresco pausado'}
+            className={`grid h-10 w-10 place-items-center rounded-control transition-colors duration-rapido ease-mesa hover:bg-s2 lg:h-8 lg:w-8 ${
+              autoRefresh ? 'text-oro' : 'text-hueso-2 hover:text-hueso'
+            }`}
+          >
+            <ArrowsClockwise size={16} />
+          </button>
+          <button
+            onClick={handleClear}
+            aria-label="Vaciar el registro"
+            title="Vaciar el registro"
+            className="grid h-10 w-10 place-items-center rounded-control text-hueso-2 transition-colors duration-rapido ease-mesa hover:bg-s2 hover:text-lacre lg:h-8 lg:w-8"
+          >
+            <Trash size={16} />
+          </button>
+        </>
+      }
     >
-      <div className="relative w-full max-w-2xl bg-carbon-800 rounded-xl overflow-hidden shadow-2xl flex flex-col max-h-[90dvh]">
-        {/* Header */}
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-carbon-700 shrink-0">
-          <h2 className="text-sm font-semibold tracking-wide text-bone-500">Registro de actividad</h2>
-          {errorCount > 0 && (
-            <span className="text-[10px] px-2 py-0.5 rounded font-medium bg-neon-red/15 text-neon-red">
-              {errorCount} error{errorCount !== 1 ? 'es' : ''}
-            </span>
-          )}
-
-          <div className="ml-auto flex items-center gap-1">
-            {/* Filtro nivel */}
-            <div className="flex items-center rounded-lg overflow-hidden border border-carbon-600 text-[11px] mr-1">
-              {([
-                { id: 'all', label: 'Todos' },
-                { id: 'error', label: 'Errores' },
-              ] as const).map(({ id, label }) => (
-                <button
-                  key={id}
-                  onClick={() => setFilter(id as 'all' | LogLevel)}
-                  className={`px-2.5 py-1 transition-colors ${
-                    filter === id ? 'bg-carbon-600 text-bone-500' : 'bg-carbon-800 text-bone-700 hover:text-bone-500'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-
-            <button
-              onClick={() => setAutoRefresh((v) => !v)}
-              title={autoRefresh ? 'Auto-refresco activo' : 'Auto-refresco pausado'}
-              className={`p-1.5 rounded-lg transition-colors ${
-                autoRefresh ? 'text-gold-500' : 'text-bone-700 hover:text-bone-500'
-              }`}
-            >
-              <RotateCw size={13} />
-            </button>
-            <button
-              onClick={handleClear}
-              title="Limpiar logs"
-              className="p-1.5 rounded-lg text-bone-700 hover:text-neon-red transition-colors"
-            >
-              <Trash2 size={13} />
-            </button>
-            <button
-              onClick={onClose}
-              className="p-1.5 rounded-lg bg-carbon-700/80 text-bone-700 hover:text-bone-500 transition-colors"
-            >
-              <X size={14} />
-            </button>
-          </div>
-        </div>
-
-        {/* Lista */}
-        <div className="overflow-y-auto flex-1 p-2 font-mono text-[11px]">
-          {loading ? (
-            <p className="p-4 text-bone-700">Cargando...</p>
-          ) : logs.length === 0 ? (
-            <p className="p-4 text-bone-700">Sin actividad registrada.</p>
-          ) : (
-            <div className="flex flex-col">
-              {logs.map((l) => (
-                <div
-                  key={l.id}
-                  className="flex items-start gap-2 px-2 py-1.5 rounded hover:bg-carbon-700/50 border-b border-carbon-700/40 last:border-0"
-                >
-                  <span className="shrink-0 text-bone-700 tabular-nums">{formatTime(l.ts)}</span>
-                  <span
-                    className={`shrink-0 w-14 uppercase tracking-wide ${
-                      l.level === 'error' ? 'text-neon-red' : 'text-gold-500/80'
-                    }`}
-                  >
-                    {CATEGORY_LABEL[l.category] ?? l.category}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <span className={l.level === 'error' ? 'text-neon-red' : 'text-bone-500'}>{l.message}</span>
-                    {l.detail && <span className="block text-bone-700 break-words">{l.detail}</span>}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+      <div className="sticky top-0 z-10 flex gap-1.5 border-b border-linea bg-s1 px-5 py-2.5">
+        <button className="chip" aria-pressed={filter === 'all'} onClick={() => setFilter('all')}>Todo</button>
+        <button className="chip" aria-pressed={filter === 'error'} onClick={() => setFilter('error')}>Errores</button>
       </div>
-    </div>
+
+      {loading ? (
+        <p className="px-5 py-6 text-ui text-hueso-3">Cargando el registro…</p>
+      ) : logs.length === 0 ? (
+        <div className="flex flex-col items-start gap-3 px-5 py-10">
+          <p className="pt-[.16em] font-display text-display uppercase text-hueso">
+            {filter === 'error' ? 'Sin errores' : 'Sin actividad'}
+          </p>
+          <p className="text-body text-hueso-2">
+            {filter === 'error'
+              ? 'Nada ha fallado en lo que guarda el registro.'
+              : 'Aquí aparece cada generación, subida y publicación.'}
+          </p>
+          {filter === 'error' && <button className="btn-sec mt-1" onClick={() => setFilter('all')}>Ver todo</button>}
+        </div>
+      ) : (
+        <ul className="font-mono text-meta">
+          {logs.map((l) => (
+            // id + hora: si dos procesos del servidor escribieron el mismo logs.jsonl,
+            // cada uno con su contador, los ids se repiten.
+            <li key={`${l.id}-${l.ts}`} className="flex flex-col gap-0.5 border-b border-linea px-5 py-2 transition-colors duration-rapido ease-mesa hover:bg-s2">
+              <span className="flex items-baseline gap-2">
+                <span className="tabular-nums text-hueso-3">{formatTime(l.ts)}</span>
+                <span className={l.level === 'error' ? 'text-lacre' : 'text-hueso-2'}>
+                  {CATEGORY_LABEL[l.category] ?? l.category}
+                </span>
+              </span>
+              <span className={`font-sans text-ui ${l.level === 'error' ? 'text-lacre' : 'text-hueso'}`}>{l.message}</span>
+              {l.detail && <span className="break-words text-hueso-3">{l.detail}</span>}
+            </li>
+          ))}
+        </ul>
+      )}
+    </PanelDeslizante>
   )
 }

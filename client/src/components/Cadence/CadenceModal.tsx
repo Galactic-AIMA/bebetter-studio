@@ -1,7 +1,9 @@
-import { X, Clock, Check, AlertCircle, CalendarClock } from 'lucide-react'
+import { Check, WarningCircle } from '@phosphor-icons/react'
 import { useEffect, useState } from 'react'
 import { cadenceApi, ScheduleResult } from '../../api'
 import { dayLabel } from '../../lib/cola'
+import PanelDeslizante from '../ui/PanelDeslizante'
+import { Segmentos } from '../ui/mesa'
 
 interface Props {
   onClose: () => void
@@ -73,7 +75,7 @@ export default function CadenceModal({ onClose }: Props) {
   const handleSave = async () => {
     setError(null)
     if (hasDupes) {
-      setError('Hay horas repetidas — cada franja debe ser distinta')
+      setError('Hay dos horas iguales: cada salida necesita su propia hora.')
       return
     }
     setSaving(true)
@@ -96,174 +98,113 @@ export default function CadenceModal({ onClose }: Props) {
   const evenGap = gaps.length > 0 && gaps.every((g) => g === gaps[0]) ? gaps[0] : null
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-2 sm:p-4"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose()
-      }}
-    >
-      <div className="relative w-full max-w-md bg-carbon-800 rounded-xl overflow-hidden shadow-2xl flex flex-col max-h-[90dvh]">
-        {/* Header */}
-        <div className="flex items-center gap-2.5 px-4 py-3 border-b border-carbon-700 shrink-0">
-          <Clock size={15} className="text-gold-500" />
-          <h2 className="text-sm font-semibold tracking-wide text-bone-500">Cadencia de publicación</h2>
-          <button
-            onClick={onClose}
-            className="ml-auto p-1.5 rounded-lg bg-carbon-700/80 text-bone-700 hover:text-bone-500 transition-colors"
-          >
-            <X size={14} />
-          </button>
-        </div>
-
-        <div className="overflow-y-auto flex-1 p-4 flex flex-col gap-5">
-          {loading ? (
-            <p className="text-bone-700 text-xs">Cargando…</p>
-          ) : (
-            <>
-              <p className="text-[11px] leading-relaxed text-bone-700">
-                A estas horas (todos los días) se publica el aprobado más antiguo de la cola. La cola
-                se drena en orden; si un slot no tiene nada aprobado, no pasa nada.
-              </p>
-
-              {/* Nº de publicaciones/día */}
-              <div>
-                <label className="block text-[11px] font-medium text-bone-500 mb-1.5">
-                  Publicaciones al día
-                </label>
-                <div className="flex items-center rounded-lg overflow-hidden border border-carbon-600 text-xs w-max">
-                  {Array.from({ length: MAX_SLOTS }, (_, i) => i + 1).map((n) => (
-                    <button
-                      key={n}
-                      onClick={() => applyCount(n)}
-                      className={`px-3 py-1.5 transition-colors ${
-                        times.length === n
-                          ? 'bg-carbon-600 text-gold-500 font-medium'
-                          : 'bg-carbon-800 text-bone-700 hover:text-bone-500'
-                      }`}
-                    >
-                      {n}
-                    </button>
-                  ))}
-                </div>
-                <p className="text-[10px] text-bone-700 mt-1">
-                  Sugerencia repartida en la franja {hhmm(DAY_START)}–{hhmm(DAY_END)}. Puedes ajustar cada hora.
-                </p>
-              </div>
-
-              {/* Horas (veto) */}
-              <div>
-                <label className="block text-[11px] font-medium text-bone-500 mb-1.5">Horas</label>
-                <div className="flex flex-wrap gap-2">
-                  {times.map((t, idx) => (
-                    <select
-                      key={idx}
-                      value={hourOf(t)}
-                      onChange={(e) => setSlot(idx, Number(e.target.value))}
-                      className="bg-carbon-900 border border-carbon-600 rounded-lg px-2.5 py-1.5 text-xs text-bone-500 tabular-nums focus:border-gold-500 outline-none"
-                    >
-                      {HOUR_OPTIONS.map((h) => (
-                        <option key={h} value={h}>
-                          {hhmm(h)}
-                        </option>
-                      ))}
-                    </select>
-                  ))}
-                </div>
-              </div>
-
-              {/* Resumen */}
-              <div className="text-[11px] text-bone-700 bg-carbon-900/60 rounded-lg px-3 py-2 border border-carbon-700">
-                {sorted.map(hhmm).join(' · ')}
-                {evenGap && <span className="text-bone-500"> — ~cada {evenGap}h</span>}
-                <span className="block text-[10px] mt-0.5 text-bone-700/80">{timezone}</span>
-              </div>
-
-              {/* Próximas publicaciones (proyección de la cola de aprobados) */}
-              <div className="border-t border-carbon-700 pt-4">
-                <div className="flex items-center gap-1.5 mb-2">
-                  <CalendarClock size={13} className="text-gold-500" />
-                  <label className="text-[11px] font-medium text-bone-500">Próximas publicaciones</label>
-                  {schedule && schedule.count > 0 && (
-                    <span className="text-[10px] text-bone-700">({schedule.count} en cola)</span>
-                  )}
-                </div>
-                {loadingSchedule ? (
-                  <p className="text-[11px] text-bone-700">Calculando…</p>
-                ) : !schedule || schedule.count === 0 ? (
-                  <p className="text-[11px] text-bone-700">
-                    No hay videos aprobados en la cola. Los que apruebes por Telegram aparecerán aquí
-                    con su hora estimada.
-                  </p>
-                ) : schedule.times.length === 0 ? (
-                  <p className="text-[11px] text-neon-red">
-                    Hay {schedule.count} aprobado(s) pero no hay cadencia configurada — no se
-                    publicarán hasta definir horas arriba.
-                  </p>
-                ) : (
-                  <ul className="flex flex-col gap-1.5">
-                    {schedule.items.map((it, i) => (
-                      <li
-                        key={it.id}
-                        className="flex items-center gap-2.5 bg-carbon-900/60 rounded-lg px-2.5 py-1.5 border border-carbon-700"
-                      >
-                        <span className="text-[10px] text-bone-700 tabular-nums w-4 shrink-0">
-                          {i + 1}
-                        </span>
-                        {it.thumbnailUrl ? (
-                          <img
-                            src={it.thumbnailUrl}
-                            alt=""
-                            className="w-7 h-10 object-cover rounded shrink-0 bg-carbon-700"
-                          />
-                        ) : (
-                          <div className="w-7 h-10 rounded shrink-0 bg-carbon-700" />
-                        )}
-                        <span className="text-[11px] text-bone-500 leading-snug line-clamp-2 flex-1 min-w-0">
-                          {it.phrase}
-                        </span>
-                        <span className="text-[11px] text-gold-500 tabular-nums text-right shrink-0 whitespace-nowrap">
-                          {it.time ? (
-                            <>
-                              {dayLabel(it, schedule.timezone)}
-                              <br />
-                              {it.time}
-                            </>
-                          ) : (
-                            '—'
-                          )}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-
-              {error && (
-                <div className="flex items-start gap-1.5 text-[11px] text-neon-red">
-                  <AlertCircle size={13} className="shrink-0 mt-0.5" />
-                  <span>{error}</span>
-                </div>
-              )}
-            </>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="flex items-center gap-2 px-4 py-3 border-t border-carbon-700 shrink-0">
-          {saved && (
-            <span className="flex items-center gap-1 text-[11px] text-gold-500">
-              <Check size={13} /> Guardado
-            </span>
-          )}
+    <PanelDeslizante
+      titulo="Cadencia"
+      onClose={onClose}
+      pie={
+        <>
+          <span aria-live="polite" className="text-ui text-hueso-2">
+            {saved && <span className="flex items-center gap-1.5"><Check size={16} className="text-oro" /> Guardada</span>}
+          </span>
           <button
             onClick={handleSave}
             disabled={loading || saving || times.length === 0}
-            className="ml-auto flex items-center gap-1.5 px-4 py-1.5 text-xs text-carbon-900 bg-gold-500 hover:bg-gold-600 disabled:opacity-40 rounded-lg transition-colors font-medium"
+            className="btn-sec ml-auto"
           >
             {saving ? 'Guardando…' : 'Guardar cadencia'}
           </button>
+        </>
+      }
+    >
+      {loading ? (
+        <p className="px-5 py-6 text-ui text-hueso-3">Cargando la cadencia…</p>
+      ) : (
+        <div className="flex flex-col gap-6 px-5 py-5">
+          <p className="text-ui text-hueso-2">
+            A estas horas, todos los días, sale el aprobado más antiguo de la cola. Si a una hora no
+            hay nada aprobado, no pasa nada.
+          </p>
+
+          <div className="flex flex-col gap-1.5">
+            <Segmentos
+              label="Publicaciones al día"
+              value={String(times.length)}
+              onChange={(v) => applyCount(Number(v))}
+              options={Array.from({ length: MAX_SLOTS }, (_, i) => ({ value: String(i + 1), label: <span className="font-mono">{i + 1}</span> }))}
+            />
+            <p className="text-meta text-hueso-3">
+              Se reparten entre las <span className="font-mono">{hhmm(DAY_START)}</span> y las{' '}
+              <span className="font-mono">{hhmm(DAY_END)}</span>. Puedes mover cada hora.
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <span className="text-ui text-hueso-3">Horas</span>
+            <div className="flex flex-wrap gap-1.5">
+              {times.map((t, idx) => (
+                <select
+                  key={idx}
+                  value={hourOf(t)}
+                  onChange={(e) => setSlot(idx, Number(e.target.value))}
+                  aria-label={`Hora ${idx + 1}`}
+                  className={`campo h-10 w-auto font-mono tabular-nums lg:h-8 lg:py-0 ${
+                    hasDupes && times.filter((x) => hourOf(x) === hourOf(t)).length > 1 ? 'border-lacre' : ''
+                  }`}
+                >
+                  {HOUR_OPTIONS.map((h) => (
+                    <option key={h} value={h}>{hhmm(h)}</option>
+                  ))}
+                </select>
+              ))}
+            </div>
+            <p className="font-mono text-meta text-hueso-3">
+              {evenGap ? `cada ${evenGap} h · ` : ''}{timezone}
+            </p>
+          </div>
+
+          {error && (
+            <p role="alert" className="flex items-start gap-1.5 text-ui text-lacre">
+              <WarningCircle size={16} className="mt-0.5 shrink-0" /> {error}
+            </p>
+          )}
+
+          {/* Próximas publicaciones: la proyección de la cola de aprobados. */}
+          <section className="flex flex-col gap-2 border-t border-linea pt-5">
+            <h3 className="flex items-baseline gap-2">
+              <span className="rotulo">Próximas salidas</span>
+              {schedule && schedule.count > 0 && (
+                <span className="font-mono text-meta tabular-nums text-hueso-3">{schedule.count} en cola</span>
+              )}
+            </h3>
+            {loadingSchedule ? (
+              <p className="text-ui text-hueso-3">Calculando…</p>
+            ) : !schedule || schedule.count === 0 ? (
+              <p className="text-ui text-hueso-2">
+                No hay nada aprobado en la cola. Lo que apruebes en Revisión aparecerá aquí con su hora.
+              </p>
+            ) : schedule.times.length === 0 ? (
+              <p className="flex items-start gap-1.5 text-ui text-lacre">
+                <WarningCircle size={16} className="mt-0.5 shrink-0" />
+                Hay {schedule.count} aprobado{schedule.count === 1 ? '' : 's'} pero ninguna hora: no saldrán hasta que guardes una cadencia.
+              </p>
+            ) : (
+              <ol>
+                {schedule.items.map((it) => (
+                  <li key={it.id} className="flex items-center gap-3 border-b border-linea py-2 last:border-0">
+                    <span className="h-10 w-[23px] shrink-0 overflow-hidden rounded-[4px] bg-s2">
+                      {it.thumbnailUrl && <img src={it.thumbnailUrl} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />}
+                    </span>
+                    <span className="line-clamp-2 min-w-0 flex-1 text-ui text-hueso">{it.phrase}</span>
+                    <span className="shrink-0 whitespace-nowrap text-right font-mono text-meta tabular-nums text-hueso-2">
+                      {it.time ? (<>{dayLabel(it, schedule.timezone)}<br /><span className="text-oro">{it.time}</span></>) : '—'}
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </section>
         </div>
-      </div>
-    </div>
+      )}
+    </PanelDeslizante>
   )
 }

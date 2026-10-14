@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Play, Queue, PaperPlaneTilt, CaretDown, GoogleDriveLogo, ArrowSquareOut, CheckCircle, WarningCircle, CircleNotch, X } from '@phosphor-icons/react'
+import { Play, Queue, PaperPlaneTilt, CaretDown, GoogleDriveLogo, ArrowSquareOut, CheckCircle, WarningCircle, HourglassMedium, X } from '@phosphor-icons/react'
 import { useVideoStore } from '../store/videoStore'
 import { videosApi, imagesOutputApi } from '../api'
 import { wrapText } from '../lib/wrapText'
@@ -300,13 +300,17 @@ export default function Editor() {
 
       {/* Aviso: abajo y al centro, sobre el escenario. Iconos, no ✓ ✗. */}
       {toast && (
+        // El contenedor centra (transform propio) y el hijo entra: si la animación
+        // fuera en el mismo elemento, pisaría el -translate-x-1/2.
+        <div className="fixed bottom-24 left-1/2 z-50 max-w-[calc(100vw-32px)] -translate-x-1/2 lg:bottom-6">
         <div
           role={toast.state === 'error' ? 'alert' : 'status'}
-          className={`fixed bottom-24 left-1/2 z-50 flex max-w-[calc(100vw-32px)] -translate-x-1/2 items-center gap-2.5 rounded-panel border bg-s2 px-4 py-3 text-ui shadow-[0_20px_50px_-12px_rgb(0_0_0/.85)] lg:bottom-6 ${
+          className={`aviso-entra flex items-center gap-2.5 rounded-panel border bg-s2 px-4 py-3 text-ui shadow-[0_20px_50px_-12px_rgb(0_0_0/.85)] ${
             toast.state === 'error' ? 'border-lacre/40 text-lacre' : 'border-linea-2 text-hueso'
           }`}
         >
-          {toast.state === 'loading' && <CircleNotch size={16} className="shrink-0 animate-spin" />}
+          {/* Sin giro en bucle: la única animación infinita es el «rec» (DESIGN.md §7). */}
+          {toast.state === 'loading' && <HourglassMedium size={16} className="shrink-0 text-oro" />}
           {toast.state === 'success' && <CheckCircle size={16} className="shrink-0 text-oro" />}
           {toast.state === 'error' && <WarningCircle size={16} className="shrink-0" />}
           <span>
@@ -319,6 +323,7 @@ export default function Editor() {
               <X size={14} />
             </button>
           )}
+        </div>
         </div>
       )}
 

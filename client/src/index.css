@@ -280,6 +280,11 @@
     animation: encender 900ms cubic-bezier(.22,.8,.2,1) both;
   }
 
+  /* Aviso (toast): entra una vez desde abajo, en t-base. */
+  .aviso-entra {
+    animation: aviso-entra 200ms cubic-bezier(.2,.8,.2,1) both;
+  }
+
   /* El punto «rec» de Generar mientras renderiza. Única animación en bucle. */
   .latido {
     animation: latido 1s ease-in-out infinite;
@@ -289,6 +294,11 @@
 @keyframes encender {
   from { opacity: 0; }
   to { opacity: 1; }
+}
+
+@keyframes aviso-entra {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
 }
 
 @keyframes latido {
