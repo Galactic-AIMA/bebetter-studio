@@ -204,6 +204,23 @@
     box-sizing: border-box;
   }
 
+  /* Los controles nativos (desplegables de <select>, selector de color, barras de
+     scroll) se pintan oscuros: sin esto, la lista de un <select> sale blanca. */
+  :root {
+    color-scheme: dark;
+    scrollbar-color: theme('colors.s3') transparent;
+  }
+
+  /* Seleccionar texto es luz de proyector, no el azul del sistema. */
+  ::selection {
+    background: rgb(197 160 89 / .32);
+    color: theme('colors.hueso');
+  }
+
+  input, textarea {
+    caret-color: theme('colors.oro');
+  }
+
   body {
     margin: 0;
     @apply bg-sala text-hueso font-sans text-body antialiased;
@@ -248,7 +265,7 @@
     @apply border-solid border-linea-2 bg-s2 text-hueso;
   }
   .campo {
-    @apply w-full rounded-control border border-borde-control bg-sala px-2.5 py-1.5 text-body text-hueso placeholder:text-hueso-3
+    @apply min-h-10 w-full rounded-control border border-borde-control bg-sala px-2.5 py-1.5 text-body text-hueso placeholder:text-hueso-3 lg:min-h-0
       transition-colors duration-rapido ease-mesa focus:border-oro focus:outline-none;
   }
   .kbd {

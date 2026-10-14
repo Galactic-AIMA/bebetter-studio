@@ -158,7 +158,7 @@ export default function ReviewPanel({ onClose }: Props) {
           ref={cerrarRef}
           onClick={onClose}
           aria-label="Cerrar la revisión"
-          className="btn-fantasma ml-auto h-10 gap-2 px-2 lg:h-8"
+          className="btn-fantasma ml-auto h-10 min-w-10 justify-center gap-2 px-2 lg:h-8"
         >
           <span className="hidden sm:inline">Volver</span><span className="kbd hidden sm:inline-flex">Esc</span>
           <X size={18} className="sm:hidden" />

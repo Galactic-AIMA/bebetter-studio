@@ -454,7 +454,7 @@ export default function CarouselStudio() {
                         onClick={() => removeCarousel(c.id)}
                         aria-label={`Borrar el carrusel «${c.tema.slice(0, 40)}»`}
                         title="Borrar carrusel"
-                        className="absolute right-1.5 top-9 grid h-8 w-8 place-items-center rounded-control bg-velo text-hueso-2 opacity-100 transition-opacity duration-rapido ease-mesa hover:text-lacre focus-visible:opacity-100 lg:opacity-0 lg:group-hover:opacity-100"
+                        className="absolute right-1.5 top-9 grid h-10 w-10 place-items-center lg:h-8 lg:w-8 rounded-control bg-velo text-hueso-2 opacity-100 transition-opacity duration-rapido ease-mesa hover:text-lacre focus-visible:opacity-100 lg:opacity-0 lg:group-hover:opacity-100"
                       >
                         <Trash size={16} />
                       </button>

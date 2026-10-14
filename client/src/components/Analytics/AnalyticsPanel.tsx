@@ -259,7 +259,7 @@ export default function AnalyticsPanel() {
                           target="_blank"
                           rel="noreferrer"
                           aria-label="Abrir en Instagram"
-                          className="grid h-8 w-8 place-items-center rounded-control text-hueso-3 transition-colors duration-rapido ease-mesa hover:bg-s3 hover:text-hueso"
+                          className="grid h-10 w-10 place-items-center rounded-control text-hueso-3 lg:h-8 lg:w-8 transition-colors duration-rapido ease-mesa hover:bg-s3 hover:text-hueso"
                         >
                           <ArrowSquareOut size={16} />
                         </a>

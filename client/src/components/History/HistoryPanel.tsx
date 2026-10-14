@@ -56,7 +56,7 @@ export default function HistoryPanel({ active }: { active: boolean }) {
         <button className="chip ml-auto" aria-pressed={onlyViral} onClick={() => setOnlyViral((v) => !v)}>
           <Star size={14} weight={onlyViral ? 'fill' : 'regular'} className={onlyViral ? 'text-oro' : ''} /> Virales
         </button>
-        <button onClick={load} disabled={loading} className="btn-fantasma p-1" aria-label="Recargar el historial">
+        <button onClick={load} disabled={loading} className="btn-fantasma grid h-10 w-10 place-items-center lg:h-auto lg:w-auto lg:p-1" aria-label="Recargar el historial">
           <ArrowsClockwise size={16} />
         </button>
       </div>

@@ -86,7 +86,7 @@ export function Interruptor({
         disabled={disabled}
         title={title}
         onClick={() => onChange(!checked)}
-        className="flex items-center gap-2.5 text-ui text-hueso disabled:cursor-not-allowed disabled:opacity-40"
+        className="flex min-h-10 items-center gap-2.5 text-left text-ui text-hueso disabled:cursor-not-allowed disabled:opacity-40 lg:min-h-0"
       >
         <span
           className={`relative h-5 w-[34px] shrink-0 rounded-full transition-colors duration-rapido ease-mesa ${

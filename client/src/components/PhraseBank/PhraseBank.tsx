@@ -434,14 +434,14 @@ export default function PhraseBank() {
                 <div className="absolute right-3 top-2.5 flex opacity-0 transition-opacity duration-rapido ease-mesa focus-within:opacity-100 group-hover:opacity-100">
                   <button
                     onClick={(e) => { e.stopPropagation(); startEdit(phrase) }}
-                    className="btn-fantasma p-1.5"
+                    className="btn-fantasma grid h-10 w-10 place-items-center lg:h-auto lg:w-auto lg:p-1.5"
                     aria-label="Editar frase"
                   >
                     <PencilSimple size={16} />
                   </button>
                   <button
                     onClick={(e) => { e.stopPropagation(); deletePhrase(phrase.id) }}
-                    className="btn-fantasma p-1.5 hover:text-lacre"
+                    className="btn-fantasma grid h-10 w-10 place-items-center hover:text-lacre lg:h-auto lg:w-auto lg:p-1.5"
                     aria-label="Borrar frase"
                   >
                     <Trash size={16} />
