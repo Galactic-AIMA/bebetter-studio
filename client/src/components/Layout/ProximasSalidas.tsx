@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { cadenceApi, ScheduleResult } from '../../api'
+import { cadenceApi, ScheduleResult, EVENTO_COLA } from '../../api'
 import { splitByTiempos } from '@shared/splitByTiempos'
 import { dayLabel } from '../../lib/cola'
 
@@ -19,10 +19,11 @@ export default function ProximasSalidas() {
     const cargar = () =>
       cadenceApi.schedule().then((d) => { setDatos(d); setFallo(false) }).catch(() => setFallo(true))
     cargar()
-    // La cola cambia cuando alguien aprueba (desde la app o Telegram): con mirar
-    // cada cinco minutos basta para una tira informativa.
+    // Lo que se encola desde la app avisa al momento; lo que se aprueba desde
+    // Telegram no, y para eso basta con mirar cada cinco minutos.
     const t = setInterval(cargar, 5 * 60_000)
-    return () => clearInterval(t)
+    addEventListener(EVENTO_COLA, cargar)
+    return () => { clearInterval(t); removeEventListener(EVENTO_COLA, cargar) }
   }, [])
 
   const items = datos?.items ?? []

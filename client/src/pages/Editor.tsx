@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Play, Queue, PaperPlaneTilt, CaretDown, GoogleDriveLogo, ArrowSquareOut, CheckCircle, WarningCircle, HourglassMedium, X } from '@phosphor-icons/react'
+import { Play, Queue, PaperPlaneTilt, CaretDown, GoogleDriveLogo, ArrowSquareOut, CheckCircle, WarningCircle, HourglassMedium, X, ImageSquare } from '@phosphor-icons/react'
 import { useVideoStore } from '../store/videoStore'
 import { videosApi, imagesOutputApi } from '../api'
 import { wrapText } from '../lib/wrapText'
@@ -16,9 +16,13 @@ import BottomNav, { Seccion } from '../components/Layout/BottomNav'
 
 type ToastState = { state: 'loading' | 'success' | 'error'; loadingText?: string; successText?: string; message?: string }
 
-/** Secundario de DESIGN.md §6. Se repite en la barra de resultado. */
+/** Secundario de DESIGN.md §6. Se repite en la barra de resultado. 40 px en el
+ *  móvil para el dedo; 32 en escritorio, como el resto de secundarios. */
 const BTN_SECUNDARIO =
-  'inline-flex h-8 items-center gap-2 rounded-control border border-borde-control px-3 text-ui text-hueso transition-colors duration-rapido ease-mesa hover:bg-s2 disabled:opacity-40'
+  'inline-flex h-10 items-center gap-2 rounded-control border border-borde-control px-3 text-ui text-hueso transition-colors duration-rapido ease-mesa hover:bg-s2 disabled:opacity-40 lg:h-8'
+
+/** Iconos del escenario: Phosphor light a 18 (la mesa usa regular a 16, DESIGN.md §6). */
+const ICONO = { size: 18, weight: 'light' } as const
 
 /** El encendido (DESIGN.md §7.1) ocurre una vez por carga de la app. Sin esto se
  *  repetía cada vez que se volvía al editor desde Carrusel o Analítica, que
@@ -50,6 +54,19 @@ export default function Editor() {
   const [seccion, setSeccion] = useState<Seccion>('vista')
 
   const hasDelimiter = config.text.content.includes('//')
+  // Recién abierta la app no hay fondo ni frase: el preview mostraría un rectángulo
+  // gris con «Tu frase aquí…». En su lugar, el estado vacío dice por dónde empezar.
+  const vacio = !config.imageId && !selectedPhraseId
+
+  const elegirFondo = () => {
+    setBancoTab('images')
+    setSeccion('banco')
+    // Al banco, con el foco en el primer fondo: en escritorio la lista ya está a la
+    // vista y lo útil es poder recorrerla con el teclado desde ahí.
+    requestAnimationFrame(() =>
+      document.querySelector<HTMLElement>('[aria-label="Banco de imágenes"] [role=option]')?.focus()
+    )
+  }
 
   useEffect(() => {
     if (!menuPublicar) return
@@ -193,13 +210,13 @@ export default function Editor() {
 
               <div className="relative z-10 flex min-h-0 flex-1 flex-col items-center justify-center gap-4 px-4 pb-3 pt-4 lg:px-6 lg:pt-6">
                 {mode === 'image' && hasDelimiter && (
-                  <div className="flex gap-1.5" role="group" aria-label="Variante de la imagen">
+                  <div className="flex flex-wrap justify-center gap-1.5" role="group" aria-label="Variante de la imagen">
                     {(['combined', 'hook', 'punchline'] as ImageVariant[]).map((v) => (
                       <button
                         key={v}
                         onClick={() => setImageVariant(v)}
                         aria-pressed={imageVariant === v}
-                        className={`h-7 rounded-control border px-2.5 text-ui transition-colors duration-rapido ease-mesa ${
+                        className={`h-10 rounded-control border px-3 text-ui lg:h-7 lg:px-2.5 transition-colors duration-rapido ease-mesa ${
                           imageVariant === v ? 'border-linea-2 bg-s2 text-hueso' : 'border-dashed border-borde-control text-hueso-2 hover:text-hueso'
                         }`}
                       >
@@ -211,10 +228,20 @@ export default function Editor() {
 
                 {/* El preview: una promesa sobre el MP4 (DESIGN.md §6). */}
                 <div
-                  className={`min-h-0 w-full max-w-full flex-1 lg:max-h-[620px] ${encender ? 'encender' : ''}`}
+                  className={`relative min-h-0 w-full max-w-full flex-1 lg:max-h-[620px] ${encender ? 'encender' : ''}`}
                   style={{ aspectRatio: `${config.resolution.width}/${config.resolution.height}`, maxWidth: '100%' }}
                 >
-                  <VideoPreview config={config} fraseKey={selectedPhraseId} />
+                  <VideoPreview config={config} fraseKey={selectedPhraseId} vacio={vacio} />
+                  {/* Estado vacío (DESIGN.md §6): una línea en Anton, una frase y una acción. */}
+                  {vacio && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-8 text-center">
+                      <p className="pt-[.16em] font-display text-display uppercase text-hueso">Elige un fondo</p>
+                      <p className="text-body text-hueso-2">Primero la imagen. Después, la frase.</p>
+                      <button onClick={elegirFondo} className={`${BTN_SECUNDARIO} mt-1`}>
+                        <ImageSquare {...ICONO} /> Elegir fondo
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Generar: el único botón relleno de la pantalla. `relative z-10` para
@@ -233,7 +260,7 @@ export default function Editor() {
 
                 {error && (
                   <p role="alert" className="flex max-w-md items-center gap-2 text-ui text-lacre">
-                    <WarningCircle size={16} className="shrink-0" /> {error}
+                    <WarningCircle {...ICONO} className="shrink-0" /> {error}
                   </p>
                 )}
 
@@ -242,10 +269,10 @@ export default function Editor() {
                 {lastVideo && (
                   <div className="flex flex-wrap items-center justify-center gap-2">
                     <button onClick={() => setShowVideoPreview(true)} className={BTN_SECUNDARIO}>
-                      <Play size={14} /> Ver reel
+                      <Play {...ICONO} /> Ver reel
                     </button>
                     <button onClick={queueVideo} disabled={ocupado} className={BTN_SECUNDARIO}>
-                      <Queue size={14} /> Enviar a la cola
+                      <Queue {...ICONO} /> Enviar a la cola
                     </button>
                     <div ref={menuPublicarRef} className="relative">
                       <button
@@ -255,31 +282,31 @@ export default function Editor() {
                         aria-haspopup="menu"
                         className={BTN_SECUNDARIO}
                       >
-                        <PaperPlaneTilt size={14} /> Publicar ahora <CaretDown size={12} className="text-hueso-2" />
+                        <PaperPlaneTilt {...ICONO} /> Publicar ahora <CaretDown size={12} className="text-hueso-2" />
                       </button>
                       {menuPublicar && (
                         <div role="menu" className="absolute bottom-full left-0 z-20 mb-1.5 min-w-full overflow-hidden rounded-panel border border-linea-2 bg-s2 py-1 shadow-[0_20px_40px_-12px_rgb(0_0_0/.8)]">
-                          <button role="menuitem" onClick={() => publish('prod')} className="block w-full whitespace-nowrap px-3 py-2 text-left text-ui hover:bg-s3">
+                          <button role="menuitem" onClick={() => publish('prod')} className="block w-full whitespace-nowrap px-3 py-3 text-left lg:py-2 text-ui hover:bg-s3">
                             En producción
                           </button>
-                          <button role="menuitem" onClick={() => publish('test')} className="block w-full whitespace-nowrap px-3 py-2 text-left text-ui text-hueso-2 hover:bg-s3 hover:text-hueso">
+                          <button role="menuitem" onClick={() => publish('test')} className="block w-full whitespace-nowrap px-3 py-3 text-left lg:py-2 text-ui text-hueso-2 hover:bg-s3 hover:text-hueso">
                             En test
                           </button>
                         </div>
                       )}
                     </div>
                     <button onClick={uploadToDrive} disabled={ocupado} className={BTN_SECUNDARIO}>
-                      <GoogleDriveLogo size={14} /> Drive
+                      <GoogleDriveLogo {...ICONO} /> Drive
                     </button>
                   </div>
                 )}
                 {lastImage && (
                   <div className="flex flex-wrap items-center justify-center gap-2">
                     <a href={lastImage.publicUrl} target="_blank" rel="noreferrer" className={BTN_SECUNDARIO}>
-                      <ArrowSquareOut size={14} /> Abrir imagen
+                      <ArrowSquareOut {...ICONO} /> Abrir imagen
                     </a>
                     <button onClick={uploadToDrive} disabled={ocupado} className={BTN_SECUNDARIO}>
-                      <GoogleDriveLogo size={14} /> Drive
+                      <GoogleDriveLogo {...ICONO} /> Drive
                     </button>
                   </div>
                 )}
@@ -317,7 +344,13 @@ export default function Editor() {
       {toast && (
         // El contenedor centra (transform propio) y el hijo entra: si la animación
         // fuera en el mismo elemento, pisaría el -translate-x-1/2.
-        <div className="fixed bottom-24 left-1/2 z-50 max-w-[calc(100vw-32px)] -translate-x-1/2 lg:bottom-6">
+        // En escritorio, centrado sobre el ESCENARIO y no sobre la ventana: su centro
+        // es el de la ventana corrido (barra + banco − inspector) / 2.
+        <div
+          className={`fixed bottom-24 left-1/2 z-50 max-w-[calc(100vw-32px)] -translate-x-1/2 lg:bottom-6 ${
+            editando ? 'lg:left-[calc(50%+42px)] xl:left-[calc(50%+146px)]' : ''
+          }`}
+        >
         <div
           role={toast.state === 'error' ? 'alert' : 'status'}
           className={`aviso-entra flex items-center gap-2.5 rounded-panel border bg-s2 px-4 py-3 text-ui shadow-[0_20px_50px_-12px_rgb(0_0_0/.85)] ${

@@ -1,6 +1,9 @@
 import axios from 'axios'
 import { Phrase, ImageItem, VideoRecord, VideoConfig, ImageRecord, ImageVariant, WatermarkConfig, HistoryItem, ImageRecommendation } from '../types'
 
+/** Se emite en `window` cada vez que un video entra en la cola de publicación. */
+export const EVENTO_COLA = 'bebetter:cola'
+
 const api = axios.create({ baseURL: '/api' })
 
 // La sesión caduca, y cuando lo hace el servidor devuelve 401 a TODO. Sin esto,
@@ -337,8 +340,13 @@ export const videosApi = {
     api.post<{ driveUrl: string }>(`/videos/${id}/upload-drive`).then((r) => r.data),
   publish: (id: string, env: 'test' | 'prod') =>
     api.post(`/videos/${id}/publish`, { env }).then((r) => r.data),
+  // Avisa a quien muestre la cola (la tira de próximas salidas) para que no espere
+  // a su sondeo de cinco minutos. Se encola desde el editor, Revisión y Lotes.
   queue: (id: string) =>
-    api.post<{ success: boolean; queueId: string }>(`/videos/${id}/queue`).then((r) => r.data),
+    api.post<{ success: boolean; queueId: string }>(`/videos/${id}/queue`).then((r) => {
+      dispatchEvent(new Event(EVENTO_COLA))
+      return r.data
+    }),
   remove: (id: string) => api.delete(`/videos/${id}`),
 
   // ── Cola de revisión (Fase 5) ──────────────────────────────────────────────

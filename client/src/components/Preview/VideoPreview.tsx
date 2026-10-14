@@ -12,6 +12,8 @@ interface Props {
    * no repite la coreografía.
    */
   fraseKey?: string | null
+  /** Sin fondo ni frase: se pinta solo la pantalla, y el estado vacío va encima. */
+  vacio?: boolean
 }
 
 const FONT_MAP = buildFontMap()
@@ -30,7 +32,7 @@ function alfas(t: number): [number, number] {
   return [posarse(t / T_ENTRA), posarse((t - T_ENTRA - T_RESPIRO) / T_ENTRA)]
 }
 
-export default function VideoPreview({ config, fraseKey }: Props) {
+export default function VideoPreview({ config, fraseKey, vacio = false }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   // La coreografía va por RELOJ, no por render: al elegir una frase el `config`
   // cambia varias veces seguidas (texto, fondo afín, pista…) y cada cambio
@@ -97,7 +99,7 @@ export default function VideoPreview({ config, fraseKey }: Props) {
         }
         // Degradado de carbón entre la imagen y el texto (mismo perfil que el render).
         drawTextScrim(ctx, W, H, config.text.position.y)
-        drawText(ctx, config, W, H, alfa)
+        if (!vacio) drawText(ctx, config, W, H, alfa)
         if (wmEnabled && wmType === 'text') {
           drawTextWatermark(ctx, config.watermark!, W, H)
         } else if (wmEnabled && wm) {
@@ -122,7 +124,7 @@ export default function VideoPreview({ config, fraseKey }: Props) {
       paso()
     })
     return () => { vigente = false; cancelAnimationFrame(cuadro) }
-  }, [config])
+  }, [config, vacio])
 
   return (
     <div className="flex items-center justify-center w-full h-full">
