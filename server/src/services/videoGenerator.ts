@@ -75,7 +75,13 @@ export function buildScrimFilter(
     if (y1 <= y0) continue
     boxes.push(`drawbox=x=0:y=${y0}:w=iw:h=${y1 - y0}:color=${color}@${alpha.toFixed(4)}:t=fill`)
   }
-  return boxes.join(',')
+  if (!boxes.length) return ''
+  // En RGB y no en el YUV 4:2:0 del decodificador: ahí cada muestra de color la
+  // comparten cuatro píxeles y drawbox la funde varias veces, así que el velo
+  // apagaba el color además de oscurecer (un rojo (225,45,0) salía (77,60,52) en
+  // vez de (130,29,4), que es lo que pinta el preview). El codificador vuelve a
+  // yuv420p al final (`-pix_fmt`), igual que antes.
+  return ['format=rgb24', ...boxes].join(',')
 }
 // ---------------------------------------------------------------------------
 
