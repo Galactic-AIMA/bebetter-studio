@@ -1,6 +1,8 @@
-import { X, Music, Sparkles, Check, AlertCircle, Play, Pause } from 'lucide-react'
+import { X, Sparkle, Check, WarningCircle, Play, Pause, DownloadSimple, ArrowSquareOut } from '@phosphor-icons/react'
 import { useEffect, useRef, useState } from 'react'
 import { audioApi, AudioTrack } from '../../api'
+import PanelDeslizante from '../ui/PanelDeslizante'
+import { Rango, Campo } from '../ui/mesa'
 
 interface Props {
   onClose: () => void
@@ -18,13 +20,22 @@ const MOODS = [
 ]
 
 // Familia sonora: CÓMO suena, no qué evoca. Es lo que reparte las pistas entre los
-// reels, así que conviene juzgarla oyendo (botón ▶) y no por el nombre del archivo.
+// reels, así que conviene juzgarla oyendo (botón de escuchar) y no por el nombre del archivo.
 const TEXTURAS = [
   { slug: 'acustico', label: 'Acústico — guitarra, instrumento real' },
   { slug: 'etereo', label: 'Etéreo — sintes lentos, arpegios, pads' },
   { slug: 'pulsante', label: 'Pulsante — latido rítmico, hipnótico' },
   { slug: 'orquestal', label: 'Orquestal — metales, cuerdas, fanfarria' },
 ]
+
+/**
+ * Trocea lo pegado en el textarea: una URL por línea y sin los parámetros de
+ * seguimiento (`?igsi=…`), que cambian en cada compartición y harían que el mismo
+ * reel se cosechara dos veces.
+ */
+function urlsDe(texto: string): string[] {
+  return texto.split(/\r?\n/).map((l) => l.trim().split('?')[0]).filter(Boolean)
+}
 
 interface Draft {
   energia: number
@@ -42,6 +53,19 @@ export default function AudioTagsPanel({ onClose }: Props) {
   const [savedOk, setSavedOk] = useState<Record<string, boolean>>({})
   const [error, setError] = useState<string | null>(null)
   const [playing, setPlaying] = useState<string | null>(null)
+  const [harvestUrl, setHarvestUrl] = useState('')
+  const [harvesting, setHarvesting] = useState(false)
+  const [savingSource, setSavingSource] = useState<string | null>(null)
+  // Borradores de frase de origen, uno por REEL (clave = sourceUrl). No van en
+  // `drafts` porque una pista tiene N procedencias: varios reels del nicho usan el
+  // mismo tema y cada uno lleva su propia frase.
+  const [srcDrafts, setSrcDrafts] = useState<Record<string, string>>({})
+  // Última pista cosechada: se resalta para que David no tenga que buscarla en la
+  // lista después de pegar el link.
+  const [recien, setRecien] = useState<string | null>(null)
+  // Resultado de la última cosecha (canción, tramo, tema repetido). No es un error:
+  // va en su propio hueco para no teñir de rojo lo que salió bien.
+  const [aviso, setAviso] = useState<string | null>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
 
   const togglePlay = (filename: string) => {
@@ -60,6 +84,15 @@ export default function AudioTagsPanel({ onClose }: Props) {
     try {
       const list = await audioApi.list()
       setTracks(list)
+      setSrcDrafts((prev) => {
+        const next = { ...prev }
+        for (const t of list) {
+          for (const f of t.sources ?? []) {
+            if (next[f.sourceUrl] === undefined) next[f.sourceUrl] = f.sourcePhrase ?? ''
+          }
+        }
+        return next
+      })
       setDrafts((prev) => {
         const next = { ...prev }
         for (const t of list) {
@@ -109,6 +142,83 @@ export default function AudioTagsPanel({ onClose }: Props) {
     }
   }
 
+  // Cosecha: baja el corte del reel y trae la frase leída de sus fotogramas. No la
+  // guarda — cae en el campo de procedencia de la tarjeta para revisarla y
+  // confirmarla, que es lo que mete el corte en el pool.
+  const harvest = async () => {
+    const urls = urlsDe(harvestUrl)
+    if (urls.length === 0) return
+    setHarvesting(true)
+    setError(null)
+    setAviso(null)
+    try {
+      if (urls.length === 1) {
+        const r = await audioApi.harvest(urls[0])
+        await load()
+        // La propuesta de Gemini manda sobre lo que hubiera: es lo que David acaba
+        // de pedir que se lea.
+        setSrcDrafts((p) => ({ ...p, [r.sourceUrl]: r.proposedPhrase || p[r.sourceUrl] || '' }))
+        setRecien(r.filename)
+        const partes: string[] = []
+        if (r.audioTitle) partes.push(`«${r.audioTitle}»${r.audioArtist ? ` de ${r.audioArtist}` : ''}`)
+        if (r.startMs != null) partes.push(`entra en el ${(r.startMs / 1000).toFixed(1)}s del tema`)
+        if (r.temaRepetido) partes.push('mismo tema que un reel ya cosechado: se reutiliza el corte')
+        if (!r.proposedPhrase) partes.push('no se leyó texto en pantalla: escribe la frase a mano')
+        setAviso(`Corte de ${r.durationSeg}s${partes.length ? ` · ${partes.join(' · ')}` : ' cosechado.'}`)
+      } else {
+        const { results, errors } = await audioApi.harvestBatch(urls)
+        await load()
+        setSrcDrafts((p) => {
+          const next = { ...p }
+          for (const r of results) next[r.sourceUrl] = r.proposedPhrase || next[r.sourceUrl] || ''
+          return next
+        })
+        const sinTexto = results.filter((r) => !r.proposedPhrase).length
+        const repes = results.filter((r) => r.temaRepetido).length
+        setAviso(
+          `${results.length}/${urls.length} cosechados` +
+          (repes ? ` · ${repes} comparten tema con otro` : '') +
+          (sinTexto ? ` · ${sinTexto} sin texto legible` : '') +
+          ' · revisa y confirma las frases abajo'
+        )
+        if (errors.length) setError(errors.slice(0, 3).join(' · ') + (errors.length > 3 ? ` (+${errors.length - 3})` : ''))
+      }
+      setHarvestUrl('')
+    } catch (e: any) {
+      setError(e?.response?.data?.error || e.message)
+    } finally {
+      setHarvesting(false)
+    }
+  }
+
+  // Confirmar la procedencia es lo ÚNICO que mete un corte en el pool: sin frase
+  // de origen vectorizada no suena, por muy etiquetado que esté.
+  const saveSource = async (sourceUrl: string) => {
+    const frase = srcDrafts[sourceUrl]?.trim()
+    if (!frase) return
+    setSavingSource(sourceUrl)
+    setError(null)
+    try {
+      await audioApi.saveSource(sourceUrl, frase)
+      await load()
+    } catch (e: any) {
+      setError(e?.response?.data?.error || e.message)
+    } finally {
+      setSavingSource(null)
+    }
+  }
+
+  // Quita un reel mal cosechado. NO borra el audio: puede estar sosteniendo las
+  // procedencias de otros reels que comparten tema.
+  const dropSource = async (sourceUrl: string) => {
+    try {
+      await audioApi.deleteSource(sourceUrl)
+      await load()
+    } catch (e: any) {
+      setError(e?.response?.data?.error || e.message)
+    }
+  }
+
   const patch = (filename: string, p: Partial<Draft>) => {
     setSavedOk((s) => ({ ...s, [filename]: false }))
     setDrafts((prev) => ({ ...prev, [filename]: { ...prev[filename], ...p } }))
@@ -137,130 +247,214 @@ export default function AudioTagsPanel({ onClose }: Props) {
   }
 
   const untagged = tracks.filter((t) => !t.analyzed).length
+  // Cuántos cortes pueden sonar. Desde el 18-ago manda la procedencia, no las
+  // etiquetas: con 0 aquí, los reels salen SIN música por mucho banco que haya.
+  const enPool = tracks.filter((t) => t.enPool).length
+  // Cuántos links hay escritos en el textarea (para el rótulo del botón).
+  const pendientes = urlsDe(harvestUrl).length
+
+  const meta = (
+    <span
+      className={`shrink-0 font-mono text-meta tabular-nums ${enPool > 0 ? 'text-hueso-2' : 'text-lacre'}`}
+      title="Cortes con frase de origen confirmada. Solo estos entran en el emparejamiento."
+    >
+      {enPool}/{tracks.length} en el pool
+    </span>
+  )
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
-    >
-      <div className="relative w-full max-w-2xl bg-carbon-800 rounded-xl overflow-hidden shadow-2xl flex flex-col max-h-[85vh]">
-        {/* Header */}
-        <div className="flex items-center gap-2.5 px-4 py-3 border-b border-carbon-700 shrink-0">
-          <Music size={15} className="text-gold-500" />
-          <h2 className="text-sm font-semibold tracking-wide text-bone-500">Audio — energía y textura</h2>
+    <PanelDeslizante titulo="Audio" meta={meta} onClose={onClose}>
+      {/* Cosecha con procedencia. Un reel del nicho es un corte que ALGUIEN YA
+          ELIGIÓ para este tipo de contenido: esa es la señal que empareja, y no
+          hay algoritmo que la deduzca de la música. */}
+      <section className="flex flex-col gap-2 border-b border-linea px-5 py-4">
+        <label htmlFor="cosecha" className="text-ui text-hueso-3">Cosechar de reels del nicho</label>
+        <textarea
+          id="cosecha"
+          value={harvestUrl}
+          onChange={(e) => setHarvestUrl(e.target.value)}
+          rows={pendientes > 1 ? 4 : 2}
+          placeholder="Pega links de reels, uno por línea"
+          className="campo resize-y text-ui"
+        />
+        <div className="flex flex-wrap items-center gap-2">
+          <button onClick={harvest} disabled={harvesting || !harvestUrl.trim()} className="btn-sec">
+            <DownloadSimple size={16} />
+            {harvesting ? 'Cosechando…' : `Cosechar${pendientes > 1 ? ` (${pendientes})` : ''}`}
+          </button>
           <button
             onClick={analyzeUntagged}
             disabled={analyzing || loading || untagged === 0}
-            className="ml-auto flex items-center gap-1.5 px-3 py-1.5 text-xs text-carbon-900 bg-gold-500 hover:bg-gold-600 disabled:opacity-40 rounded-lg transition-colors font-medium"
-            title="Analiza con IA las pistas sin etiquetar y propone energía/mood para confirmar"
+            title="Analiza con IA las pistas sin etiquetar y propone energía, textura y mood para confirmar"
+            className="btn-fantasma ml-auto h-10 px-1 lg:h-8"
           >
-            <Sparkles size={12} />
+            <Sparkle size={16} />
             {analyzing ? 'Analizando…' : `Analizar sin etiquetar${untagged ? ` (${untagged})` : ''}`}
           </button>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-lg bg-carbon-700/80 text-bone-700 hover:text-bone-500 transition-colors"
-          >
-            <X size={14} />
-          </button>
         </div>
-
-        <div className="overflow-y-auto flex-1 p-4 flex flex-col gap-2.5">
-          {loading ? (
-            <p className="text-bone-700 text-xs">Cargando…</p>
-          ) : tracks.length === 0 ? (
-            <p className="text-bone-700 text-xs">
-              No hay pistas en <code>data/audio/</code>. Descarga pistas royalty-free ahí y recarga.
-            </p>
+        <div aria-live="polite" className="text-meta">
+          {error ? (
+            <p role="alert" className="flex items-start gap-1.5 text-ui text-lacre"><WarningCircle size={16} className="mt-0.5 shrink-0" /> {error}</p>
+          ) : aviso ? (
+            <p className="flex items-start gap-1.5 text-ui text-hueso-2"><Check size={16} className="mt-0.5 shrink-0 text-oro" /> {aviso}</p>
           ) : (
-            tracks.map((t) => {
-              const d = drafts[t.filename]
-              if (!d) return null
-              return (
-                <div key={t.filename} className="bg-carbon-900/60 rounded-lg px-3 py-2.5 border border-carbon-700 flex flex-col gap-2">
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => togglePlay(t.filename)}
-                      title={playing === t.filename ? 'Pausar' : 'Escuchar pista'}
-                      className="shrink-0 p-1 rounded bg-carbon-700 text-bone-500 hover:text-gold-500 transition-colors"
-                    >
-                      {playing === t.filename ? <Pause size={12} /> : <Play size={12} />}
-                    </button>
-                    <span className="text-[12px] text-bone-500 flex-1 min-w-0 truncate">{t.name}</span>
-                    {!t.analyzed && (
-                      <span className="text-[10px] text-gold-500 bg-gold-500/10 px-1.5 py-0.5 rounded shrink-0">sin etiquetar</span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-3 flex-wrap">
-                    {/* Energía */}
-                    <label className="flex items-center gap-1.5 text-[11px] text-bone-700">
-                      Energía
-                      <input
-                        type="range" min={0} max={10} step={1}
-                        value={d.energia}
-                        onChange={(e) => patch(t.filename, { energia: Number(e.target.value) })}
-                        className="accent-gold-500"
-                      />
-                      <span className="tabular-nums text-bone-500 w-4">{d.energia}</span>
-                    </label>
-                    {/* Textura — decide el reparto de pistas entre reels */}
+            <p className="text-hueso-3">
+              Baja el corte tal cual suena en el reel y lee su frase en pantalla. Revísala antes de
+              confirmar: la frase de origen es lo que empareja.
+            </p>
+          )}
+        </div>
+      </section>
+
+      {loading ? (
+        <p className="px-5 py-6 text-ui text-hueso-3">Cargando los cortes…</p>
+      ) : tracks.length === 0 ? (
+        <div className="flex flex-col items-start gap-3 px-5 py-10">
+          <p className="pt-[.16em] font-display text-display uppercase text-hueso">Sin música</p>
+          <p className="text-body text-hueso-2">Pega arriba el link de un reel del nicho para cosechar el primer corte.</p>
+        </div>
+      ) : (
+        <ul>
+          {tracks.map((t) => {
+            const d = drafts[t.filename]
+            if (!d) return null
+            const titulo = t.sources?.find((f) => f.audioTitle)?.audioTitle ?? t.name
+            const artista = t.sources?.find((f) => f.audioArtist)?.audioArtist
+            return (
+              <li
+                key={t.filename}
+                className={`flex flex-col gap-3 border-b border-linea px-5 py-4 ${recien === t.filename ? 'bg-s2' : ''}`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <button
+                    onClick={() => togglePlay(t.filename)}
+                    aria-label={playing === t.filename ? `Pausar ${titulo}` : `Escuchar ${titulo}`}
+                    aria-pressed={playing === t.filename}
+                    className="btn-sec w-10 shrink-0 px-0 lg:w-8"
+                  >
+                    {playing === t.filename ? <Pause size={16} weight="fill" className="text-oro" /> : <Play size={16} />}
+                  </button>
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="truncate text-ui text-hueso">{titulo}</span>
+                    <span className="flex flex-wrap gap-x-2 font-mono text-meta text-hueso-3">
+                      {artista && <span className="truncate font-sans">{artista}</span>}
+                      {recien === t.filename && <span className="text-oro">recién cosechado</span>}
+                      {(t.sources?.length ?? 0) > 1 && (
+                        <span title="Reels del nicho distintos que usaron este mismo tema">{t.sources!.length} reels</span>
+                      )}
+                      {!t.enPool && (t.mergedInto
+                        ? <span title={`Mismo tema que ${t.mergedInto}: su procedencia vive allí`}>duplicado</span>
+                        : <span className="text-lacre" title="Sin frase de origen confirmada: este corte no puede sonar">fuera del pool</span>)}
+                      {!t.analyzed && !t.mergedInto && <span>sin etiquetar</span>}
+                    </span>
+                  </span>
+                </div>
+
+                {/* Procedencia: el eje que empareja desde el 18-ago. Una pista
+                    puede tener VARIOS reels de origen —varias cuentas del nicho
+                    usando el mismo tema— y cada uno aporta su propia frase. */}
+                <div className="flex flex-col gap-1.5">
+                  {(t.sources ?? []).length === 0 && (
+                    // Dos motivos MUY distintos para no tener procedencia; confundirlos
+                    // hacía que el panel dijera que un corte recién cosechado
+                    // «es anterior a la cosecha».
+                    <p className="text-ui text-hueso-3">
+                      {t.mergedInto
+                        ? <>Es el mismo tema que <span className="text-hueso-2">{t.mergedInto}</span> y su frase de origen vive allí. Este archivo ya no se elige.</>
+                        : 'Sin reel de origen: es anterior a la cosecha y no puede sonar.'}
+                    </p>
+                  )}
+                  {(t.sources ?? []).map((f) => {
+                    const borrador = (srcDrafts[f.sourceUrl] ?? '').trim()
+                    const igual = borrador === (f.sourcePhrase ?? '')
+                    return (
+                      <div key={f.sourceUrl} className="flex items-center gap-1.5">
+                        <input
+                          type="text"
+                          value={srcDrafts[f.sourceUrl] ?? ''}
+                          onChange={(e) => setSrcDrafts((p) => ({ ...p, [f.sourceUrl]: e.target.value }))}
+                          placeholder="Frase que se leía en ese reel"
+                          aria-label="Frase de origen"
+                          title={`Contra esto se empareja. Reel: ${f.sourceUrl}`}
+                          className="campo h-10 min-w-0 flex-1 py-0 text-ui lg:h-8"
+                        />
+                        <a
+                          href={f.sourceUrl} target="_blank" rel="noreferrer"
+                          aria-label="Abrir el reel de origen"
+                          title={f.sourceUrl}
+                          className="btn-fantasma grid h-10 w-8 shrink-0 place-items-center lg:h-8"
+                        >
+                          <ArrowSquareOut size={16} />
+                        </a>
+                        <button
+                          onClick={() => saveSource(f.sourceUrl)}
+                          disabled={savingSource === f.sourceUrl || !borrador || igual}
+                          className="btn-sec shrink-0 px-2.5"
+                        >
+                          {savingSource === f.sourceUrl ? 'Vectorizando…' : f.confirmada && igual ? 'Confirmada' : 'Confirmar'}
+                        </button>
+                        <button
+                          onClick={() => dropSource(f.sourceUrl)}
+                          aria-label="Quitar este reel de origen"
+                          title="Quitar este reel de origen (no borra el audio)"
+                          className="btn-fantasma grid h-10 w-8 shrink-0 place-items-center hover:text-lacre lg:h-8"
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+
+                <Rango
+                  label="Energía" valor={String(d.energia)} min={0} max={10}
+                  value={d.energia} onChange={(n) => patch(t.filename, { energia: n })}
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  {/* La textura decide el reparto de pistas entre reels. */}
+                  <Campo label="Textura">
                     <select
                       value={d.textura}
                       onChange={(e) => patch(t.filename, { textura: e.target.value })}
                       title="Familia sonora: es lo que evita que dos reels seguidos suenen igual"
-                      className="bg-carbon-900 border border-carbon-600 rounded-lg px-2 py-1 text-[11px] text-bone-500 focus:border-gold-500 outline-none"
+                      className="campo h-10 py-0 text-ui lg:h-8"
                     >
-                      {TEXTURAS.map((x) => (
-                        <option key={x.slug} value={x.slug}>{x.label}</option>
-                      ))}
+                      {TEXTURAS.map((x) => <option key={x.slug} value={x.slug}>{x.label}</option>)}
                     </select>
-                    {/* Mood — informativo desde 2026-08-03, ya no elige la pista */}
+                  </Campo>
+                  {/* Mood: informativo desde 2026-08-03, ya no elige la pista. */}
+                  <Campo label="Mood (informativo)">
                     <select
                       value={d.moodCategory}
                       onChange={(e) => patch(t.filename, { moodCategory: e.target.value })}
                       title="Dato informativo: ya no interviene en qué pista se elige"
-                      className="bg-carbon-900 border border-carbon-600 rounded-lg px-2 py-1 text-[11px] text-bone-700 focus:border-gold-500 outline-none"
+                      className="campo h-10 py-0 text-ui lg:h-8"
                     >
-                      {MOODS.map((m) => (
-                        <option key={m.slug} value={m.slug}>{m.label}</option>
-                      ))}
+                      {MOODS.map((m) => <option key={m.slug} value={m.slug}>{m.label}</option>)}
                     </select>
-                    {/* Guardar */}
-                    <button
-                      onClick={() => save(t.filename)}
-                      disabled={saving === t.filename}
-                      className="ml-auto flex items-center gap-1 px-2.5 py-1 text-[11px] rounded-lg bg-carbon-700 text-bone-500 hover:bg-carbon-600 disabled:opacity-40 transition-colors"
-                    >
-                      {savedOk[t.filename] ? <><Check size={11} className="text-gold-500" /> Guardado</> : saving === t.filename ? 'Guardando…' : 'Guardar'}
-                    </button>
-                  </div>
-                  <input
-                    type="text"
-                    value={d.descripcion}
-                    onChange={(e) => patch(t.filename, { descripcion: e.target.value })}
-                    placeholder="Descripción (atmósfera, instrumentación)…"
-                    className="bg-carbon-900 border border-carbon-600 rounded-lg px-2 py-1 text-[11px] text-bone-500 focus:border-gold-500 outline-none w-full"
-                  />
+                  </Campo>
                 </div>
-              )
-            })
-          )}
+                <input
+                  type="text"
+                  value={d.descripcion}
+                  onChange={(e) => patch(t.filename, { descripcion: e.target.value })}
+                  placeholder="Descripción: atmósfera, instrumentación"
+                  aria-label="Descripción"
+                  className="campo text-ui"
+                />
+                <div className="flex justify-end">
+                  <button onClick={() => save(t.filename)} disabled={saving === t.filename} className="btn-sec">
+                    {savedOk[t.filename] ? <><Check size={16} className="text-oro" /> Guardado</> : saving === t.filename ? 'Guardando…' : 'Guardar'}
+                  </button>
+                </div>
+              </li>
+            )
+          })}
+        </ul>
+      )}
 
-          {error && (
-            <div className="flex items-start gap-1.5 text-[11px] text-neon-red">
-              <AlertCircle size={13} className="shrink-0 mt-0.5" />
-              <span>{error}</span>
-            </div>
-          )}
-        </div>
-
-        {/* Un solo elemento de audio; togglePlay fija `playing` al reproducir. */}
-        <audio
-          ref={audioRef}
-          onPause={() => setPlaying(null)}
-          onEnded={() => setPlaying(null)}
-        />
-      </div>
-    </div>
+      {/* Un solo elemento de audio; togglePlay fija `playing` al reproducir. */}
+      <audio ref={audioRef} onPause={() => setPlaying(null)} onEnded={() => setPlaying(null)} />
+    </PanelDeslizante>
   )
 }

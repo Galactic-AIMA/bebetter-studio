@@ -47,6 +47,10 @@ export const GenerateVideoSchema = z.object({
     audioTrack: z.string().optional(),
   }),
   phraseId: z.string().optional(),
+  // Marca la pieza como pendiente de revisión en vez de dejarla suelta. Lo usa la
+  // generación por lotes: un lote NO encola, y por tanto no gasta frase ni copies
+  // hasta que alguien lo aprueba. Ver el comentario de `videos.estado` en db.ts.
+  paraRevision: z.boolean().optional(),
 })
 
 export const GenerateImageSchema = z.object({

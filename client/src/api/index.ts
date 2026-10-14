@@ -1,7 +1,32 @@
 import axios from 'axios'
 import { Phrase, ImageItem, VideoRecord, VideoConfig, ImageRecord, ImageVariant, WatermarkConfig, HistoryItem, ImageRecommendation } from '../types'
 
+/** Se emite en `window` cada vez que un video entra en la cola de publicación. */
+export const EVENTO_COLA = 'bebetter:cola'
+
 const api = axios.create({ baseURL: '/api' })
+
+// La sesión caduca, y cuando lo hace el servidor devuelve 401 a TODO. Sin esto,
+// la app se llenaría de errores sueltos que no explican nada mientras la causa
+// real —hay que volver a entrar— no aparece por ninguna parte. `Puerta` escucha
+// este aviso y vuelve a pintar el login.
+// El error se sigue rechazando: quien llamó tiene que enterarse igual.
+api.interceptors.response.use(
+  (r) => r,
+  (err) => {
+    if (err?.response?.status === 401) window.dispatchEvent(new Event('bb:sin-sesion'))
+    return Promise.reject(err)
+  }
+)
+
+/** El login no cuelga de `/api`, así que no usa esta instancia. */
+export const authApi = {
+  quienSoy: () =>
+    axios
+      .get<{ autenticado: boolean; puertaActiva: boolean; email?: string; nombre?: string }>('/auth/me')
+      .then((r) => r.data),
+  salir: () => axios.post('/auth/logout').then(() => window.location.reload()),
+}
 
 export const imagesApi = {
   list: () => api.get<ImageItem[]>('/images').then((r) => r.data),
@@ -207,6 +232,36 @@ export interface AudioTrack {
   textura?: string | null
   descripcion?: string | null
   analyzed?: boolean
+  /** Reels del nicho de los que salió este corte (varios comparten tema). */
+  sources?: TrackSource[]
+  /** Corte al que se fusionó este por ser el mismo tema. null = no es duplicado. */
+  mergedInto?: string | null
+  /** true = tiene alguna frase de origen vectorizada, o sea que puede sonar. */
+  enPool?: boolean
+}
+
+export interface TrackSource {
+  sourceUrl: string
+  sourcePhrase: string | null
+  audioTitle: string | null
+  audioArtist: string | null
+  startMs: number | null
+  confirmada: boolean
+}
+
+export interface HarvestResult {
+  filename: string
+  sourceUrl: string
+  /** Lo que Gemini leyó en los fotogramas. Vacío = no encontró texto legible. */
+  proposedPhrase: string
+  durationSeg: number
+  /** Nombre de la canción, si el reel usó la biblioteca de audio de Instagram. */
+  audioTitle: string | null
+  audioArtist: string | null
+  startMs: number | null
+  /** true = otro reel ya había traído este mismo tema; se reutiliza el archivo. */
+  temaRepetido: boolean
+  yaEstaba: boolean
 }
 
 export interface AudioProposal {
@@ -222,8 +277,18 @@ export interface AutoPick {
   name: string
   moodCategory: string | null
   textura?: string | null
-  energia: number
+  energia: number | null
+  /** Coseno frase↔frase de origen del corte (0..1). */
   score: number
+  sourcePhrase?: string | null
+  sourceUrl?: string | null
+  audioTitle?: string | null
+  audioArtist?: string | null
+  /** Cuántos reels del nicho distintos usaron este tema. */
+  reelsDelNicho?: number
+  duracionSeg?: number | null
+  /** Lo que durará el reel si se genera con esta pista (la marca el corte). */
+  duracionReel?: number
 }
 
 export const audioApi = {
@@ -239,6 +304,24 @@ export const audioApi = {
     api
       .put(`/audio/${encodeURIComponent(filename)}/tags`, { energia, moodCategory, descripcion, textura })
       .then((r) => r.data),
+  // Cosecha con procedencia: baja el corte del reel y propone su frase de origen.
+  // Tarda (descarga + FFmpeg + lectura de fotogramas) → timeout largo a propósito.
+  harvest: (url: string) =>
+    api.post<HarvestResult>('/audio/harvest', { url }, { timeout: 5 * 60 * 1000 }).then((r) => r.data),
+  // Tanda: el servidor cosecha en serie (~17 s por reel), así que 50 links son unos
+  // 15 min. De ahí el timeout de 45.
+  harvestBatch: (urls: string[]) =>
+    api
+      .post<{ results: HarvestResult[]; errors: string[] }>(
+        '/audio/harvest-batch', { urls }, { timeout: 45 * 60 * 1000 }
+      )
+      .then((r) => r.data),
+  // La procedencia se confirma por URL del reel, no por pista: una misma pista
+  // tiene varias, una por cada reel del nicho que usó ese tema.
+  saveSource: (sourceUrl: string, sourcePhrase: string) =>
+    api.put('/audio/source', { sourceUrl, sourcePhrase }).then((r) => r.data),
+  deleteSource: (sourceUrl: string) =>
+    api.delete('/audio/source', { params: { url: sourceUrl } }).then((r) => r.data),
 }
 
 export const historyApi = {
@@ -257,9 +340,33 @@ export const videosApi = {
     api.post<{ driveUrl: string }>(`/videos/${id}/upload-drive`).then((r) => r.data),
   publish: (id: string, env: 'test' | 'prod') =>
     api.post(`/videos/${id}/publish`, { env }).then((r) => r.data),
+  // Avisa a quien muestre la cola (la tira de próximas salidas) para que no espere
+  // a su sondeo de cinco minutos. Se encola desde el editor, Revisión y Lotes.
   queue: (id: string) =>
-    api.post<{ success: boolean; queueId: string }>(`/videos/${id}/queue`).then((r) => r.data),
+    api.post<{ success: boolean; queueId: string }>(`/videos/${id}/queue`).then((r) => {
+      dispatchEvent(new Event(EVENTO_COLA))
+      return r.data
+    }),
   remove: (id: string) => api.delete(`/videos/${id}`),
+
+  // ── Cola de revisión (Fase 5) ──────────────────────────────────────────────
+  /** Lo que produjo un lote y todavía no ha mirado nadie. */
+  pendientes: () => api.get<VideoRecord[]>('/videos/pendientes').then((r) => r.data),
+  /**
+   * Descarta una pieza. `motivo: 'frase'` además ARCHIVA la frase: sin eso volvería
+   * a salir en el siguiente lote, porque el planificador ordena por `usage_count` y
+   * rechazar no lo toca.
+   */
+  reject: (id: string, motivo: 'imagen' | 'frase' | 'otro') =>
+    api.post<{ success: boolean; fraseArchivada: boolean }>(`/videos/${id}/reject`, { motivo })
+      .then((r) => r.data),
+  /**
+   * «Otra imagen»: descarta esta y rehace la MISMA frase con un fondo nuevo.
+   * Genera una imagen, así que tarda — de ahí el timeout largo.
+   */
+  rehacer: (id: string) =>
+    api.post<{ video: VideoRecord }>(`/videos/${id}/rehacer`, {}, { timeout: 10 * 60 * 1000 })
+      .then((r) => r.data.video),
 }
 
 export interface CadenceConfig {

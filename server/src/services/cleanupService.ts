@@ -1,6 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import { config } from '../config'
+import { recortarCache } from './mediaStore'
 
 const MAX_AGE_MS = 24 * 60 * 60 * 1000 // 24 horas
 
@@ -52,7 +53,11 @@ export function runCleanup() {
     path.join(dataBase, 'images-output.json'),
   )
 
-  if (videos + images > 0) {
-    console.log(`[cleanup] Eliminados: ${videos} videos, ${images} imágenes`)
+  // El caché del banco bajado de R2 no envejece como los renders: se recorta por
+  // TAMAÑO, tirando lo que hace más tiempo que no se abre (ver `recortarCache`).
+  const cache = recortarCache()
+
+  if (videos + images + cache > 0) {
+    console.log(`[cleanup] Eliminados: ${videos} videos, ${images} imágenes, ${cache} del caché del banco`)
   }
 }

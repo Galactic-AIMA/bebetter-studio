@@ -28,7 +28,11 @@ export const config = {
     test: process.env.WEBHOOK_TEST_URL || '',
     prod: process.env.WEBHOOK_PROD_URL || '',
     secret: process.env.WEBHOOK_SECRET || '',
-    approval: process.env.WEBHOOK_APPROVAL_URL || '',  // n8n "Aprobación bebetter" (Fase 4) — manda el paquete a Telegram
+    approval: process.env.WEBHOOK_APPROVAL_URL || '',
+    // Avisos de progreso de un lote hacia n8n → Telegram. Vacío = no se avisa a
+    // nadie, que es lo correcto en local: los avisos son para quien lanza el lote
+    // a distancia y no tiene la barra de progreso delante.
+    lote: process.env.WEBHOOK_LOTE_URL || '',  // n8n "Aprobación bebetter" (Fase 4) — manda el paquete a Telegram
   },
 
   watermark: {
@@ -43,11 +47,72 @@ export const config = {
     // —frases, guiones, copies—: en la capa gratuita Google entrena con los datos.
     apiKeyFree: process.env.GOOGLE_API_KEY_FREE || '',
     sheetId: process.env.GOOGLE_SHEET_ID || '',  // Sheet "Cola bebetter" (Fase 4) — lo crea scripts/setup-queue-sheet.ts
+
+    // Vertex AI — ensayo de créditos Google (alta 2026-08-17, corte 2026-11-15).
+    // Misma familia de modelos que AI Studio, pero autenticada por service account
+    // (IAM) en vez de por clave con candado de IP: una mudanza de servidor ya no la
+    // rompe. Y Vertex NO entrena con los datos, así que sirve para contenido propio.
+    //
+    // Verificado el 2026-08-17 con scripts/vertex-comparar-embeddings.ts:
+    // `gemini-embedding-001` devuelve vectores BIT A BIT IDÉNTICOS por las dos
+    // puertas (coseno 1.000000000, Δmax 0) ⇒ los embeddings ya guardados siguen
+    // siendo válidos y NO hay que re-vectorizar el banco.
+    //
+    // Con `project` o `credentials` vacíos se cae a AI Studio: es el interruptor
+    // de vuelta atrás, sin tocar código.
+    //
+    // ⚠️ `location`: us-central1 sirve la familia 2.5 y los embeddings (es donde se
+    // validó lo de arriba). Los modelos 3.x —incluido gemini-3-pro-image— solo
+    // responden en `global`. Si algún día se migran las funciones de texto, van con
+    // su propia location.
+    vertex: {
+      project: process.env.VERTEX_PROJECT || '',
+      location: process.env.VERTEX_LOCATION || 'us-central1',
+      credentials: process.env.VERTEX_CREDENTIALS || '',
+      // Modelos de imagen. Solo responden en `global`, NO en us-central1.
+      //   gemini-3-pro-image     = Nano Banana Pro (el mismo que sirve KIE)
+      //   gemini-2.5-flash-image = más rápido y barato, calidad menor
+      imageLocation: process.env.VERTEX_IMAGE_LOCATION || 'global',
+      imageModel: process.env.VERTEX_IMAGE_MODEL || 'gemini-3-pro-image',
+      // A quién se le pide cuando el principal no da hueco (429 de la cuota
+      // compartida). Vaciarlo desactiva el respaldo y el fallo sube tal cual.
+      imageModelRespaldo: process.env.VERTEX_IMAGE_MODEL_FALLBACK ?? 'gemini-2.5-flash-image',
+      // Modelo para los FONDOS DE REEL. Distinto del de carruseles a propósito
+      // (2026-08-20): el fondo de un reel no lleva texto —lo pinta FFmpeg encima—,
+      // así que no necesita el Pro. Y la diferencia no es de matiz: medido el
+      // 2026-08-18 con el mismo prompt, el Pro tardó 430,5 s y el flash 7,2 s.
+      // En un lote de 30 eso es la diferencia entre horas y minutos.
+      // El Pro queda de respaldo por si el flash no da hueco.
+      imageModelReels: process.env.VERTEX_IMAGE_MODEL_REELS || 'gemini-2.5-flash-image',
+      // Los modelos de texto 3.x tampoco están en us-central1: solo en `global`.
+      // Los embeddings sí (y ahí es donde se validó que los vectores coinciden),
+      // por eso son dos `location` distintas y no una.
+      textLocation: process.env.VERTEX_TEXT_LOCATION || 'global',
+    },
   },
 
   kie: {
     apiKey: process.env.KIE_API_KEY || '',  // KIE AI (Nano Banana Pro) — generación de imágenes IA para el banco
   },
+
+  // Qué backend genera las imágenes IA: 'kie' (revendedor, cobra por imagen sin
+  // tope) o 'vertex' (directo, con cargo a los créditos del ensayo). Cambiar esta
+  // variable es todo el rollback — `kieService` se queda intacto.
+  imageBackend: (process.env.IMAGE_BACKEND || 'kie') as 'kie' | 'vertex',
+
+  // Fondos con IA por delante del banco en los lotes (2026-08-18, decisión de David).
+  // Una imagen hecha PARA esa frase gana a la menos mala de 263. Se apaga poniendo
+  // IA_PRIMERO=false, y entonces manda el banco como hasta ahora — el planificador
+  // sigue eligiendo una imagen para cada par en los dos casos, así que apagarlo no
+  // deja piezas sin fondo.
+  iaPrimero: process.env.IA_PRIMERO !== 'false',
+
+  // Qué proporción de cada lote lleva fondo generado con IA (2026-08-18). David
+  // pidió empezar en 80/20: de 10 reels, 8 de IA y 2 del banco. No es un sorteo —
+  // ver `repartoIA()` en aiImageService: el banco se queda las piezas donde SU
+  // match es mejor, así que las 2 del banco son sus dos mejores emparejamientos y
+  // la IA cubre justo donde el banco flojea.
+  iaProporcion: Math.min(1, Math.max(0, Number(process.env.IA_PROPORCION ?? '0.8'))),
 
   pinterest: {
     appId: process.env.PINTEREST_APP_ID || '',
@@ -62,5 +127,51 @@ export const config = {
     bin: process.env.GALLERY_DL_PATH || 'gallery-dl',
     boardUrl: process.env.PINTEREST_BOARD_URL || '',
     limit: parseInt(process.env.GALLERY_DL_LIMIT || '0') || 0,
+  },
+
+  // Cosecha de audio con procedencia (2026-08-18). Se queda SIEMPRE en local, y
+  // es mejor así: yt-dlp contra Instagram desde una IP de datacenter se bloquea
+  // mucho más que desde una residencial, la dispara David pegando links (no
+  // necesita ser autónoma) y el resultado sube a R2 como una pista más. Solo
+  // viaja el resultado, no la descarga.
+  ytDlp: {
+    bin: process.env.YTDLP_PATH || 'yt-dlp',
+    // Instagram pide sesión para casi todo. `chrome`/`firefox`/`edge` lee las
+    // cookies del navegador donde David ya está logueado; el fichero Netscape es
+    // la alternativa si el navegador las tiene cifradas y no las suelta.
+    cookiesFromBrowser: process.env.YTDLP_COOKIES_FROM_BROWSER || '',
+    cookiesFile: process.env.YTDLP_COOKIES_FILE || '',
+  },
+
+  // ─── La puerta (2026-08-20) ────────────────────────────────────────────────
+  //
+  // Hasta hoy la app no tenía autenticación NINGUNA: las 16 rutas `/api` abiertas
+  // y un `basic_auth` de Caddy como tapón. Esto lo sustituye por login de Google
+  // restringido a una lista blanca de correos.
+  //
+  // De Google solo se usa el `id_token` UNA VEZ, para saber quién eres. No se
+  // guarda ni el access token ni el refresh token: la sesión que viaja después es
+  // nuestra, firmada con `SESSION_SECRET`. Eso evita de golpe la caducidad de
+  // refresh tokens a 7 días del modo «Testing» y quita un secreto que custodiar.
+  auth: {
+    // Apagado por defecto: en local David trabaja sin puerta y así sigue. Se
+    // enciende en la VM con AUTH_ENABLED=true.
+    activo: process.env.AUTH_ENABLED === 'true',
+    clientId: process.env.AUTH_GOOGLE_CLIENT_ID || '',
+    clientSecret: process.env.AUTH_GOOGLE_CLIENT_SECRET || '',
+    // De dónde cuelga /auth/google/callback. Explícita y no deducida de la
+    // petición: detrás de un proxy, Host y protocolo son lo que el proxy diga, y
+    // una redirect_uri que no case EXACTAMENTE con la registrada da error 400.
+    baseUrl: (process.env.AUTH_BASE_URL || '').replace(/\/$/, ''),
+    // Quién puede entrar. Se comparan en minúsculas y sin espacios.
+    correos: (process.env.AUTH_ALLOWED_EMAILS || '')
+      .split(',').map((c) => c.trim().toLowerCase()).filter(Boolean),
+    // Con qué se firma la cookie de sesión. Cambiarlo cierra todas las sesiones.
+    sessionSecret: process.env.SESSION_SECRET || '',
+    // La puerta de las máquinas: n8n y el futuro Job de Cloud Run no pueden pasar
+    // por un login pensado para un humano. Va en la cabecera `X-API-Key`.
+    tokenServicio: process.env.SERVICE_TOKEN || '',
+    // 30 días. Es una app de una persona en su propio dominio, no un banco.
+    duracionSesionSeg: parseInt(process.env.SESSION_MAX_AGE || '2592000'),
   },
 }

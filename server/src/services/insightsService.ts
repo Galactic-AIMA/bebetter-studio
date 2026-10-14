@@ -100,17 +100,23 @@ export function fechaLocal(d = new Date()): string {
   return `${d.getFullYear()}-${mes}-${dia}`
 }
 
-export function saveSnapshot(mediaId: string, metrics: Record<string, number>, capturedAt?: string): void {
-  db.prepare(
+export async function saveSnapshot(mediaId: string, metrics: Record<string, number>, capturedAt?: string): Promise<void> {
+  await db.prepare(
     `INSERT INTO media_insights (media_id, captured_at, metrics_json)
      VALUES (?, ?, ?)
      ON CONFLICT(media_id, captured_at) DO UPDATE SET metrics_json = excluded.metrics_json`
   ).run(mediaId, capturedAt ?? fechaLocal(), JSON.stringify(metrics))
 }
 
-/** ¿Ya hay snapshot de hoy? Lo usa el arranque para no repetir el del cron. */
-export function haySnapshotDeHoy(): boolean {
-  const r = db
+/**
+ * ¿Ya hay snapshot de hoy? Lo usa el arranque para no repetir el del cron.
+ *
+ * ⚠️ Es `async` desde la Fase 2 y tiene que llamarse con `await`. Cuando devolvía
+ * `boolean` sobre un `.get()` que ya era una promesa, `!!r` era SIEMPRE `true`
+ * (una promesa es un objeto) y el snapshot de arranque no se tomaba nunca.
+ */
+export async function haySnapshotDeHoy(): Promise<boolean> {
+  const r = await db
     .prepare(`SELECT 1 FROM media_insights WHERE captured_at = ? LIMIT 1`)
     .get(fechaLocal())
   return !!r
@@ -144,13 +150,13 @@ export async function collectInsights(soloRecientes = false): Promise<CollectRes
   }
 
   const desde = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString()
-  const filas = db
+  const filas = (await db
     .prepare(
       soloRecientes
         ? `SELECT media_id, media_type FROM publications WHERE published_at >= ? ORDER BY published_at DESC`
         : `SELECT media_id, media_type FROM publications ORDER BY published_at DESC`
     )
-    .all(...(soloRecientes ? [desde] : [])) as { media_id: string; media_type: string | null }[]
+    .all(...(soloRecientes ? [desde] : []))) as { media_id: string; media_type: string | null }[]
 
   const res: CollectResult = { total: filas.length, ok: 0, fallidas: [] }
 
@@ -200,6 +206,8 @@ export interface PieceStats {
   nivelEnergia?: number
   /** 'ia' | 'banco' — de dónde salió la imagen de fondo */
   imagenOrigen?: string
+  /** Modelo que generó la imagen. Solo en las de IA. */
+  imagenModelo?: string
   estilo?: string
   efecto?: string
   audio?: string
@@ -225,14 +233,15 @@ export interface PieceStats {
 }
 
 /** Último snapshot de cada publicación, ya cruzado con su receta. */
-export function pieceStats(): PieceStats[] {
-  const filas = db
+export async function pieceStats(): Promise<PieceStats[]> {
+  const filas = (await db
     .prepare(
       `SELECT
          r.media_id, r.permalink, r.published_at, r.media_type, r.recipe_status,
          r.recipe_blocks, r.has_phrase, r.has_image, r.has_audio, r.has_render,
-         COALESCE(r.image_filename, json_extract(v.config_extra, '$.imageId')) AS imagen_archivo,
+         r.imagen_archivo,
          img.origen AS imagen_origen,
+         img.modelo AS imagen_modelo,
          COALESCE(pv.text, pc.text) AS frase_video,
          COALESCE(pv.mood_category, pc.mood_category) AS mood,
          COALESCE(pv.nivel_energia, pc.nivel_energia) AS energia,
@@ -241,7 +250,7 @@ export function pieceStats(): PieceStats[] {
          i.metrics_json
        FROM v_publication_recipe r
        LEFT JOIN videos    v  ON v.id = r.video_id
-       LEFT JOIN images    img ON img.filename = COALESCE(r.image_filename, json_extract(v.config_extra, '$.imageId'))
+       LEFT JOIN images    img ON img.filename = r.imagen_archivo
        LEFT JOIN carousels c  ON c.id = r.carousel_id
        LEFT JOIN phrases   pv ON pv.id = v.phrase_id
        LEFT JOIN phrases   pc ON pc.id = r.phrase_id
@@ -252,7 +261,7 @@ export function pieceStats(): PieceStats[] {
        ) i ON i.media_id = r.media_id
        ORDER BY r.published_at DESC`
     )
-    .all() as any[]
+    .all()) as any[]
 
   return filas.map((f) => {
     const m = f.metrics_json ? JSON.parse(f.metrics_json) : {}
@@ -296,6 +305,7 @@ export function pieceStats(): PieceStats[] {
       moodCategory: f.mood ?? undefined,
       nivelEnergia: f.energia ?? undefined,
       imagenOrigen,
+      imagenModelo: f.imagen_modelo ?? undefined,
       estilo: f.style ?? undefined,
       efecto: f.effect ?? undefined,
       audio,
@@ -352,11 +362,19 @@ export function rangoEnergia(n?: number): string | undefined {
   return 'máxima (9-10)'
 }
 
-export function summaryByDimension(stats: PieceStats[] = pieceStats()): DimensionSummary[] {
+export async function summaryByDimension(stats?: PieceStats[]): Promise<DimensionSummary[]> {
+  // El valor por defecto ya no puede ir en la firma: cargarlo sería una llamada
+  // asíncrona, y un `await` no cabe ahí.
+  const piezas = stats ?? (await pieceStats())
   const dims: [string, (s: PieceStats) => string | undefined][] = [
     ['mood', (s) => s.moodCategory],
     ['formato', (s) => (s.mediaType === 'CAROUSEL_ALBUM' ? 'carrusel' : 'reel')],
     ['imagen', (s) => s.imagenOrigen],
+    // Solo las de IA tienen modelo, así que esta dimensión compara Pro contra flash
+    // sin que el banco meta ruido. Existe para resolver con datos una duda que hoy
+    // es de opinión: el 18-ago el Pro tardó 430,5 s contra 7,2 s del flash y no se
+    // vio un salto de calidad, pero con una imagen de cada no se decide nada.
+    ['modelo imagen', (s) => s.imagenModelo],
     ['audio', (s) => (!s.hasAudio ? undefined : s.audio && s.audio !== 'ninguno' ? 'con música' : 'sin música')],
     ['estilo', (s) => s.estilo],
     ['efecto', (s) => s.efecto],
@@ -366,7 +384,7 @@ export function summaryByDimension(stats: PieceStats[] = pieceStats()): Dimensio
 
   const out: DimensionSummary[] = []
   // Solo piezas con métricas: una sin snapshot no aporta, solo diluye la media.
-  const conDatos = stats.filter((s) => s.reach != null)
+  const conDatos = piezas.filter((s) => s.reach != null)
 
   for (const [dimension, get] of dims) {
     const grupos = new Map<string, PieceStats[]>()

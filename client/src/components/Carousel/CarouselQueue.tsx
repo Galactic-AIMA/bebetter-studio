@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { CalendarClock, RefreshCw, Check, AlertCircle, Plus, X } from 'lucide-react'
+import { ArrowsClockwise, Check, WarningCircle, Plus, X } from '@phosphor-icons/react'
 import { carouselsApi, CarouselUpcoming } from '../../api'
 
 /**
@@ -101,7 +101,7 @@ export default function CarouselQueue() {
   const save = async () => {
     setError(null)
     if (hasDupes) {
-      setError('Hay horas repetidas — cada franja debe ser distinta')
+      setError('Hay dos horas iguales: cada franja necesita la suya.')
       return
     }
     setSaving(true)
@@ -117,139 +117,116 @@ export default function CarouselQueue() {
   }
 
   return (
-    <div className="mt-6 bg-carbon-800 rounded-xl p-4 border border-carbon-700">
-      <div className="flex items-center gap-2 mb-3">
-        <CalendarClock size={13} className="text-gold-500" />
-        <h2 className="text-[11px] font-medium text-bone-500">Cola de publicación</h2>
-        {!!data?.count && <span className="text-[10px] text-bone-700">({data.count} en cola)</span>}
-        <button
-          onClick={load}
-          disabled={loading}
-          className="ml-auto flex items-center gap-1 text-[10px] text-bone-700 hover:text-bone-500 disabled:opacity-40"
-        >
-          <RefreshCw size={10} className={loading ? 'animate-spin' : ''} /> Actualizar
+    <section className="mt-8 border-t border-linea pt-5">
+      <header className="mb-3 flex items-center gap-2">
+        <h2 className="rotulo">Cola de publicación</h2>
+        {!!data?.count && <span className="font-mono text-meta tabular-nums text-hueso-3">{data.count} en cola</span>}
+        <button onClick={load} disabled={loading} className="btn-fantasma ml-auto h-10 px-1 lg:h-8">
+          <ArrowsClockwise size={16} /> Actualizar
         </button>
-      </div>
+      </header>
 
       {/* ── Cadencia semanal ── */}
-      <div className="flex flex-wrap items-center gap-1.5 mb-2">
+      <div className="mb-2 flex flex-wrap items-center gap-1.5">
         {DAYS.map((d) => (
           <button
             key={d.iso}
             onClick={() => toggleDay(d.iso)}
-            className={`text-[10px] rounded-md px-2 py-1 border transition-colors ${
-              days.includes(d.iso)
-                ? 'bg-gold-500 text-carbon-900 border-gold-500 font-medium'
-                : 'bg-carbon-900 text-bone-700 border-carbon-600 hover:text-bone-500'
-            }`}
+            aria-pressed={days.includes(d.iso)}
+            aria-label={d.full}
+            className="chip"
           >
             {d.label}
           </button>
         ))}
 
-        <span className="text-[10px] text-bone-700 mx-1">a las</span>
+        <span className="mx-1 text-ui text-hueso-3">a las</span>
 
         {times.map((t, i) => (
-          <span key={i} className="flex items-center gap-0.5">
+          <span key={i} className="flex items-center">
             <select
               value={hourOf(t)}
               onChange={(e) => setTime(i, Number(e.target.value))}
-              className="bg-carbon-900 border border-carbon-600 rounded-md px-1.5 py-1 text-[10px] text-bone-500 tabular-nums focus:outline-none focus:border-gold-500/60"
+              aria-label={`Hora ${i + 1}`}
+              className="campo h-10 w-auto py-0 font-mono tabular-nums lg:h-8"
             >
               {HOUR_OPTIONS.map((h) => (
-                <option key={h} value={h}>
-                  {hhmm(h)}
-                </option>
+                <option key={h} value={h}>{hhmm(h)}</option>
               ))}
             </select>
             {times.length > 1 && (
               <button
                 onClick={() => removeTime(i)}
-                className="p-0.5 text-bone-700 hover:text-neon-red"
+                aria-label="Quitar esta franja"
                 title="Quitar esta franja"
+                className="btn-fantasma grid h-10 w-8 place-items-center hover:text-lacre lg:h-8"
               >
-                <X size={11} />
+                <X size={14} />
               </button>
             )}
           </span>
         ))}
 
         {times.length < MAX_TIMES && (
-          <button
-            onClick={addTime}
-            className="flex items-center gap-0.5 text-[10px] text-bone-700 hover:text-bone-500 border border-carbon-600 rounded-md px-1.5 py-1"
-            title="Añadir otra franja"
-          >
-            <Plus size={10} /> hora
+          <button onClick={addTime} className="btn-sec px-2" title="Añadir otra franja">
+            <Plus size={14} /> hora
           </button>
         )}
 
         {dirty && (
-          <button
-            onClick={save}
-            disabled={saving || !days.length || !times.length}
-            className="ml-auto text-[10px] font-medium text-carbon-900 bg-gold-500 hover:bg-gold-600 rounded-md px-2.5 py-1 disabled:opacity-40 transition-colors"
-          >
+          <button onClick={save} disabled={saving || !days.length || !times.length} className="btn-sec ml-auto border-hueso">
             {saving ? 'Guardando…' : 'Guardar cadencia'}
           </button>
         )}
         {saved && !dirty && (
-          <span className="ml-auto flex items-center gap-1 text-[10px] text-gold-500">
-            <Check size={11} /> Guardado
+          <span className="ml-auto flex items-center gap-1.5 text-ui text-hueso-2">
+            <Check size={16} className="text-oro" /> Guardada
           </span>
         )}
       </div>
 
-      <p className="text-[10px] text-bone-700 mb-3">
-        Los carruseles en cola se publican solos: {resumen(days, times)}
-        {data?.timezone ? ` · ${data.timezone}` : ''}
+      <p className="mb-4 text-ui text-hueso-3">
+        Los carruseles en cola salen solos: {resumen(days, times)}
+        {data?.timezone && <span className="font-mono text-meta"> · {data.timezone}</span>}
       </p>
 
       {error && (
-        <p className="flex items-start gap-1.5 text-[10px] text-neon-red mb-2">
-          <AlertCircle size={11} className="shrink-0 mt-0.5" /> {error}
+        <p role="alert" className="mb-3 flex items-start gap-1.5 text-ui text-lacre">
+          <WarningCircle size={16} className="mt-0.5 shrink-0" /> {error}
         </p>
       )}
 
       {/* ── Lo que hay en cola ── */}
       {loading && !data ? (
-        <p className="text-[11px] text-bone-700">Cargando…</p>
+        <p className="text-ui text-hueso-3">Cargando la cola…</p>
       ) : !data || data.count === 0 ? (
-        <p className="text-[11px] text-bone-700">
-          No hay carruseles en cola. Los que envíes con “Enviar a la cola” aparecerán aquí con su
-          fecha estimada.
+        <p className="text-ui text-hueso-2">
+          No hay carruseles en cola. Los que envíes con «Enviar a la cola» aparecerán aquí con su fecha.
         </p>
       ) : !data.days.length || !data.times.length ? (
-        <p className="text-[11px] text-neon-red">
-          Hay {data.count} en cola pero no hay cadencia configurada — no se publicarán hasta elegir
-          días y horas arriba.
+        <p className="flex items-start gap-1.5 text-ui text-lacre">
+          <WarningCircle size={16} className="mt-0.5 shrink-0" />
+          Hay {data.count} en cola pero ningún día ni hora: no saldrán hasta que guardes una cadencia.
         </p>
       ) : (
-        <ul className="flex flex-col gap-1.5">
+        <ol>
           {data.items.map((it, i) => (
-            <li
-              key={it.id}
-              className="flex items-center gap-2.5 bg-carbon-900/60 rounded-lg px-2.5 py-1.5 border border-carbon-700"
-            >
-              <span className="text-[10px] text-bone-700 tabular-nums w-4 shrink-0">{i + 1}</span>
-              {it.firstImage ? (
-                <img src={it.firstImage} alt="" className="w-8 h-10 object-cover rounded shrink-0 bg-carbon-700" />
-              ) : (
-                <div className="w-8 h-10 rounded shrink-0 bg-carbon-700" />
-              )}
-              <span className="flex-1 min-w-0">
-                {it.referencia && (
-                  <span className="text-[9px] font-medium text-neon-red block leading-tight">{it.referencia}</span>
-                )}
-                <span className="text-[11px] text-bone-500 leading-snug line-clamp-2 block">{it.tema}</span>
+            <li key={it.id} className="flex items-center gap-3 border-b border-linea py-2 last:border-0">
+              <span className="w-4 shrink-0 font-mono text-meta tabular-nums text-hueso-3">{i + 1}</span>
+              <span className="h-10 w-8 shrink-0 overflow-hidden rounded-[4px] bg-s2">
+                {it.firstImage && <img src={it.firstImage} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />}
               </span>
-              <span className="text-[11px] text-gold-500 tabular-nums text-right shrink-0 whitespace-nowrap">
+              <span className="min-w-0 flex-1">
+                {it.referencia && <span className="block font-mono text-meta text-hueso-3">{it.referencia}</span>}
+                <span className="line-clamp-2 block text-ui text-hueso">{it.tema}</span>
+              </span>
+              <span className="shrink-0 whitespace-nowrap text-right font-mono text-meta tabular-nums text-oro">
                 {etaLabel(it.etaIso, data.timezone)}
               </span>
             </li>
           ))}
-        </ul>
+        </ol>
       )}
-    </div>
+    </section>
   )
 }

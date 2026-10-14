@@ -1,3 +1,4 @@
+import type { VisualStyle } from '@shared/presets'
 export interface TextConfig {
   content: string
   font: string
@@ -41,6 +42,13 @@ export interface Phrase {
   moodKeywords?: string[]
   createdAt?: string
   archived?: boolean  // retirada de la rotación, sin borrar (ver db.ts)
+  // Las dos columnas de NORMA de marca (2026-08-18). Una frase que no sea
+  // 'dos_tiempos' + 'tercera' no entra en el pool de publicación: ni /random, ni
+  // /recommend, ni el planificador del lote la proponen. Se muestran en el banco
+  // para que se vea cuál hay que reconvertir — sin el aviso, desaparecerían de la
+  // rotación en silencio. `undefined` = sin clasificar, que tampoco cumple.
+  estructura?: 'dos_tiempos' | 'un_golpe'
+  persona?: 'segunda' | 'tercera'
 }
 
 export interface ImageItem {
@@ -82,13 +90,18 @@ export interface VideoRecord {
   viral?: boolean
   createdAt: string
   config: VideoConfig
+  /**
+   * Estado de revisión. `undefined` = pieza del editor, se decide en el momento.
+   * Las de un lote nacen 'pendiente_revision' y no gastan frase ni copies hasta
+   * aprobarlas — encolar es lo que aprueba. La pantalla de revisión es la Fase 5.
+   */
+  estado?: 'pendiente_revision' | 'aprobado' | 'rechazado'
 }
 
 export type TransitionType = 'fade' | 'fadeBlack' | 'none'
-export type TextAlign = 'left' | 'center' | 'right'
+export type { TextAlign, VisualStyle } from '@shared/presets'
 export type TextEffect = 'none' | 'fadeIn' | 'slideUp' | 'glowPulse'
 export type WatermarkPosition = 'left' | 'center' | 'right'
-export type VisualStyle = 'bebetter' | 'serene' | 'raw' | 'minimal' | 'cinematic' | 'bold'
 
 export interface WatermarkConfig {
   enabled: boolean

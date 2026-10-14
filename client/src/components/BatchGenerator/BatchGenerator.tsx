@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
-import { CheckSquare, Square, Layers, Upload, Send, Play, ClipboardCheck, Wand2, Shuffle, Trash2, Pencil, Music, X } from 'lucide-react'
+import { CheckSquare, Square, Stack, UploadSimple, PaperPlaneTilt, Play, Queue, MagicWand, Shuffle, PencilSimple, X, Check, WarningCircle } from '@phosphor-icons/react'
+import { splitByTiempos } from '@shared/splitByTiempos'
+import { Segmentos, Interruptor, Progreso } from '../ui/mesa'
 import { phrasesApi, imagesApi, videosApi, imagesOutputApi, batchApi, BatchPair } from '../../api'
 import { Phrase, ImageItem } from '../../types'
 import { useVideoStore } from '../../store/videoStore'
@@ -379,7 +381,7 @@ export default function BatchGenerator() {
     runPostAction('Publicando n8n', (r) => r.mode === 'video' && !r.published, (r) => publishPatch(r.id, publishEnv))
 
   const sendPendingToApproval = () =>
-    runPostAction('Enviando a aprobación', (r) => r.mode === 'video' && !r.queued, (r) => queuePatch(r.id))
+    runPostAction('Enviando a la cola', (r) => r.mode === 'video' && !r.queued, (r) => queuePatch(r.id))
 
   const okCount = results.filter((r) => r.ok).length
   const errCount = results.filter((r) => !r.ok).length
@@ -391,399 +393,335 @@ export default function BatchGenerator() {
   const manualTotal = batchMode === 'phrases' ? selectedPhrases.length : selectedImages.length
 
   if (loadingData) {
-    return <p className="p-4 text-xs text-bone-700">Cargando...</p>
+    return <p className="px-5 py-6 text-ui text-hueso-3">Cargando el banco…</p>
   }
 
+  const total = planMode === 'auto' ? plannedPairs.length : manualTotal
+  const puedeGenerar = planMode === 'auto' ? plannedPairs.length > 0 : canGenerateManual
+  const pieza = mode === 'video' ? 'video' : 'imagen'
+  const piezas = mode === 'video' ? 'videos' : 'imágenes'
+
   return (
-    <div className="flex flex-col gap-4 p-4">
+    <div className="flex flex-col">
 
-      {/* Modo de planificación */}
-      <div className="flex gap-1 bg-carbon-700 rounded-lg p-1">
-        {(['auto', 'manual'] as PlanMode[]).map((pm) => (
-          <button
-            key={pm}
-            onClick={() => setPlanMode(pm)}
-            className={`flex-1 text-xs py-1.5 rounded-md transition-colors ${
-              planMode === pm ? 'bg-carbon-600 text-bone-500' : 'text-bone-700 hover:text-bone-500'
-            }`}
-          >
-            {pm === 'auto' ? 'Automático' : 'Manual'}
-          </button>
-        ))}
+      {/* Cómo se arma el lote */}
+      <div className="flex flex-col gap-3 border-b border-linea px-5 pb-4 pt-4 lg:pt-3">
+        <Segmentos
+          value={planMode}
+          options={[{ value: 'auto', label: 'Automático' }, { value: 'manual', label: 'Manual' }]}
+          onChange={setPlanMode}
+        />
+        <Segmentos
+          label="Parte de"
+          value={batchMode}
+          options={[{ value: 'phrases', label: 'Frases' }, { value: 'images', label: 'Imágenes' }]}
+          onChange={setBatchMode}
+        />
+        <p className="text-ui text-hueso-2">
+          {planMode === 'auto'
+            ? <>Toma las {batchMode === 'phrases' ? 'frases' : 'imágenes'} menos usadas, las empareja por afinidad y les pone audio por mood. Revisa la propuesta antes de generar.</>
+            : batchMode === 'phrases'
+              ? 'Elige las frases. A cada una se le asigna el fondo más afín.'
+              : 'Elige los fondos. A cada uno se le asigna la frase más afín.'}
+        </p>
       </div>
 
-      {/* Driver (por frases / por imágenes) */}
-      <div className="flex gap-1 bg-carbon-700 rounded-lg p-1">
-        <button
-          onClick={() => setBatchMode('phrases')}
-          className={`flex-1 text-xs py-1.5 rounded-md transition-colors ${
-            batchMode === 'phrases' ? 'bg-carbon-600 text-bone-500' : 'text-bone-700 hover:text-bone-500'
-          }`}
-        >
-          Por frases
-        </button>
-        <button
-          onClick={() => setBatchMode('images')}
-          className={`flex-1 text-xs py-1.5 rounded-md transition-colors ${
-            batchMode === 'images' ? 'bg-carbon-600 text-bone-500' : 'text-bone-700 hover:text-bone-500'
-          }`}
-        >
-          Por imágenes
-        </button>
-      </div>
-
-      {/* ── MODO AUTOMÁTICO ────────────────────────────────────────────────────── */}
+      {/* ── AUTOMÁTICO ─────────────────────────────────────────────────────────── */}
       {planMode === 'auto' && (
-        <>
-          <p className="text-[10px] text-bone-700">
-            Elige cuántas piezas y el sistema toma las {batchMode === 'phrases' ? 'frases' : 'imágenes'} menos
-            usadas, empareja por compatibilidad (el score manda) y asigna audio por mood. Revisa el preview antes de generar.
-          </p>
-
-          <div className="flex items-center gap-2">
-            <label className="text-[11px] text-bone-700">Cantidad</label>
-            <input
-              type="number" min={1} max={50} value={autoCount}
-              onChange={(e) => setAutoCount(Math.max(1, Math.min(50, parseInt(e.target.value) || 1)))}
-              className="w-16 bg-carbon-900 border border-carbon-600 rounded-lg px-2 py-1 text-xs text-bone-500 tabular-nums focus:border-gold-500 outline-none"
-            />
-            <button
-              onClick={() => setAllowRepeat((v) => !v)}
-              className={`text-[11px] px-2 py-1 rounded-lg transition-colors ${
-                allowRepeat ? 'bg-gold-500/20 text-gold-500' : 'bg-carbon-700 text-bone-700 hover:bg-carbon-600'
-              }`}
-              title="Permite repetir imagen cuando no alcanzan las compatibles"
-            >
-              Permitir repetir imagen
+        <div className="flex flex-col gap-3 border-b border-linea px-5 py-4">
+          <div className="flex items-end gap-3">
+            <label className="flex flex-col gap-1.5">
+              <span className="text-ui text-hueso-3">Piezas</span>
+              <input
+                type="number" min={1} max={50} value={autoCount}
+                onChange={(e) => setAutoCount(Math.max(1, Math.min(50, parseInt(e.target.value) || 1)))}
+                className="campo w-20 font-mono text-ui tabular-nums"
+              />
+            </label>
+            <button onClick={proposePlan} disabled={planning || isRunning} className="btn-sec flex-1">
+              <MagicWand size={16} />
+              {planning ? 'Proponiendo…' : `Proponer ${autoCount}`}
             </button>
           </div>
-
-          <button
-            onClick={proposePlan}
-            disabled={planning || isRunning}
-            className="flex items-center justify-center gap-2 bg-carbon-700 hover:bg-carbon-600 disabled:opacity-40 text-bone-500 text-xs font-medium rounded-lg px-3 py-2 transition-colors"
-          >
-            <Wand2 size={14} />
-            {planning ? 'Proponiendo…' : `Proponer lote de ${autoCount}`}
-          </button>
-
-          {planError && <p className="text-[11px] text-neon-red">{planError}</p>}
-
-          {/* Preview editable de pares */}
-          {plannedPairs.length > 0 && (
-            <section className="flex flex-col gap-1.5">
-              <h3 className="text-xs font-semibold uppercase tracking-widest text-bone-700">
-                Preview ({plannedPairs.length})
-              </h3>
-              <div className="flex flex-col gap-1.5 max-h-72 overflow-y-auto">
-                {plannedPairs.map((pp, idx) => (
-                  <div key={`${pp.phraseId}-${idx}`} className="flex items-center gap-2 bg-carbon-700 rounded-lg p-1.5">
-                    <img src={pp.imageUrl} alt="" className="w-9 h-14 object-cover rounded shrink-0 bg-carbon-900" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[11px] text-bone-500 leading-snug line-clamp-2">{pp.phraseText}</p>
-                      <div className="flex items-center gap-2 mt-0.5 text-[10px] text-bone-700">
-                        {pp.score > 0 && <span title="Compatibilidad">◈ {pp.score.toFixed(2)}</span>}
-                        {pp.audioTrack ? (
-                          <span className="flex items-center gap-0.5" title={pp.audioTrack}>
-                            <Music size={9} /> {pp.audioTextura ?? pp.audioMood ?? '—'}{typeof pp.audioEnergia === 'number' ? ` E${pp.audioEnergia}` : ''}
-                          </span>
-                        ) : (
-                          <span className="flex items-center gap-0.5 text-bone-700/60"><Music size={9} /> sin audio</span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-0.5 shrink-0">
-                      <button onClick={() => rerollPair(idx)} title="Re-rodar imagen" className="p-1 rounded text-bone-700 hover:text-gold-500"><Shuffle size={13} /></button>
-                      <button onClick={() => openPicker(idx)} title="Cambiar imagen a mano" className="p-1 rounded text-bone-700 hover:text-gold-500"><Pencil size={13} /></button>
-                      <button onClick={() => excludePair(idx)} title="Excluir del lote" className="p-1 rounded text-bone-700 hover:text-neon-red"><Trash2 size={13} /></button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
+          <Interruptor
+            label="Repetir fondo si faltan afines"
+            checked={allowRepeat}
+            onChange={setAllowRepeat}
+          />
+          {planError && (
+            <p role="alert" className="flex items-start gap-1.5 text-ui text-lacre">
+              <WarningCircle size={16} className="mt-0.5 shrink-0" /> {planError}
+            </p>
           )}
-        </>
+        </div>
       )}
 
-      {/* ── MODO MANUAL ────────────────────────────────────────────────────────── */}
+      {planMode === 'auto' && plannedPairs.length > 0 && (
+        <section aria-label="Propuesta del lote" className="border-b border-linea">
+          <p className="rotulo px-5 pb-1 pt-4">Propuesta · <span className="font-mono">{plannedPairs.length}</span></p>
+          <ul>
+            {plannedPairs.map((pp, idx) => {
+              const [a, b] = splitByTiempos(pp.phraseText)
+              return (
+                <li key={`${pp.phraseId}-${idx}`} className="group flex items-start gap-3 border-b border-linea px-5 py-3 last:border-0">
+                  <img src={pp.imageUrl} alt="" className="h-16 w-9 shrink-0 rounded-control border border-linea-2 bg-sala object-cover" />
+                  <div className="min-w-0 flex-1">
+                    <p className="line-clamp-3 text-ui text-hueso">
+                      {a}
+                      {b && <><span aria-hidden="true" className="mx-1 font-mono text-meta text-lacre">//</span><span className="text-hueso-2">{b}</span></>}
+                    </p>
+                    <p className="mt-1 flex flex-wrap gap-x-3 font-mono text-meta text-hueso-3">
+                      {pp.score > 0 && <span title="Afinidad entre frase y fondo">afinidad {pp.score.toFixed(2)}</span>}
+                      <span title={pp.audioTrack} className="truncate">
+                        {pp.audioTrack
+                          ? `${pp.audioTextura ?? pp.audioMood ?? pp.audioTrack.replace(/\.[^.]+$/, '').slice(0, 24)}${typeof pp.audioEnergia === 'number' ? ` · e${pp.audioEnergia}` : ''}`
+                          : 'sin audio'}
+                      </span>
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 opacity-60 transition-opacity duration-rapido ease-mesa focus-within:opacity-100 group-hover:opacity-100">
+                    <button onClick={() => rerollPair(idx)} aria-label="Otro fondo afín" title="Otro fondo afín" className="btn-fantasma p-1.5"><Shuffle size={16} /></button>
+                    <button onClick={() => openPicker(idx)} aria-label="Elegir fondo a mano" title="Elegir fondo a mano" className="btn-fantasma p-1.5"><PencilSimple size={16} /></button>
+                    <button onClick={() => excludePair(idx)} aria-label="Quitar del lote" title="Quitar del lote" className="btn-fantasma p-1.5 hover:text-lacre"><X size={16} /></button>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        </section>
+      )}
+
+      {/* ── MANUAL ─────────────────────────────────────────────────────────────── */}
       {planMode === 'manual' && batchMode === 'phrases' && (
-        <>
-          <p className="text-[10px] text-bone-700">
-            Selecciona las frases — la mejor imagen se asigna automáticamente por compatibilidad semántica.
-          </p>
-          <section>
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-xs font-semibold uppercase tracking-widest text-bone-700">
-                Frases ({selectedPhraseIds.size}/{phrases.length})
-              </h3>
-              <button onClick={toggleAllPhrases} className="text-xs text-bone-700 hover:text-bone-500 transition-colors">
-                {selectedPhraseIds.size === phrases.length ? 'Quitar todas' : 'Todas'}
-              </button>
-            </div>
-            <div className="flex flex-col gap-1 max-h-64 overflow-y-auto">
-              {phrases.map((p) => {
-                const selected = selectedPhraseIds.has(p.id)
-                return (
+        <section aria-label="Frases del lote" className="border-b border-linea">
+          <div className="flex items-center justify-between px-5 pb-1 pt-4">
+            <p className="rotulo">Frases · <span className="font-mono">{selectedPhraseIds.size}/{phrases.length}</span></p>
+            <button onClick={toggleAllPhrases} className="btn-fantasma">
+              {selectedPhraseIds.size === phrases.length ? 'Ninguna' : 'Todas'}
+            </button>
+          </div>
+          <ul className="max-h-80 overflow-y-auto">
+            {phrases.map((p) => {
+              const selected = selectedPhraseIds.has(p.id)
+              const usos = p.usageCount ?? 0
+              return (
+                <li key={p.id} className="border-b border-linea last:border-0">
                   <button
-                    key={p.id}
+                    role="checkbox"
+                    aria-checked={selected}
                     onClick={() => togglePhrase(p.id)}
-                    className={`flex items-start gap-2 text-left px-2 py-1.5 rounded-lg transition-colors text-xs ${
-                      selected ? 'bg-neon-red/20 text-neon-red' : 'bg-carbon-700 text-bone-700 hover:bg-carbon-600'
-                    }`}
+                    className={`flex w-full items-start gap-2.5 px-5 py-2.5 text-left transition-colors duration-rapido ease-mesa hover:bg-s2 ${selected ? 'bg-s2' : ''}`}
                   >
-                    {selected ? <CheckSquare size={13} className="mt-0.5 shrink-0" /> : <Square size={13} className="mt-0.5 shrink-0" />}
-                    <div className="min-w-0 flex-1">
-                      <span className="leading-relaxed line-clamp-2">{p.text}</span>
-                      {p.author && <p className="text-[10px] text-gold-500/80 mt-0.5">– {p.author} –</p>}
-                    </div>
-                    {(p.usageCount ?? 0) > 0 && (
-                      <span className="shrink-0 text-[10px] text-bone-700 bg-carbon-600 rounded px-1.5 py-0.5">×{p.usageCount}</span>
-                    )}
+                    {selected
+                      ? <CheckSquare size={16} weight="fill" className="mt-0.5 shrink-0 text-oro" />
+                      : <Square size={16} className="mt-0.5 shrink-0 text-hueso-3" />}
+                    <span className="min-w-0 flex-1">
+                      <span className={`line-clamp-2 text-ui ${selected ? 'text-hueso' : 'text-hueso-2'}`}>{p.text}</span>
+                      <span className="mt-0.5 block font-mono text-meta text-hueso-3">
+                        {usos === 0 ? 'sin usar' : `${usos} uso${usos !== 1 ? 's' : ''}`}{p.author ? ` · ${p.author}` : ''}
+                      </span>
+                    </span>
                   </button>
-                )
-              })}
-              {phrases.length === 0 && <p className="text-xs text-bone-700 py-2">No hay frases en el banco.</p>}
-            </div>
-          </section>
-        </>
+                </li>
+              )
+            })}
+            {phrases.length === 0 && <li className="px-5 py-4 text-ui text-hueso-3">No hay frases en el banco.</li>}
+          </ul>
+        </section>
       )}
 
       {planMode === 'manual' && batchMode === 'images' && (
-        <>
-          <p className="text-[10px] text-bone-700">
-            Selecciona las imágenes — la mejor frase se asigna automáticamente por compatibilidad semántica.
-          </p>
-          <section>
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-xs font-semibold uppercase tracking-widest text-bone-700">
-                Imágenes ({selectedImageIds.size}/{images.length})
-              </h3>
-              <button onClick={toggleAllImages} className="text-xs text-bone-700 hover:text-bone-500 transition-colors">
-                {selectedImageIds.size === images.length ? 'Quitar todas' : 'Todas'}
-              </button>
-            </div>
-            <div className="grid grid-cols-4 gap-1.5 max-h-52 overflow-y-auto">
-              {images.map((img) => {
-                const selected = selectedImageIds.has(img.id)
-                return (
-                  <button
-                    key={img.id}
-                    onClick={() => toggleImage(img.id)}
-                    className={`relative aspect-[9/16] overflow-hidden rounded border-2 transition-all ${
-                      selected ? 'border-neon-red' : 'border-transparent hover:border-carbon-600'
-                    }`}
-                  >
-                    <img src={img.url} alt={img.filename} className="w-full h-full object-cover" />
-                    {(img.usageCount ?? 0) > 0 && (
-                      <span className="absolute top-0.5 right-0.5 text-[9px] bg-carbon-900/80 text-bone-700 rounded px-1">×{img.usageCount}</span>
-                    )}
-                    {selected && (
-                      <div className="absolute inset-0 bg-neon-red/20 flex items-center justify-center">
-                        <CheckSquare size={16} className="text-neon-red" />
-                      </div>
-                    )}
-                  </button>
-                )
-              })}
-              {images.length === 0 && <p className="col-span-4 text-xs text-bone-700 py-2">No hay imágenes.</p>}
-            </div>
-          </section>
-        </>
+        <section aria-label="Fondos del lote" className="border-b border-linea">
+          <div className="flex items-center justify-between px-5 pb-2 pt-4">
+            <p className="rotulo">Fondos · <span className="font-mono">{selectedImageIds.size}/{images.length}</span></p>
+            <button onClick={toggleAllImages} className="btn-fantasma">
+              {selectedImageIds.size === images.length ? 'Ninguno' : 'Todos'}
+            </button>
+          </div>
+          <div className="grid max-h-80 grid-cols-4 gap-1.5 overflow-y-auto px-5 pb-4">
+            {images.map((img) => {
+              const selected = selectedImageIds.has(img.id)
+              return (
+                <button
+                  key={img.id}
+                  role="checkbox"
+                  aria-checked={selected}
+                  aria-label={img.filename}
+                  onClick={() => toggleImage(img.id)}
+                  className={`relative aspect-[9/16] overflow-hidden rounded-control border transition-colors duration-rapido ease-mesa ${
+                    selected ? 'border-oro ring-1 ring-oro' : 'border-linea-2 hover:border-borde-control'
+                  }`}
+                >
+                  <img src={img.url} alt="" className="h-full w-full object-cover" loading="lazy" decoding="async" />
+                  {(img.usageCount ?? 0) > 0 && (
+                    <span className="absolute right-0.5 top-0.5 rounded-[4px] bg-velo px-1 font-mono text-meta text-hueso-2">×{img.usageCount}</span>
+                  )}
+                  {selected && (
+                    <CheckSquare size={18} weight="fill" className="absolute bottom-1 left-1 text-oro" />
+                  )}
+                </button>
+              )
+            })}
+            {images.length === 0 && <p className="col-span-4 py-2 text-ui text-hueso-3">No hay fondos en el banco.</p>}
+          </div>
+        </section>
       )}
 
-      {/* Opciones post-generación */}
-      <section className="flex flex-col gap-2">
-        <button
-          onClick={() => setUploadToDrive((v) => !v)}
-          className={`flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs transition-colors ${
-            uploadToDrive ? 'bg-gold-500/20 text-gold-500' : 'bg-carbon-700 text-bone-700 hover:bg-carbon-600'
-          }`}
+      {/* Al terminar cada pieza */}
+      <div className="flex flex-col gap-1 border-b border-linea px-5 py-3">
+        <p className="rotulo pb-1">Al terminar cada pieza</p>
+        <Interruptor label="Subir a Google Drive" checked={uploadToDrive} onChange={setUploadToDrive} />
+        <Interruptor
+          label="Publicar ya vía n8n"
+          checked={publishToN8n && mode === 'video'}
+          onChange={setPublishToN8n}
+          disabled={mode !== 'video'}
+          title="Carril express: publica sin pasar por la cola"
         >
-          <Upload size={13} />
-          Subir a Google Drive
-        </button>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setPublishToN8n((v) => !v)}
-            disabled={mode !== 'video'}
-            className={`flex-1 flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs transition-colors ${
-              publishToN8n && mode === 'video'
-                ? 'bg-gold-500/20 text-gold-500'
-                : 'bg-carbon-700 text-bone-700 hover:bg-carbon-600 disabled:opacity-40 disabled:cursor-not-allowed'
-            }`}
-          >
-            <Send size={13} />
-            Publicar vía n8n
-          </button>
           {publishToN8n && mode === 'video' && (
             <select
               value={publishEnv}
               onChange={(e) => setPublishEnv(e.target.value as 'test' | 'prod')}
-              className="bg-carbon-700 text-bone-700 text-xs rounded-lg px-2 py-1.5 border border-carbon-600"
+              aria-label="Entorno de publicación"
+              className="campo w-auto py-1 text-ui"
             >
               <option value="test">Test</option>
               <option value="prod">Producción</option>
             </select>
           )}
-        </div>
-      </section>
+        </Interruptor>
+      </div>
 
-      {/* Botón generar */}
-      {planMode === 'auto' ? (
+      {/* Generar el lote. Secundario a propósito: el único relleno de la pantalla
+          es «Generar reel» del escenario (DESIGN.md §6). */}
+      <div className="flex flex-col gap-2 border-b border-linea px-5 py-4">
         <button
-          onClick={generatePlan}
-          disabled={isRunning || plannedPairs.length === 0}
-          className="flex items-center justify-center gap-2 bg-gold-500 hover:bg-gold-600 disabled:bg-carbon-600 disabled:cursor-not-allowed text-bone-500 text-sm font-medium rounded-xl px-4 py-2.5 transition-colors"
+          onClick={planMode === 'auto' ? generatePlan : generateManual}
+          disabled={isRunning || !puedeGenerar}
+          className="btn-sec h-10 w-full text-body"
         >
-          <Layers size={15} />
+          <Stack size={18} />
           {isRunning
-            ? `${progress!.phase || 'Generando'} ${progress!.current}/${progress!.total}...`
-            : `Generar ${plannedPairs.length} ${mode === 'video' ? 'videos' : 'imágenes'}`}
+            ? <>{progress!.phase || 'Generando'} <span className="font-mono">{progress!.current}/{progress!.total}</span></>
+            : total > 0 ? `Generar ${total} ${total === 1 ? pieza : piezas}` : `Generar ${piezas}`}
         </button>
-      ) : (
-        <button
-          onClick={generateManual}
-          disabled={isRunning || !canGenerateManual}
-          className="flex items-center justify-center gap-2 bg-gold-500 hover:bg-gold-600 disabled:bg-carbon-600 disabled:cursor-not-allowed text-bone-500 text-sm font-medium rounded-xl px-4 py-2.5 transition-colors"
-        >
-          <Layers size={15} />
-          {isRunning
-            ? `${progress!.phase || 'Generando'} ${progress!.current}/${progress!.total}...`
-            : `Generar ${manualTotal} ${mode === 'video' ? 'videos' : 'imágenes'}`}
-        </button>
-      )}
-
-      {/* Barra de progreso */}
-      {isRunning && (
-        <div className="w-full bg-carbon-700 rounded-full h-1.5">
-          <div
-            className="bg-neon-red h-1.5 rounded-full transition-all"
-            style={{ width: `${(progress!.current / progress!.total) * 100}%` }}
-          />
-        </div>
-      )}
+        {isRunning && <Progreso actual={progress!.current} total={progress!.total} label="Progreso del lote" />}
+      </div>
 
       {/* Resultados */}
       {results.length > 0 && (
-        <section>
-          <p className="text-xs text-bone-700 mb-2">
-            {okCount} generado{okCount !== 1 ? 's' : ''}
-            {errCount > 0 && <span className="text-neon-red"> · {errCount} error{errCount !== 1 ? 'es' : ''}</span>}
+        <section aria-label="Resultado del lote" className="flex flex-col gap-3 px-5 py-4">
+          <p className="text-ui text-hueso-2">
+            <span className="font-mono">{okCount}</span> generada{okCount !== 1 ? 's' : ''}
+            {errCount > 0 && <span className="text-lacre"> · <span className="font-mono">{errCount}</span> con error</span>}
           </p>
 
           {okCount > 0 && (
-            <div className="flex flex-col gap-2 mb-2">
+            <div className="flex flex-wrap gap-2">
               {mode === 'video' && (
-                <button
-                  onClick={sendPendingToApproval}
-                  disabled={isRunning || pendingQueue === 0}
-                  className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium bg-gold-500 hover:bg-gold-600 text-bone-500 disabled:bg-carbon-600 disabled:text-bone-700 disabled:cursor-not-allowed transition-colors"
-                >
-                  <ClipboardCheck size={14} />
-                  Enviar a aprobación{pendingQueue > 0 ? ` (${pendingQueue})` : ''}
+                <button onClick={sendPendingToApproval} disabled={isRunning || pendingQueue === 0} className="btn-sec">
+                  <Queue size={16} /> Enviar a la cola{pendingQueue > 0 && <span className="font-mono text-meta text-hueso-3">{pendingQueue}</span>}
                 </button>
               )}
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={uploadPendingToDrive}
-                  disabled={isRunning || pendingDrive === 0}
-                  className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-xs bg-carbon-700 text-bone-700 hover:bg-carbon-600 hover:text-gold-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                  <Upload size={12} />
-                  Subir a Drive{pendingDrive > 0 ? ` (${pendingDrive})` : ''}
-                </button>
-                {mode === 'video' && (
-                  <>
-                    <button
-                      onClick={publishPending}
-                      disabled={isRunning || pendingPublish === 0}
-                      title="Carril express: publica ya, saltándose la cola"
-                      className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-xs bg-carbon-700 text-bone-700 hover:bg-carbon-600 hover:text-gold-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                    >
-                      <Send size={12} />
-                      Publicar ya{pendingPublish > 0 ? ` (${pendingPublish})` : ''}
-                    </button>
-                    <select
-                      value={publishEnv}
-                      onChange={(e) => setPublishEnv(e.target.value as 'test' | 'prod')}
-                      disabled={isRunning}
-                      className="bg-carbon-700 text-bone-700 text-xs rounded-lg px-1.5 py-1.5 border border-carbon-600 disabled:opacity-40"
-                    >
-                      <option value="test">Test</option>
-                      <option value="prod">Prod</option>
-                    </select>
-                  </>
-                )}
-              </div>
+              <button onClick={uploadPendingToDrive} disabled={isRunning || pendingDrive === 0} className="btn-sec">
+                <UploadSimple size={16} /> Drive{pendingDrive > 0 && <span className="font-mono text-meta text-hueso-3">{pendingDrive}</span>}
+              </button>
+              {mode === 'video' && (
+                <div className="flex gap-1">
+                  <button
+                    onClick={publishPending}
+                    disabled={isRunning || pendingPublish === 0}
+                    title="Carril express: publica ya, saltándose la cola"
+                    className="btn-sec"
+                  >
+                    <PaperPlaneTilt size={16} /> Publicar ya{pendingPublish > 0 && <span className="font-mono text-meta text-hueso-3">{pendingPublish}</span>}
+                  </button>
+                  <select
+                    value={publishEnv}
+                    onChange={(e) => setPublishEnv(e.target.value as 'test' | 'prod')}
+                    disabled={isRunning}
+                    aria-label="Entorno de publicación"
+                    className="campo w-auto py-1 text-ui"
+                  >
+                    <option value="test">Test</option>
+                    <option value="prod">Prod</option>
+                  </select>
+                </div>
+              )}
             </div>
           )}
 
-          <div className="flex flex-col gap-1 max-h-48 overflow-y-auto">
+          <ul className="max-h-64 overflow-y-auto">
             {results.map((r, i) => (
-              <div key={i} className={`flex flex-col gap-1 px-2 py-1.5 rounded-lg text-xs ${r.ok ? 'bg-carbon-700' : 'bg-red-900/20'}`}>
-                <div className="flex items-center gap-2">
-                  <span className={`shrink-0 ${r.ok ? 'text-gold-500' : 'text-neon-red'}`}>{r.ok ? '✓' : '✗'}</span>
+              <li key={i} className="flex flex-col gap-0.5 border-b border-linea py-2 last:border-0">
+                <div className="flex items-center gap-2 text-ui">
+                  {r.ok
+                    ? <Check size={16} className="shrink-0 text-hueso-2" aria-label="Generada" />
+                    : <WarningCircle size={16} className="shrink-0 text-lacre" aria-label="Error" />}
                   {r.ok ? (
-                    <div className="flex items-center gap-2 min-w-0">
+                    <>
                       {r.mode === 'video' ? (
                         <button
                           onClick={() => setPreview({ src: r.publicUrl, name: r.filename })}
-                          className="flex items-center gap-1 text-gold-500 hover:underline truncate"
+                          className="flex min-w-0 items-center gap-1 text-hueso transition-colors duration-rapido ease-mesa hover:text-oro"
                         >
-                          <Play size={11} className="shrink-0" /> {r.filename}
+                          <Play size={14} className="shrink-0" /> <span className="truncate font-mono text-meta">{r.filename}</span>
                         </button>
                       ) : (
-                        <a href={r.publicUrl} target="_blank" rel="noreferrer" className="text-gold-500 hover:underline truncate">
+                        <a href={r.publicUrl} target="_blank" rel="noreferrer" className="truncate font-mono text-meta text-hueso hover:text-oro">
                           {r.filename}
                         </a>
                       )}
-                      {r.driveUrl && <span title="Subido a Drive" className="shrink-0 inline-flex"><Upload size={11} className="text-bone-700" /></span>}
-                      {r.queued && <span title="Enviado a aprobación" className="shrink-0 inline-flex"><ClipboardCheck size={11} className="text-gold-500" /></span>}
-                      {r.published && <span title="Publicado vía n8n (express)" className="shrink-0 inline-flex"><Send size={11} className="text-bone-700" /></span>}
-                    </div>
+                      <span className="ml-auto flex shrink-0 gap-1.5 text-hueso-3">
+                        {r.driveUrl && <UploadSimple size={14} aria-label="En Drive" />}
+                        {r.queued && <Queue size={14} className="text-oro" aria-label="En la cola" />}
+                        {r.published && <PaperPlaneTilt size={14} aria-label="Publicada" />}
+                      </span>
+                    </>
                   ) : (
-                    <span className="text-neon-red truncate">{r.error || 'Error desconocido'}</span>
+                    <span className="truncate text-lacre">{r.error || 'Falló sin decir por qué'}</span>
                   )}
                 </div>
                 {(r.driveError || r.publishError || r.queueError) && (
-                  <div className="pl-5 flex flex-col gap-0.5">
-                    {r.driveError && <span className="text-neon-red/90 text-[10px]">⚠ Drive: {r.driveError}</span>}
-                    {r.queueError && <span className="text-neon-red/90 text-[10px]">⚠ Aprobación: {r.queueError}</span>}
-                    {r.publishError && <span className="text-neon-red/90 text-[10px]">⚠ n8n: {r.publishError}</span>}
+                  <div className="flex flex-col pl-6 text-meta text-lacre">
+                    {r.driveError && <span>Drive: {r.driveError}</span>}
+                    {r.queueError && <span>Cola: {r.queueError}</span>}
+                    {r.publishError && <span>n8n: {r.publishError}</span>}
                   </div>
                 )}
-              </div>
+              </li>
             ))}
-          </div>
+          </ul>
         </section>
       )}
 
-      {/* Mini-picker para cambiar la imagen de un par a mano */}
+      {/* Elegir el fondo de un par a mano */}
       {picker !== null && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-velo p-2 sm:p-4"
           onClick={(e) => { if (e.target === e.currentTarget) setPicker(null) }}
+          onKeyDown={(e) => { if (e.key === 'Escape') setPicker(null) }}
         >
-          <div className="relative w-full max-w-lg bg-carbon-800 rounded-xl overflow-hidden shadow-2xl flex flex-col max-h-[80vh]">
-            <div className="flex items-center gap-2.5 px-4 py-3 border-b border-carbon-700 shrink-0">
-              <h2 className="text-sm font-semibold text-bone-500">Elegir imagen</h2>
-              <span className="text-[11px] text-bone-700">ordenadas por compatibilidad</span>
-              <button onClick={() => setPicker(null)} className="ml-auto p-1.5 rounded-lg bg-carbon-700/80 text-bone-700 hover:text-bone-500"><X size={14} /></button>
+          <div role="dialog" aria-modal="true" aria-label="Elegir fondo" className="relative flex max-h-[85dvh] w-full max-w-lg flex-col overflow-hidden rounded-panel border border-linea-2 bg-s1">
+            <div className="flex shrink-0 items-center gap-2.5 border-b border-linea px-4 py-3">
+              <h2 className="text-body font-medium text-hueso">Elegir fondo</h2>
+              <span className="font-mono text-meta text-hueso-3">por afinidad</span>
+              <button autoFocus onClick={() => setPicker(null)} aria-label="Cerrar" className="btn-fantasma ml-auto p-1.5"><X size={16} /></button>
             </div>
             {pickerLoading ? (
-              <p className="p-4 text-xs text-bone-700">Buscando compatibles…</p>
+              <p className="p-4 text-ui text-hueso-3">Buscando los más afines…</p>
             ) : (
-              <div className="overflow-y-auto p-3 grid grid-cols-4 gap-1.5">
+              <div className="grid grid-cols-4 gap-1.5 overflow-y-auto p-3">
                 {pickerImages.map((img) => (
                   <button
                     key={img.id}
                     onClick={() => setPairImage(picker, img)}
-                    style={{ aspectRatio: '9 / 16' }}
-                    className="relative w-full overflow-hidden rounded border-2 border-transparent hover:border-gold-500 transition-all"
+                    aria-label={img.filename}
+                    className="relative aspect-[9/16] w-full overflow-hidden rounded-control border border-linea-2 transition-colors duration-rapido ease-mesa hover:border-oro"
                   >
-                    <img src={img.url} alt={img.filename} className="absolute inset-0 w-full h-full object-cover" />
+                    <img src={img.url} alt="" className="absolute inset-0 h-full w-full object-cover" loading="lazy" decoding="async" />
                     {(img.usageCount ?? 0) > 0 && (
-                      <span className="absolute top-0.5 right-0.5 text-[9px] bg-carbon-900/80 text-bone-700 rounded px-1">×{img.usageCount}</span>
+                      <span className="absolute right-0.5 top-0.5 rounded-[4px] bg-velo px-1 font-mono text-meta text-hueso-2">×{img.usageCount}</span>
                     )}
                   </button>
                 ))}

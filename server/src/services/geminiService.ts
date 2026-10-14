@@ -2,6 +2,7 @@ import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai'
 import fs from 'fs'
 import path from 'path'
 import { config } from '../config'
+import { GoogleAuth } from 'google-auth-library'
 
 /**
  * Dos capas de Gemini.
@@ -33,6 +34,18 @@ function getClient(tier: GeminiTier = 'paid'): GoogleGenerativeAI {
 function puedeCaerAPago(tier: GeminiTier): boolean {
   return tier === 'free' && !!config.google.apiKeyFree && !!config.google.apiKey
 }
+
+/**
+ * Topes de red. Sin ellos, un `fetch` que abre conexión y no recibe respuesta espera
+ * PARA SIEMPRE — pasó el 2026-08-19: `/api/phrases/embed-all` se quedó clavado en la
+ * frase 9 de 28 sin error, sin log y sin devolver nunca, y el lote entero con él.
+ *
+ * Un `AbortError` NO es un 429, así que `withRetry` no lo reintenta: sube tal cual y
+ * quien llama lo anota y pasa a la siguiente. Es lo que se quiere — perder una frase
+ * en voz alta es infinitamente mejor que colgar las veintiocho en silencio.
+ */
+const TOPE_EMBED_MS = 90_000
+const TOPE_TEXTO_MS = 180_000
 
 async function withRetry<T>(fn: () => Promise<T>, retries = 3, delayMs = 8000): Promise<T> {
   try {
@@ -211,22 +224,81 @@ const PHRASE_ANALYSIS_SCHEMA = {
   required: ['temas', 'metaforasVisuales', 'nivelEnergia', 'paletaIdeal', 'mood', 'moodCategory'],
 }
 
+// ── Persona gramatical (norma de marca desde el 2026-08-02) ───────────────────
+
+export type PersonaGramatical = 'segunda' | 'tercera'
+
+export interface PersonaClasificada {
+  persona: PersonaGramatical
+  /** La palabra concreta que lo delata. Sirve para auditar sin releer la frase. */
+  marca: string
+}
+
+const PERSONA_SCHEMA = {
+  type: SchemaType.ARRAY,
+  items: {
+    type: SchemaType.OBJECT,
+    properties: {
+      n: { type: SchemaType.NUMBER, description: 'Número de la frase, tal cual viene en la lista.' },
+      persona: {
+        type: SchemaType.STRING,
+        description: 'segunda = se dirige al lector (tú, te, tu, tus, ti, o verbo en 2.ª como "eres"/"tienes"/"deja de"). tercera = habla de la gente en general, sin dirigirse a nadie ("el que", "quien", "uno", "nadie", "muchos", impersonal con "se").',
+      },
+      marca: { type: SchemaType.STRING, description: 'La palabra exacta de la frase que lo delata.' },
+    },
+    required: ['n', 'persona', 'marca'],
+  },
+}
+
+/**
+ * Clasifica la persona gramatical de un lote de frases (máx. ~25 por llamada).
+ *
+ * Devuelve una entrada por frase, en el mismo orden. Se pide la **marca** —la
+ * palabra que lo delata— a propósito: con el histórico de este proyecto (Gemini
+ * ha fallado tres veces etiquetando con vocabulario cerrado) una etiqueta sin
+ * evidencia no es auditable, y auditar 118 frases a mano no era viable.
+ *
+ * ⚠️ Esto NO decide solo: el script lo cruza con una heurística gramatical y solo
+ * escribe donde ambos coinciden.
+ */
+export async function classifyPersona(frases: string[]): Promise<PersonaClasificada[]> {
+  const lista = frases.map((f, i) => `${i + 1}. ${f}`).join('\n')
+  const prompt = `Clasifica la PERSONA GRAMATICAL de cada frase.
+
+- "segunda": la frase se dirige al lector. Señales: tú, te, ti, tu, tus, contigo, o un verbo en 2.ª persona ("eres", "tienes", "puedes", "deja de", "mira").
+- "tercera": la frase habla de la gente en general, sin dirigirse a nadie. Señales: "el que", "quien", "uno", "nadie", "muchos", "hay quien", o impersonal con "se" ("se puede", "se nota").
+
+Fíjate solo en la GRAMÁTICA, no en el tono. Devuelve una entrada por frase, con la palabra exacta que lo delata.
+
+${lista}`
+
+  const out = JSON.parse(await generarTexto(prompt, {
+    generationConfig: {
+      temperature: 0,
+      responseMimeType: 'application/json',
+      responseSchema: PERSONA_SCHEMA as any,
+    },
+  })) as { n: number; persona: string; marca: string }[]
+
+  return frases.map((_, i) => {
+    const hit = out.find((o) => o.n === i + 1)
+    const persona: PersonaGramatical = hit?.persona === 'segunda' ? 'segunda' : 'tercera'
+    return { persona, marca: hit?.marca ?? '' }
+  })
+}
+
 /** Analiza una frase en su capa conceptual+simbólica (para matching con imágenes). */
 export async function analyzePhraseStructured(phrase: string): Promise<PhraseAnalysis> {
-  const model = getClient().getGenerativeModel({
-    model: 'gemini-3.5-flash',
-    generationConfig: {
-      responseMimeType: 'application/json',
-      responseSchema: PHRASE_ANALYSIS_SCHEMA as any,
-    },
-  })
+  const generationConfig = {
+    responseMimeType: 'application/json',
+    responseSchema: PHRASE_ANALYSIS_SCHEMA as any,
+  }
 
   const prompt = `Frase motivacional: "${phrase}"
 
 Analízala para encontrarle la imagen de fondo ideal. Extrae sus temas/conceptos, las metáforas visuales que la representarían (símbolos concretos que un banco de imágenes podría tener), la energía que pide, la paleta ideal y su mood. Piensa qué se VE en una imagen que ilustre esta frase, no solo qué se siente.`
 
-  const result = await withRetry(() => model.generateContent(prompt))
-  const out = JSON.parse(result.response.text()) as PhraseAnalysis
+  const out = JSON.parse(await generarTexto(prompt, { generationConfig })) as PhraseAnalysis
   if (!MOOD_CATEGORIES.includes(out.moodCategory as any)) out.moodCategory = 'motivador'
   return out
 }
@@ -251,14 +323,11 @@ export function buildPhraseDocument(a: PhraseAnalysis): string {
 }
 
 export async function extractMoodDescription(phrase: string): Promise<string> {
-  const model = getClient().getGenerativeModel({ model: 'gemini-3.5-flash' })
-
   const prompt = `Dada esta frase motivacional: "${phrase}"
 
 Devuelve únicamente 1-2 frases en español describiendo el mood visual y emocional que debería tener la imagen de fondo ideal para acompañarla. Escríbelo en registro descriptivo/perceptual (atmósfera, sensación, tonos), no imperativo. Sin explicaciones, sin comillas, solo la descripción.`
 
-  const result = await withRetry(() => model.generateContent(prompt))
-  return result.response.text().trim()
+  return (await generarTexto(prompt)).trim()
 }
 
 // ── Análisis de audio (emparejamiento por energía + mood — 2026-07-25) ─────────
@@ -350,13 +419,141 @@ La textura y la descripción deben coincidir: si describes guitarra acústica, l
   return parsed
 }
 
+// ── Lectura de la frase de un reel cosechado (2026-08-18) ─────────────────────
+// La procedencia de un corte de audio es la frase que se leía EN PANTALLA en el
+// reel del que salió. No está en el caption ni en los metadatos: solo en los
+// píxeles, así que se lee de los fotogramas.
+//
+// Van VARIOS fotogramas a propósito: el texto de un reel suele aparecer con
+// retardo, cambiar a media pieza o partirse en dos tiempos que nunca coinciden en
+// el mismo instante. Con un solo frame se cosecharía media frase.
+//
+// La propuesta NO se persiste sola: David la confirma en el panel 🎵, igual que
+// con las etiquetas. Un OCR malo aquí no rompe un vídeo — envenena el
+// emparejamiento de esa pista para siempre y en silencio.
+export async function readReelPhrase(
+  frames: Buffer[],
+  tier: GeminiTier = 'paid'
+): Promise<string> {
+  if (frames.length === 0) return ''
+  const model = getClient(tier).getGenerativeModel({ model: 'gemini-3.5-flash' })
+  const prompt = `Estos fotogramas son de UN MISMO reel motivacional, en orden cronológico.
+
+Transcribe LITERALMENTE el texto principal sobreimpreso que se lee en él, uniendo lo que aparezca en distintos fotogramas si el texto se muestra por partes (es normal que la frase salga en dos tiempos).
+
+Reglas:
+- Devuelve SOLO la frase, sin comillas, sin explicaciones, sin nombres de cuenta.
+- Respeta la puntuación y los saltos de tiempo con un punto si los hay.
+- IGNORA: el @usuario, el logo o marca de agua, los textos de la interfaz de Instagram (me gusta, comentarios, "Seguir", "Audio original"), los subtítulos automáticos y cualquier llamada a la acción tipo "sígueme".
+- IGNORA TAMBIÉN la atribución del autor si la hay (por ejemplo "- Séneca -", "— Marco Aurelio", "Epicteto"): devuelve solo la frase. El nombre no es parte de lo que se compara.
+- Si no hay texto sobreimpreso legible, devuelve exactamente: SIN_TEXTO`
+
+  const partes = frames.map((f) => ({
+    inlineData: { mimeType: 'image/jpeg', data: f.toString('base64') },
+  }))
+  const result = await withRetry(() => model.generateContent([prompt, ...partes]))
+  const texto = result.response.text().trim().replace(/^["'“”]|["'“”]$/g, '').trim()
+  return texto === 'SIN_TEXTO' ? '' : texto
+}
+
 // taskType SEMANTIC_SIMILARITY = correcto para matching simétrico frase↔imagen
 // (ambos lados describen "lo mismo" en registro comparable). Cambiarlo invalida
 // los vectores guardados → hay que re-vectorizar todo el banco.
+interface GenOpts {
+  model?: string
+  systemInstruction?: string
+  generationConfig?: Record<string, unknown>
+  tier?: GeminiTier
+}
+
+/**
+ * Genera texto y devuelve la respuesta CRUDA (string). Enruta por tier:
+ *   'paid' + Vertex configurado → Vertex REST en `global`
+ *   resto                       → AI Studio con el SDK de siempre
+ *
+ * El tier 'free' se queda a propósito en AI Studio: es gratis, permanente y el
+ * trabajo a granel tolera que Google entrene con él (ver config.ts). Vertex es
+ * para contenido propio.
+ *
+ * Verificado el 2026-08-18: Vertex acepta el MISMO `responseSchema` que produce
+ * `@google/generative-ai` —con los tipos en minúsculas o en mayúsculas, da igual—
+ * así que los esquemas existentes se pasan sin tocar.
+ */
+async function generarTexto(prompt: string, opts: GenOpts = {}): Promise<string> {
+  const tier = opts.tier ?? 'paid'
+  const modelo = opts.model ?? 'gemini-3.5-flash'
+
+  if (tier === 'paid' && usaVertex()) {
+    const { project, textLocation } = config.google.vertex
+    const host = textLocation === 'global' ? 'aiplatform.googleapis.com' : `${textLocation}-aiplatform.googleapis.com`
+    const url = `https://${host}/v1/projects/${project}/locations/${textLocation}/publishers/google/models/${modelo}:generateContent`
+
+    const cuerpo: Record<string, unknown> = {
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    }
+    if (opts.systemInstruction) cuerpo.systemInstruction = { parts: [{ text: opts.systemInstruction }] }
+    if (opts.generationConfig) cuerpo.generationConfig = opts.generationConfig
+
+    const json = await withRetry(async () => {
+      const { token } = await (await vertexAuth().getClient()).getAccessToken()
+      const r = await fetch(url, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(cuerpo),
+        signal: AbortSignal.timeout(TOPE_TEXTO_MS),
+      })
+      if (!r.ok) {
+        const e: any = new Error(`Vertex ${r.status}: ${(await r.text()).slice(0, 400)}`)
+        e.status = r.status
+        throw e
+      }
+      return r.json() as Promise<any>
+    })
+
+    const texto = json?.candidates?.[0]?.content?.parts?.map((x: any) => x.text).filter(Boolean).join('')
+    if (!texto) throw new Error(`Vertex no devolvió texto: ${JSON.stringify(json).slice(0, 300)}`)
+    return texto
+  }
+
+  const model = getClient(tier).getGenerativeModel({
+    model: modelo,
+    ...(opts.systemInstruction ? { systemInstruction: opts.systemInstruction } : {}),
+    ...(opts.generationConfig ? { generationConfig: opts.generationConfig as any } : {}),
+  })
+  const result = await withRetry(() => model.generateContent(prompt))
+  return result.response.text()
+}
+
+type TaskType = 'SEMANTIC_SIMILARITY' | 'RETRIEVAL_DOCUMENT' | 'RETRIEVAL_QUERY'
+
+// ¿Hay Vertex configurado? Si falta cualquiera de los dos, se cae a AI Studio.
+// Es el interruptor de vuelta atrás: se apaga vaciando VERTEX_PROJECT en el .env.
+function usaVertex(): boolean {
+  return Boolean(config.google.vertex.project && config.google.vertex.credentials)
+}
+
+// UNA sola instancia: GoogleAuth cachea el token y lo renueva solo. Crearla por
+// llamada haría un intercambio JWT por cada frase — con 118 frases eso son 118
+// handshakes de más.
+let _vertexAuth: GoogleAuth | null = null
+function vertexAuth(): GoogleAuth {
+  if (!_vertexAuth) {
+    _vertexAuth = new GoogleAuth({
+      keyFile: config.google.vertex.credentials,
+      scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+    })
+  }
+  return _vertexAuth
+}
+
 export async function embedText(
   text: string,
-  taskType: 'SEMANTIC_SIMILARITY' | 'RETRIEVAL_DOCUMENT' | 'RETRIEVAL_QUERY' = 'SEMANTIC_SIMILARITY',
+  taskType: TaskType = 'SEMANTIC_SIMILARITY',
 ): Promise<Float32Array> {
+  return usaVertex() ? embedTextVertex(text, taskType) : embedTextAiStudio(text, taskType)
+}
+
+async function embedTextAiStudio(text: string, taskType: TaskType): Promise<Float32Array> {
   if (!config.google.apiKey) throw new Error('GOOGLE_API_KEY no está configurada')
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key=${config.google.apiKey}`
   const res = await withRetry(async () => {
@@ -364,6 +561,7 @@ export async function embedText(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content: { parts: [{ text }] }, taskType }),
+      signal: AbortSignal.timeout(TOPE_EMBED_MS),
     })
     if (!r.ok) {
       const err = await r.text()
@@ -374,6 +572,41 @@ export async function embedText(
     return r.json()
   })
   return new Float32Array((res as any).embedding.values)
+}
+
+// Vertex sirve el MISMO gemini-embedding-001, pero con otra forma: endpoint
+// `:predict` con `instances` (no `:embedContent` con `content`), y el parámetro
+// va en snake_case (`task_type`). Los vectores salen idénticos — verificado con
+// scripts/vertex-comparar-embeddings.ts.
+async function embedTextVertex(text: string, taskType: TaskType): Promise<Float32Array> {
+  const { project, location } = config.google.vertex
+  const host = location === 'global' ? 'aiplatform.googleapis.com' : `${location}-aiplatform.googleapis.com`
+  const url =
+    `https://${host}/v1/projects/${project}/locations/${location}` +
+    `/publishers/google/models/gemini-embedding-001:predict`
+
+  const res = await withRetry(async () => {
+    const { token } = await (await vertexAuth().getClient()).getAccessToken()
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ instances: [{ content: text, task_type: taskType }] }),
+      signal: AbortSignal.timeout(TOPE_EMBED_MS),
+    })
+    if (!r.ok) {
+      const err = await r.text()
+      const e: any = new Error(`Vertex ${r.status}: ${err}`)
+      if (r.status === 429) e.status = 429
+      throw e
+    }
+    return r.json()
+  })
+
+  const valores = (res as any)?.predictions?.[0]?.embeddings?.values
+  if (!Array.isArray(valores)) {
+    throw new Error(`Respuesta inesperada de Vertex: ${JSON.stringify(res).slice(0, 300)}`)
+  }
+  return new Float32Array(valores)
 }
 
 // ── Copies de publicación (Fase 4) ────────────────────────────────────────────
@@ -471,29 +704,27 @@ export interface VideoCopies {
 
 /** Genera el caption de IG y el metadata de YouTube para una frase (Fase 4). */
 export async function generateCopies(phrase: string): Promise<VideoCopies> {
-  const igModel = getClient().getGenerativeModel({
-    model: 'gemini-3.5-flash',
+  const igOpts = {
     systemInstruction: IG_COPY_SYSTEM,
     generationConfig: { temperature: 0.8, topP: 0.9 },
-  })
-  const ytModel = getClient().getGenerativeModel({
-    model: 'gemini-3.5-flash',
+  }
+  const ytOpts = {
     systemInstruction: YT_COPY_SYSTEM,
     generationConfig: {
       temperature: 0.6,
       responseMimeType: 'application/json',
       responseSchema: YT_META_SCHEMA as any,
     },
-  })
+  }
 
   const [ig, yt] = await Promise.all([
-    withRetry(() => igModel.generateContent(phrase)),
-    withRetry(() => ytModel.generateContent(phrase)),
+    generarTexto(phrase, igOpts),
+    generarTexto(phrase, ytOpts),
   ])
 
   return {
-    captionIG: appendIgHashtags(ig.response.text().trim()),
-    ytMeta: yt.response.text().trim(),
+    captionIG: appendIgHashtags(ig.trim()),
+    ytMeta: yt.trim(),
   }
 }
 
@@ -570,8 +801,7 @@ export async function generateCarouselScript(
   opts: { fuente?: CarouselFuente; conHistoria?: boolean } = {}
 ): Promise<CarouselSlide[]> {
   const n = Math.min(8, Math.max(5, Math.round(nSlides)))
-  const model = getClient().getGenerativeModel({
-    model: 'gemini-3.5-flash',
+  const genOpts = {
     systemInstruction: CAROUSEL_SCRIPT_SYSTEM,
     generationConfig: {
       temperature: 0.85,
@@ -579,7 +809,7 @@ export async function generateCarouselScript(
       responseMimeType: 'application/json',
       responseSchema: CAROUSEL_SCRIPT_SCHEMA as any,
     },
-  })
+  }
 
   const { fuente, conHistoria } = opts
   const credito = [fuente?.autor, fuente?.obra].filter(Boolean).join(' · ')
@@ -599,8 +829,7 @@ export async function generateCarouselScript(
 
   const instr = `MATERIAL / TEMA:\n"""\n${tema}\n"""\n\n${contexto}\n${estructura}`
 
-  const res = await withRetry(() => model.generateContent(instr))
-  const parsed = JSON.parse(res.response.text())
+  const parsed = JSON.parse(await generarTexto(instr, genOpts))
   const slides: CarouselSlide[] = (parsed.slides ?? [])
     .map((s: any, i: number) => ({
       n: typeof s.n === 'number' ? s.n : i + 1,
@@ -649,11 +878,10 @@ export async function generateCarouselCaption(
   slides: { rol: SlideRole; texto: string }[],
   fuente?: CarouselFuente
 ): Promise<string> {
-  const model = getClient().getGenerativeModel({
-    model: 'gemini-3.5-flash',
+  const genOpts = {
     systemInstruction: CAROUSEL_CAPTION_SYSTEM,
     generationConfig: { temperature: 0.8, topP: 0.9 },
-  })
+  }
 
   const credito = [fuente?.autor, fuente?.obra].filter(Boolean).join(' · ')
   const cuerpo = slides.map((s) => `(${s.rol}) ${s.texto}`).join('\n')
@@ -665,8 +893,7 @@ export async function generateCarouselCaption(
     .filter(Boolean)
     .join('\n\n')
 
-  const res = await withRetry(() => model.generateContent(prompt))
-  return appendIgHashtags(res.response.text().trim())
+  return appendIgHashtags((await generarTexto(prompt, genOpts)).trim())
 }
 
 // Mantener compatibilidad con código existente que aún use las funciones anteriores

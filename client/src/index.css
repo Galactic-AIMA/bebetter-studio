@@ -1,30 +1,332 @@
-@import url('https://fonts.googleapis.com/css2?family=Anton&family=IBM+Plex+Sans:ital,wght@0,100;0,400;0,700;1,400&family=Inter:ital,wght@0,100;0,400;0,500;0,600;0,700;1,400&family=Lato:ital,wght@0,100;0,400;0,700;1,400&family=Montserrat:ital,wght@0,100;0,400;0,700;1,400&family=Oswald:wght@300;400;700&family=Playfair+Display:ital,wght@0,200;0,400;0,700;1,400&family=Roboto+Condensed:ital,wght@0,100;0,400;0,700;1,400&display=swap');
+/* Tipografías servidas por la propia app (`GET /api/fonts`), no por el CDN de
+   Google. Es el mismo archivo TTF que pinta FFmpeg: si el navegador midiera una
+   versión distinta de la fuente —como pasaba hasta el 2026-08-18, con la Inter
+   del CDN frente a la «Inter 28pt» del disco— el corte de línea del preview y el
+   del vídeo no podrían coincidir nunca, y el servidor no podría calcularlo solo.
+   `font-display: block` porque aquí lo que importa es medir bien, no pintar antes.
+   Las fuentes las genera `scripts/download-fonts.py`. */
+
+@font-face {
+  font-family: 'Playfair Display';
+  src: url('/api/fonts/PlayfairDisplay-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Playfair Display';
+  src: url('/api/fonts/PlayfairDisplay-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Playfair Display';
+  src: url('/api/fonts/PlayfairDisplay-Italic.ttf') format('truetype');
+  font-weight: 400;
+  font-style: italic;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Lato';
+  src: url('/api/fonts/Lato-Thin.ttf') format('truetype');
+  font-weight: 100;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Lato';
+  src: url('/api/fonts/Lato-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Lato';
+  src: url('/api/fonts/Lato-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Lato';
+  src: url('/api/fonts/Lato-Italic.ttf') format('truetype');
+  font-weight: 400;
+  font-style: italic;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Oswald';
+  src: url('/api/fonts/Oswald-Thin.ttf') format('truetype');
+  font-weight: 300;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Oswald';
+  src: url('/api/fonts/Oswald-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Oswald';
+  src: url('/api/fonts/Oswald-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Roboto Condensed';
+  src: url('/api/fonts/RobotoCondensed-Thin.ttf') format('truetype');
+  font-weight: 100;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Roboto Condensed';
+  src: url('/api/fonts/RobotoCondensed-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Roboto Condensed';
+  src: url('/api/fonts/RobotoCondensed-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Roboto Condensed';
+  src: url('/api/fonts/RobotoCondensed-Italic.ttf') format('truetype');
+  font-weight: 400;
+  font-style: italic;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Inter';
+  src: url('/api/fonts/Inter-Thin.ttf') format('truetype');
+  font-weight: 100;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Inter';
+  src: url('/api/fonts/Inter-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Inter';
+  src: url('/api/fonts/Inter-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Inter';
+  src: url('/api/fonts/Inter-Italic.ttf') format('truetype');
+  font-weight: 400;
+  font-style: italic;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'IBM Plex Sans';
+  src: url('/api/fonts/IBMPlexSans-Thin.ttf') format('truetype');
+  font-weight: 100;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'IBM Plex Sans';
+  src: url('/api/fonts/IBMPlexSans-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'IBM Plex Sans';
+  src: url('/api/fonts/IBMPlexSans-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'IBM Plex Sans';
+  src: url('/api/fonts/IBMPlexSans-Italic.ttf') format('truetype');
+  font-weight: 400;
+  font-style: italic;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Anton';
+  src: url('/api/fonts/Anton-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-* {
-  box-sizing: border-box;
+/* ─── Sala de montaje (DESIGN.md) ───────────────────────────────────────────
+   Las fuentes de la UI (IBM Plex, Anton) llegan por @fontsource en main.tsx y NO
+   se mezclan con las de arriba, que son las del render: Inter solo vive dentro
+   del preview, porque es lo que pinta FFmpeg. */
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  /* Los controles nativos (desplegables de <select>, selector de color, barras de
+     scroll) se pintan oscuros: sin esto, la lista de un <select> sale blanca. */
+  :root {
+    color-scheme: dark;
+    scrollbar-color: theme('colors.s3') transparent;
+  }
+
+  /* Seleccionar texto es luz de proyector, no el azul del sistema. */
+  ::selection {
+    background: rgb(197 160 89 / .32);
+    color: theme('colors.hueso');
+  }
+
+  input, textarea {
+    caret-color: theme('colors.oro');
+  }
+
+  body {
+    margin: 0;
+    @apply bg-sala text-hueso font-sans text-body antialiased;
+  }
+
+  /* Foco visible en oro, con aire: se ve sobre carbón y sobre el rojo de Generar. */
+  :focus-visible {
+    outline: 2px solid theme('colors.oro');
+    outline-offset: 2px;
+  }
+
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: theme('colors.s3'); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: theme('colors.borde-control'); }
 }
 
-body {
-  margin: 0;
-  background: #0A0A0A;
-  color: #E8E4DC;
-  font-family: 'Inter', sans-serif;
+/* Piezas de la MESA (DESIGN.md §6). Una sola definición para banco, lotes e
+   inspector: si cambia el botón secundario, cambia en todas partes. */
+@layer components {
+  .btn-sec {
+    @apply inline-flex h-10 items-center justify-center gap-1.5 rounded-control border border-borde-control px-3 lg:h-8 text-ui text-hueso
+      transition-colors duration-rapido ease-mesa hover:bg-s2 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent;
+  }
+  /* Encendido: el secundario que está activo (un panel abierto, una opción elegida). */
+  .btn-sec[aria-pressed='true'] {
+    @apply border-oro/60 bg-s2;
+  }
+  .btn-fantasma {
+    @apply inline-flex items-center gap-1.5 rounded-control text-ui text-hueso-2
+      transition-colors duration-rapido ease-mesa hover:text-hueso disabled:cursor-not-allowed disabled:opacity-40;
+  }
+  .btn-destructivo {
+    @apply btn-sec text-lacre;
+  }
+  /* Chip de filtro: discontinuo apagado, sólido encendido. */
+  .chip {
+    @apply inline-flex h-9 items-center gap-1.5 whitespace-nowrap lg:h-[26px] rounded-control border border-dashed border-borde-control px-2.5 text-ui text-hueso-2
+      transition-colors duration-rapido ease-mesa hover:text-hueso;
+  }
+  .chip[aria-pressed='true'] {
+    @apply border-solid border-linea-2 bg-s2 text-hueso;
+  }
+  .campo {
+    @apply min-h-10 w-full rounded-control border border-borde-control bg-sala px-2.5 py-1.5 text-body text-hueso placeholder:text-hueso-3 lg:min-h-0
+      transition-colors duration-rapido ease-mesa focus:border-oro focus:outline-none;
+  }
+  .kbd {
+    @apply inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-[4px] border border-linea-2 bg-s2 px-1 font-mono text-label font-medium normal-case tracking-normal text-hueso-2;
+  }
 }
 
-::-webkit-scrollbar {
-  width: 5px;
+@layer utilities {
+  /* Etiqueta de sección: versalitas condensadas. Máximo una por grupo. */
+  .rotulo {
+    @apply font-cond font-medium text-label uppercase text-hueso-3;
+  }
+
+  /* La única luz decorativa de la app: el proyector que ilumina el escenario. */
+  .luz-proyector {
+    background-image: radial-gradient(42% 70% at 50% 0%, rgb(197 160 89 / .12), transparent 70%);
+  }
+
+  /* Grano de película. Solo sobre capas FIJAS o el escenario (que no hace scroll),
+     con pointer-events: none. */
+  .grano {
+    pointer-events: none;
+    opacity: .05;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  /* Encendido: una vez al cargar, la sala sube la luz. */
+  .encender {
+    animation: encender 900ms cubic-bezier(.22,.8,.2,1) both;
+  }
+
+  /* Aviso (toast): entra una vez desde abajo, en t-base. */
+  .aviso-entra {
+    animation: aviso-entra 200ms cubic-bezier(.2,.8,.2,1) both;
+  }
+
+  /* El punto «rec» de Generar mientras renderiza. Única animación en bucle. */
+  .latido {
+    animation: latido 1s ease-in-out infinite;
+  }
 }
-::-webkit-scrollbar-track {
-  background: #141414;
+
+@keyframes encender {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
-::-webkit-scrollbar-thumb {
-  background: #262626;
-  border-radius: 3px;
+
+@keyframes aviso-entra {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
 }
-::-webkit-scrollbar-thumb:hover {
-  background: #A39F98;
+
+@keyframes latido {
+  50% { opacity: .25; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    transition-delay: 0ms !important;
+  }
 }

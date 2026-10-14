@@ -26,6 +26,7 @@ export function rowToVideoRecord(row: any): VideoRecord {
     phraseId: row.phrase_id ?? undefined,
     viral: row.viral === 1,
     createdAt: row.created_at,
+    estado: row.estado ?? undefined,
     config,
   }
 }

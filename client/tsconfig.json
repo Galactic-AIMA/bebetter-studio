@@ -17,9 +17,10 @@
     "noFallthroughCasesInSwitch": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["src/*"],
+      "@shared/*": ["../server/src/text/*"]
     }
   },
-  "include": ["src"],
+  "include": ["src", "../server/src/text/wrap.ts", "../server/src/text/splitByTiempos.ts"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

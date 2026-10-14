@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Star, RefreshCw } from 'lucide-react'
+import { Star, ArrowsClockwise, WarningCircle } from '@phosphor-icons/react'
 import { historyApi } from '../../api'
 import { HistoryItem } from '../../types'
 import HistoryCard from './HistoryCard'
@@ -50,53 +50,46 @@ export default function HistoryPanel({ active }: { active: boolean }) {
   const displayed = onlyViral ? items.filter((i) => i.viral) : items
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-carbon-600">
-        <span className="text-[11px] text-bone-700">{items.length} elementos</span>
-        <div className="flex items-center gap-1.5">
-          <button
-            onClick={() => setOnlyViral((v) => !v)}
-            className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-medium transition-colors ${
-              onlyViral
-                ? 'bg-gold-500/15 text-gold-500'
-                : 'text-bone-700 hover:text-bone-500'
-            }`}
-          >
-            <Star size={10} className={onlyViral ? 'fill-gold-500' : ''} />
-            Virales
-          </button>
-          <button
-            onClick={load}
-            className="p-1 rounded text-bone-700 hover:text-bone-500 transition-colors"
-            title="Recargar"
-          >
-            <RefreshCw size={11} className={loading ? 'animate-spin' : ''} />
-          </button>
-        </div>
+    <div className="flex h-full flex-col">
+      <div className="flex shrink-0 items-center gap-2 border-b border-linea px-5 pb-4 pt-4 lg:pt-3">
+        <span className="text-ui text-hueso-2"><span className="font-mono">{items.length}</span> piezas</span>
+        <button className="chip ml-auto" aria-pressed={onlyViral} onClick={() => setOnlyViral((v) => !v)}>
+          <Star size={14} weight={onlyViral ? 'fill' : 'regular'} className={onlyViral ? 'text-oro' : ''} /> Virales
+        </button>
+        <button onClick={load} disabled={loading} className="btn-fantasma grid h-10 w-10 place-items-center lg:h-auto lg:w-auto lg:p-1" aria-label="Recargar el historial">
+          <ArrowsClockwise size={16} />
+        </button>
       </div>
 
-      {/* List */}
-      <div className="flex-1 overflow-y-auto px-2 py-2">
-        {loading && (
-          <p className="text-center text-[11px] text-bone-700 py-6">Cargando...</p>
-        )}
+      <div className="flex-1 overflow-y-auto">
+        {loading && <p className="px-5 py-6 text-ui text-hueso-3">Cargando el historial…</p>}
         {error && (
-          <p className="text-center text-[11px] text-neon-red py-6">{error}</p>
-        )}
-        {!loading && !error && displayed.length === 0 && (
-          <p className="text-center text-[11px] text-bone-700 py-6">
-            {onlyViral ? 'Ningún elemento marcado como viral' : 'Sin historial todavía'}
+          <p role="alert" className="flex items-center gap-1.5 px-5 py-6 text-ui text-lacre">
+            <WarningCircle size={16} /> {error}
           </p>
         )}
-        {!loading && displayed.map((item) => (
-          <HistoryCard
-            key={`${item.kind}-${item.id}`}
-            item={item}
-            onClick={() => setSelected(item)}
-            onToggleViral={(e) => toggleViral(e, item)}
-          />
-        ))}
+        {!loading && !error && displayed.length === 0 && (
+          onlyViral ? (
+            <p className="px-5 py-6 text-ui text-hueso-3">Aún no has marcado ninguna como viral.</p>
+          ) : (
+            <div className="flex flex-col items-start gap-3 px-5 py-10">
+              <p className="pt-[.16em] font-display text-display uppercase text-hueso">Sin historial</p>
+              <p className="text-body text-hueso-2">Lo que generes aparecerá aquí, con su frase y su fondo.</p>
+            </div>
+          )
+        )}
+        {!loading && (
+          <ul>
+            {displayed.map((item) => (
+              <HistoryCard
+                key={`${item.kind}-${item.id}`}
+                item={item}
+                onClick={() => setSelected(item)}
+                onToggleViral={(e) => toggleViral(e, item)}
+              />
+            ))}
+          </ul>
+        )}
       </div>
 
       {/* Modal */}

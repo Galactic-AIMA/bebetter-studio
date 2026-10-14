@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sala de proyección · bebetter</title>
+<!--
+  DIRECCIÓN 1 · SALA DE PROYECCIÓN
+  Referencias: Villeneuve (luz que entra en la oscuridad), Apple (la UI se retira
+  para que el producto hable), Runway (la imagen ES la interfaz).
+  Form desde el contenido: el reel es la pantalla y la app es la sala a oscuras.
+  La frase llega en dos tiempos, con su respiro, igual que en el render.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Mono:wght@400&family=Inter:wght@700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
+<style>
+  :root {
+    /* Paleta «Sala» — carbones con el MISMO tono que el hueso (85°), no grises puros */
+    --sala: #0C0B0A;        /* oklch(0.15 0.004 70) lienzo */
+    --humo: #1A1815;        /* superficie elevada */
+    --humo-2: #24211D;      /* hover / activo */
+    --linea: rgba(232,228,220,.08);
+    --hueso: #E8E4DC;       /* texto 15.5:1 */
+    --hueso-2: #9C968C;     /* secundario 6.7:1 */
+    --hueso-3: #6E695F;     /* terciario 3.6:1, solo no-lectura */
+    --luz: #D4B072;         /* dorado de proyector 9.6:1: luz, no decoración */
+    --sangre: #8B1A1A;      /* SOLO relleno (hueso encima 7.3:1). Nunca texto sobre carbón */
+    --ease: cubic-bezier(.22,.8,.2,1);
+    --slow: 900ms;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--sala); color: var(--hueso);
+    font: 400 14px/1.5 'IBM Plex Sans', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased; overflow: hidden;
+  }
+  /* grano de película: capa fija, nunca sobre contenedores que hacen scroll */
+  body::after {
+    content: ''; position: fixed; inset: -50%; pointer-events: none; z-index: 40; opacity: .07;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    animation: grano 1.2s steps(6) infinite;
+  }
+  @keyframes grano { 0%{transform:translate(0,0)} 33%{transform:translate(-3%,2%)} 66%{transform:translate(2%,-3%)} 100%{transform:translate(0,0)} }
+
+  .app {
+    height: 100dvh; display: grid;
+    grid-template-columns: 64px 340px minmax(0, 1fr);
+    grid-template-rows: 60px 1fr 148px;
+    grid-template-areas: 'top top top' 'rail drawer stage' 'rail drawer strip';
+  }
+
+  /* ───────── barra superior ───────── */
+  .top { grid-area: top; display: flex; align-items: center; justify-content: space-between; padding: 0 24px 0 20px; position: relative; z-index: 5; }
+  .marca { display: flex; align-items: baseline; gap: 10px; font: 600 13px/1 'IBM Plex Sans Condensed'; letter-spacing: .32em; }
+  .marca span { color: var(--hueso-2); font-weight: 500; }
+  .modos { display: flex; gap: 32px; position: absolute; left: 50%; transform: translateX(-50%); }
+  .modos button { all: unset; cursor: pointer; font: 500 12px/1 'IBM Plex Sans Condensed'; letter-spacing: .22em; text-transform: uppercase; color: var(--hueso-3); padding: 8px 0; position: relative; transition: color .4s var(--ease); }
+  .modos button:hover { color: var(--hueso-2); }
+  .modos button[aria-current] { color: var(--hueso); }
+  .modos button[aria-current]::after { content: ''; position: absolute; left: 0; right: 0; bottom: -2px; height: 1px; background: var(--luz); box-shadow: 0 0 12px var(--luz); }
+  .acciones { display: flex; align-items: center; gap: 6px; }
+  .icono { all: unset; cursor: pointer; width: 36px; height: 36px; display: grid; place-items: center; border-radius: 10px; color: var(--hueso-2); font-size: 18px; transition: color .3s, background .3s; position: relative; }
+  .icono:hover { color: var(--hueso); background: var(--humo); }
+  .aviso { position: absolute; top: 4px; right: 3px; min-width: 15px; height: 15px; padding: 0 4px; border-radius: 8px; background: var(--luz); color: var(--sala); font: 600 9.5px/15px 'IBM Plex Sans'; text-align: center; }
+  .btn-publicar { all: unset; cursor: pointer; margin-left: 10px; padding: 9px 18px; border-radius: 999px; border: 1px solid rgba(232,228,220,.22); font: 500 13px/1 'IBM Plex Sans'; color: var(--hueso); transition: border-color .3s, background .3s; }
+  .btn-publicar:hover { border-color: var(--hueso); }
+  .btn-publicar:active { transform: scale(.97); }
+
+  /* ───────── rail ───────── */
+  .rail { grid-area: rail; display: flex; flex-direction: column; align-items: center; gap: 4px; padding-top: 12px; }
+  .rail .icono[aria-current] { color: var(--hueso); background: var(--humo); }
+  .rail .bajo { margin-top: auto; margin-bottom: 18px; }
+
+  /* ───────── cajón de frases ───────── */
+  .drawer { grid-area: drawer; display: flex; flex-direction: column; min-height: 0; padding: 4px 8px 0 4px; }
+  .drawer header { padding: 14px 16px 18px; }
+  .drawer h2 { font: 300 26px/1.1 'IBM Plex Sans'; letter-spacing: -.01em; }
+  .drawer .sub { margin-top: 6px; color: var(--hueso-2); font-size: 13px; }
+  .filtros { display: flex; gap: 6px; margin-top: 14px; }
+  .chip { all: unset; cursor: pointer; padding: 6px 12px; border-radius: 999px; font-size: 12px; color: var(--hueso-2); background: var(--humo); transition: color .3s, background .3s; }
+  .chip[aria-pressed=true] { color: var(--sala); background: var(--hueso); }
+  .lista { list-style: none; padding: 0 0 24px; overflow-y: auto; flex: 1; scrollbar-width: thin; scrollbar-color: var(--humo-2) transparent;
+    -webkit-mask: linear-gradient(to bottom, transparent, #000 16px, #000 calc(100% - 40px), transparent); mask: linear-gradient(to bottom, transparent, #000 16px, #000 calc(100% - 40px), transparent); }
+  .frase { cursor: pointer; padding: 16px; border-radius: 14px; transition: background .4s var(--ease); position: relative; }
+  .frase:hover { background: rgba(26,24,21,.6); }
+  .frase[aria-selected=true] { background: var(--humo); }
+  .frase .a { color: var(--hueso); font-size: 14px; line-height: 1.45; text-wrap: pretty; }
+  .frase .b { color: var(--hueso-2); font-size: 14px; line-height: 1.45; margin-top: 6px; text-wrap: pretty; }
+  .frase .meta { display: flex; gap: 14px; margin-top: 10px; font: 400 11.5px/1 'IBM Plex Mono'; color: var(--hueso-3); }
+  .frase[aria-selected=true] .meta .en { color: var(--luz); }
+  .frase .en { display: none; }
+  .frase[aria-selected=true] .en { display: inline; }
+
+  /* ───────── escenario ───────── */
+  .stage { grid-area: stage; position: relative; display: grid; place-items: center; min-height: 0; }
+  /* haz del proyector: la única "decoración" y es luz, no gradiente de adorno */
+  .stage::before { content: ''; position: absolute; inset: -60px 0 0; pointer-events: none;
+    background: radial-gradient(42% 70% at 44% 0%, rgba(212,176,114,.13), transparent 70%); opacity: 0; transition: opacity 1.6s var(--ease); }
+  .encendida .stage::before { opacity: 1; }
+  .pantalla-wrap { display: flex; align-items: flex-end; gap: 28px; height: 100%; padding: 8px 0 22px; }
+  .pantalla { height: 100%; max-height: 640px; aspect-ratio: 9/16; position: relative; border-radius: 18px; overflow: hidden; container-type: inline-size;
+    box-shadow: 0 40px 120px -20px rgba(0,0,0,.9), 0 0 0 1px rgba(232,228,220,.06);
+    opacity: 0; transform: scale(.985); transition: opacity var(--slow) var(--ease), transform 1.4s var(--ease); }
+  .encendida .pantalla { opacity: 1; transform: none; }
+  .pantalla img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: opacity .7s var(--ease); }
+  .pantalla .scrim { position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(10,10,10,.78) 0%, rgba(10,10,10,.55) 28%, rgba(10,10,10,0) 52%); }
+  /* El texto replica el render: Inter Bold, hueso, 42px sobre 1080 = 3.89cqw, interlineado 1.2,
+     centrado al 25% de altura, respiro de una línea entre tiempos. */
+  .texto { position: absolute; left: 9.3%; right: 9.3%; top: 25%; transform: translateY(-50%); text-align: center;
+    font: 700 3.89cqw/1.2 'Inter', sans-serif; color: #E8E4DC; text-shadow: 0 1px 6px rgba(0,0,0,.55); }
+  .texto p { transition: opacity .7s var(--ease), filter .7s var(--ease); }
+  .texto p + p { margin-top: 1.2em; }
+  .texto p.oculto { opacity: 0; filter: blur(4px); }
+  .handle { position: absolute; bottom: 6%; left: 0; right: 0; text-align: center; font: 400 2.1cqw/1 'Inter'; color: #C5A059; letter-spacing: .02em; }
+
+  /* controles bajo la pantalla, columna derecha del escenario */
+  .mando { display: flex; flex-direction: column; gap: 22px; width: 260px; padding-bottom: 6px; opacity: 0; transform: translateY(8px); transition: opacity .8s .5s var(--ease), transform .8s .5s var(--ease); }
+  .encendida .mando { opacity: 1; transform: none; }
+  .ficha dt { font: 500 11px/1 'IBM Plex Sans Condensed'; letter-spacing: .2em; text-transform: uppercase; color: var(--hueso-3); }
+  .ficha dd { margin: 8px 0 18px; font-size: 14px; color: var(--hueso); display: flex; align-items: center; gap: 10px; }
+  .ficha dd small { color: var(--hueso-2); font-size: 12.5px; }
+  .miniatura { width: 30px; height: 53px; border-radius: 5px; object-fit: cover; }
+  .interruptor { margin-left: auto; width: 34px; height: 20px; border-radius: 999px; background: var(--humo-2); position: relative; cursor: pointer; border: 0; transition: background .3s; }
+  .interruptor::after { content: ''; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: var(--hueso-2); transition: transform .35s var(--ease), background .3s; }
+  .interruptor[aria-checked=true] { background: rgba(212,176,114,.28); }
+  .interruptor[aria-checked=true]::after { transform: translateX(14px); background: var(--luz); }
+  .btn-generar { all: unset; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 12px; height: 52px; border-radius: 999px; background: var(--sangre); color: var(--hueso); font: 500 15px/1 'IBM Plex Sans'; letter-spacing: .01em;
+    box-shadow: 0 10px 40px -10px rgba(139,26,26,.8), inset 0 1px 0 rgba(255,255,255,.12); transition: transform .15s, filter .3s; }
+  .btn-generar:hover { filter: brightness(1.12); }
+  .btn-generar:active { transform: scale(.98); }
+  .rec { width: 9px; height: 9px; border-radius: 50%; background: var(--hueso); }
+  .generando .rec { animation: latido 1s ease-in-out infinite; }
+  @keyframes latido { 50% { opacity: .25; } }
+  .btn-sec { all: unset; cursor: pointer; text-align: center; font-size: 13px; color: var(--hueso-2); transition: color .3s; }
+  .btn-sec:hover { color: var(--hueso); }
+  /* al generar, la sala baja la luz y solo queda la pantalla */
+  .generando .drawer, .generando .rail, .generando .top, .generando .strip { opacity: .25; transition: opacity 1s var(--ease); }
+  .drawer, .rail, .top, .strip { transition: opacity 1s var(--ease); }
+
+  /* ───────── tira de próximas salidas ───────── */
+  .strip { grid-area: strip; display: flex; align-items: center; gap: 28px; padding: 0 40px 18px 24px; }
+  .strip h3 { font: 500 11px/1.4 'IBM Plex Sans Condensed'; letter-spacing: .2em; text-transform: uppercase; color: var(--hueso-3); width: 92px; }
+  .fotogramas { display: flex; gap: 14px; overflow: hidden; flex: 1; min-width: 0; -webkit-mask: linear-gradient(to right, #000 85%, transparent); mask: linear-gradient(to right, #000 85%, transparent); }
+  .fotograma { flex: 0 0 236px; display: flex; gap: 12px; align-items: center; padding: 8px 14px 8px 8px; border-radius: 14px; transition: background .4s; cursor: pointer; }
+  .fotograma:hover { background: var(--humo); }
+  .fotograma img { width: 52px; height: 92px; border-radius: 8px; object-fit: cover; filter: saturate(.8) brightness(.9); }
+  .fotograma b { display: block; font: 500 13px/1.3 'IBM Plex Sans'; color: var(--hueso); }
+  .fotograma span { display: block; margin-top: 4px; font: 400 11.5px/1.3 'IBM Plex Mono'; color: var(--hueso-2); }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition-duration: 1ms !important; animation: none !important; }
+  }
+  @media (max-width: 900px) {
+    body { overflow: auto; }
+    .app { grid-template-columns: minmax(0, 1fr); grid-template-rows: 56px auto auto auto; grid-template-areas: 'top' 'stage' 'drawer' 'strip'; height: auto; }
+    .rail, .modos, .acciones .icono:not([aria-label^=Revisi]) { display: none; }
+    .top { padding: 0 16px; }
+    .pantalla-wrap { flex-direction: column; align-items: center; height: auto; padding: 8px 16px 24px; }
+    .pantalla { height: auto; width: min(82vw, 360px); }
+    .mando { width: min(82vw, 360px); }
+    .strip { flex-direction: column; align-items: flex-start; padding: 16px; }
+    .fotogramas { overflow-x: auto; width: 100%; }
+  }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <header class="top">
+    <div class="marca">BEBETTER <span>STUDIO</span></div>
+    <nav class="modos" aria-label="Modo de creación">
+      <button aria-current="page">Video</button>
+      <button>Imagen</button>
+      <button>Carrusel</button>
+    </nav>
+    <div class="acciones">
+      <button class="icono" aria-label="Analítica"><i class="ph-light ph-chart-line-up"></i></button>
+      <button class="icono" aria-label="Cadencia de publicación"><i class="ph-light ph-calendar-dots"></i></button>
+      <button class="icono" aria-label="Revisión del lote, 12 piezas esperando"><i class="ph-light ph-film-strip"></i><span class="aviso">12</span></button>
+      <button class="btn-publicar">Publicar</button>
+    </div>
+  </header>
+
+  <nav class="rail" aria-label="Bancos">
+    <button class="icono" aria-current="true" aria-label="Frases"><i class="ph-light ph-quotes"></i></button>
+    <button class="icono" aria-label="Imágenes"><i class="ph-light ph-image"></i></button>
+    <button class="icono" aria-label="Audio"><i class="ph-light ph-waveform"></i></button>
+    <button class="icono" aria-label="Lotes"><i class="ph-light ph-stack"></i></button>
+    <button class="icono" aria-label="Historial"><i class="ph-light ph-clock-counter-clockwise"></i></button>
+    <button class="icono bajo" aria-label="Registro de actividad"><i class="ph-light ph-scroll"></i></button>
+  </nav>
+
+  <aside class="drawer">
+    <header>
+      <h2>Frases</h2>
+      <p class="sub">61 en rotación, todas en dos tiempos</p>
+      <div class="filtros">
+        <button class="chip" aria-pressed="true">Sin usar</button>
+        <button class="chip" aria-pressed="false">Todas</button>
+        <button class="chip" aria-pressed="false">Fuera de norma</button>
+      </div>
+    </header>
+    <ul class="lista" id="lista" role="listbox" aria-label="Banco de frases"></ul>
+  </aside>
+
+  <main class="stage">
+    <div class="pantalla-wrap">
+      <div class="pantalla" id="pantalla">
+        <img id="fondo" alt="">
+        <div class="scrim"></div>
+        <div class="texto" id="texto"><p></p><p></p></div>
+        <div class="handle">@bebetter.path</div>
+      </div>
+      <div class="mando">
+        <dl class="ficha">
+          <dt>Fondo</dt>
+          <dd><img class="miniatura" id="mini" alt=""> <span><span id="fondoNombre"></span><br><small>Generado con IA</small></span></dd>
+          <dt>Sonido</dt>
+          <dd><i class="ph-light ph-waveform" style="font-size:18px;color:var(--luz)"></i> <span><span id="pista"></span><br><small>Corte cosechado del nicho</small></span></dd>
+          <dt>Duración</dt>
+          <dd>7 s <small>la marca el corte de audio</small></dd>
+          <dt>Acabado</dt>
+          <dd>Grano cinematográfico <button class="interruptor" role="switch" aria-checked="true" aria-label="Grano cinematográfico"></button></dd>
+        </dl>
+        <button class="btn-generar" id="generar"><span class="rec"></span><span id="genTexto">Generar reel</span></button>
+        <button class="btn-sec">Otra frase al azar</button>
+      </div>
+    </div>
+  </main>
+
+  <section class="strip" aria-label="Próximas salidas">
+    <h3>Próximas salidas</h3>
+    <div class="fotogramas" id="fotogramas"></div>
+  </section>
+</div>
+
+<script src="assets/contenido.js"></script>
+<script>
+  const { frases, tiempos, img } = BB
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches
+  const $ = (id) => document.getElementById(id)
+  const nombres = { barra: 'La barra bajo la lluvia', caminante: 'El caminante', marioneta: 'La marioneta en la campana', forja: 'La forja', faro: 'El faro', reloj: 'El reloj de arena', faro2: 'Subida al faro', trofeo: 'El trofeo' }
+
+  $('lista').innerHTML = frases.map((f, i) => {
+    const [a, b] = tiempos(f.texto)
+    return `<li class="frase" role="option" data-i="${i}" aria-selected="false">
+      <p class="a">${a}</p>${b ? `<p class="b">${b}</p>` : ''}
+      <div class="meta"><span>${f.usos} ${f.usos === 1 ? 'uso' : 'usos'}</span><span>energía ${f.energia}</span>${f.autor ? `<span>${f.autor}</span>` : ''}<span class="en">en pantalla</span></div>
+    </li>`
+  }).join('')
+
+  // La frase entra como en el reel: primer tiempo, respiro, giro.
+  let turno = 0
+  function mostrar(i) {
+    const f = frases[i], [a, b] = tiempos(f.texto), t = ++turno
+    document.querySelectorAll('.frase').forEach((el) => el.setAttribute('aria-selected', el.dataset.i == i))
+    const ps = $('texto').querySelectorAll('p')
+    ps.forEach((p) => p.classList.add('oculto'))
+    const fondo = $('fondo'); fondo.style.opacity = 0
+    setTimeout(() => {
+      if (t !== turno) return
+      fondo.src = img(f.fondo); fondo.style.opacity = 1
+      $('mini').src = img(f.fondo); $('fondoNombre').textContent = nombres[f.fondo]
+      $('pista').textContent = 'Textura ' + f.pista + ', energía ' + f.energia
+      ps[0].textContent = a; ps[1].textContent = b || ''
+      ps[0].classList.remove('oculto')
+      setTimeout(() => t === turno && ps[1].classList.remove('oculto'), reduce ? 0 : 1100)
+    }, reduce ? 0 : 380)
+  }
+  $('lista').addEventListener('click', (e) => { const li = e.target.closest('.frase'); if (li) mostrar(+li.dataset.i) })
+
+  // Próximas salidas: cola de ejemplo con las franjas 07:00 / 13:00 / 19:00 del código.
+  const cola = [['Hoy', '19:00', 6], ['Mañana', '07:00', 1], ['Mañana', '13:00', 4], ['Mañana', '19:00', 3], ['Miércoles', '07:00', 7]]
+  $('fotogramas').innerHTML = cola.map(([d, h, i]) => {
+    const [a] = tiempos(frases[i].texto)
+    return `<div class="fotograma"><img src="${img(frases[i].fondo)}" alt=""><div><b>${a.length > 46 ? a.slice(0, 44) + '…' : a}</b><span>${d} ${h}</span></div></div>`
+  }).join('')
+
+  document.querySelector('.interruptor').addEventListener('click', (e) => e.currentTarget.setAttribute('aria-checked', e.currentTarget.getAttribute('aria-checked') !== 'true'))
+  document.querySelectorAll('.chip').forEach((c) => c.addEventListener('click', () => document.querySelectorAll('.chip').forEach((x) => x.setAttribute('aria-pressed', x === c))))
+  document.querySelectorAll('.modos button').forEach((b) => b.addEventListener('click', () => document.querySelectorAll('.modos button').forEach((x) => x.toggleAttribute('aria-current', x === b))))
+
+  // Generar: la sala baja la luz mientras se renderiza (demo de 3 s).
+  $('generar').addEventListener('click', () => {
+    const app = $('app'); if (app.classList.contains('generando')) return
+    app.classList.add('generando'); $('genTexto').textContent = 'Renderizando'
+    setTimeout(() => { app.classList.remove('generando'); $('genTexto').textContent = 'Generar reel' }, 3000)
+  })
+
+  // Las luces se encienden al abrir.
+  requestAnimationFrame(() => setTimeout(() => { $('app').classList.add('encendida'); mostrar(3) }, reduce ? 0 : 250))
+</script>
+</body>
+</html>

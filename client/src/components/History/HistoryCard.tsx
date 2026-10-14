@@ -1,4 +1,5 @@
-import { Star } from 'lucide-react'
+import { Star } from '@phosphor-icons/react'
+import { splitByTiempos } from '@shared/splitByTiempos'
 import { HistoryItem } from '../../types'
 
 interface Props {
@@ -12,51 +13,37 @@ function formatDate(iso: string) {
   return d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: '2-digit' })
 }
 
+/** Fila del historial. Dos botones hermanos (abrir · viral): antes la estrella era
+ *  un botón DENTRO de otro, que el HTML no permite. */
 export default function HistoryCard({ item, onClick, onToggleViral }: Props) {
   const imageId = item.config.imageId
   const thumbnailUrl = imageId ? `/api/images/file/${encodeURIComponent(imageId)}` : null
-  const phrase = item.config.text.content
+  const [a, b] = splitByTiempos(item.config.text.content)
 
   return (
-    <button
-      onClick={onClick}
-      className="w-full flex items-start gap-2.5 p-2 rounded-lg hover:bg-carbon-600 transition-colors text-left group"
-    >
-      {/* Thumbnail */}
-      <div className="shrink-0 w-12 h-12 rounded bg-carbon-600 overflow-hidden">
-        {thumbnailUrl ? (
-          <img src={thumbnailUrl} alt="" className="w-full h-full object-cover" />
-        ) : (
-          <div className="w-full h-full bg-carbon-600" />
-        )}
-      </div>
-
-      {/* Info */}
-      <div className="flex-1 min-w-0 flex flex-col gap-1">
-        <p className="text-xs text-bone-500 line-clamp-2 leading-snug">{phrase}</p>
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-[10px] text-bone-700">{formatDate(item.createdAt)}</span>
-          <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${
-            item.kind === 'video'
-              ? 'bg-carbon-600 text-bone-700'
-              : 'bg-carbon-600 text-gold-500'
-          }`}>
-            {item.kind === 'video' ? 'Video' : 'Img'}
+    <li className="group flex items-start border-b border-linea transition-colors duration-rapido ease-mesa hover:bg-s2">
+      <button onClick={onClick} className="flex min-w-0 flex-1 items-start gap-3 py-3 pl-5 text-left">
+        <span className="h-16 w-9 shrink-0 overflow-hidden rounded-control border border-linea-2 bg-s2">
+          {thumbnailUrl && <img src={thumbnailUrl} alt="" className="h-full w-full object-cover" loading="lazy" decoding="async" />}
+        </span>
+        <span className="flex min-w-0 flex-1 flex-col gap-1">
+          <span className="line-clamp-2 text-ui text-hueso">
+            {a}
+            {b && <><span aria-hidden="true" className="mx-1 font-mono text-meta text-lacre">//</span><span className="text-hueso-2">{b}</span></>}
           </span>
-        </div>
-      </div>
-
-      {/* Viral star */}
+          <span className="font-mono text-meta text-hueso-3">
+            {formatDate(item.createdAt)} · {item.kind === 'video' ? 'video' : 'imagen'}
+          </span>
+        </span>
+      </button>
       <button
         onClick={onToggleViral}
-        className="shrink-0 p-0.5 rounded transition-colors hover:bg-carbon-600"
-        title={item.viral ? 'Quitar viral' : 'Marcar viral'}
+        aria-pressed={!!item.viral}
+        aria-label={item.viral ? 'Quitar de virales' : 'Marcar como viral'}
+        className="btn-fantasma shrink-0 px-4 py-3"
       >
-        <Star
-          size={13}
-          className={item.viral ? 'fill-gold-500 text-gold-500' : 'text-bone-700 group-hover:text-bone-500'}
-        />
+        <Star size={16} weight={item.viral ? 'fill' : 'regular'} className={item.viral ? 'text-oro' : ''} />
       </button>
-    </button>
+    </li>
   )
 }

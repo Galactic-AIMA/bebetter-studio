@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sala de montaje · bebetter</title>
+<!--
+  DIRECCIÓN ELEGIDA · SALA DE MONTAJE (2026-10-05)
+  Vista de referencia de DESIGN.md: atmósfera de 01 Sala + estructura de 02 Mesa
+  + el giro de 03 Cartel en Revisión. Solo usa los tokens de DESIGN.md §2.
+  Pulsa «Revisión» en la barra lateral para ver la segunda pantalla.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Sans+Condensed:wght@500&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
+<style>
+  :root {
+    --sala: #0C0B0A; --s1: #121110; --s2: #1A1815; --s3: #24211D;
+    --linea: #24231F; --linea-2: #33312C; --borde-control: #6B665D;
+    --hueso: #E8E4DC; --hueso-2: #A8A39A; --hueso-3: #8A857C;
+    --oro: #C5A059; --sangre: #8B1A1A; --sangre-hover: #A52222; --lacre: #E2655B;
+    --velo: rgba(12,11,10,.72);
+    --curva: cubic-bezier(.2,.8,.2,1); --curva-sala: cubic-bezier(.22,.8,.2,1);
+    --t-rapido: 120ms; --t-base: 200ms; --t-panel: 320ms; --t-sala: 900ms;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; }
+  body { background: var(--sala); color: var(--hueso); font: 400 14px/1.5 'IBM Plex Sans', system-ui, sans-serif; -webkit-font-smoothing: antialiased; overflow: hidden; }
+  button { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--oro); outline-offset: 2px; }
+  .mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+  .label { font: 500 11px/1 'IBM Plex Sans Condensed'; letter-spacing: .2em; text-transform: uppercase; color: var(--hueso-3); }
+  kbd { font: 500 11px/1 'IBM Plex Mono'; color: var(--hueso-2); background: var(--s2); border: 1px solid var(--linea-2); border-radius: 4px; padding: 3px 5px; }
+
+  .app { height: 100dvh; display: grid; grid-template-columns: 232px 360px minmax(0,1fr) 300px; }
+  .app.revision { grid-template-columns: 232px minmax(0,1fr); }
+  .app.revision .banco, .app.revision .escenario, .app.revision .insp { display: none; }
+  .vista-revision { display: none; }
+  .app.revision .vista-revision { display: grid; }
+
+  /* ───────── barra lateral ───────── */
+  .side { background: var(--s1); border-right: 1px solid var(--linea); display: flex; flex-direction: column; padding: 14px 10px 12px; gap: 1px; transition: opacity var(--t-sala) var(--curva-sala); }
+  .ws { display: flex; align-items: baseline; gap: 8px; padding: 4px 8px 16px; font: 400 21px/1 'Anton'; letter-spacing: .02em; }
+  .ws span { font: 500 11px/1 'IBM Plex Sans Condensed'; letter-spacing: .24em; color: var(--hueso-3); }
+  .buscar { display: flex; align-items: center; gap: 8px; margin: 0 2px 12px; padding: 6px 10px; border: 1px solid var(--borde-control); border-radius: 6px; color: var(--hueso-3); font-size: 13px; cursor: text; }
+  .buscar kbd { margin-left: auto; }
+  .grupo { padding: 14px 8px 6px; }
+  .item { all: unset; display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 6px; font-size: 13px; color: var(--hueso-2); cursor: pointer; transition: background var(--t-rapido) var(--curva), color var(--t-rapido) var(--curva); }
+  .item i { font-size: 16px; }
+  .item:hover { background: var(--s2); color: var(--hueso); }
+  .item[aria-current] { background: var(--s2); color: var(--hueso); }
+  .item[aria-current] i { color: var(--oro); }
+  .item .n { margin-left: auto; font: 400 12px/1 'IBM Plex Mono'; color: var(--hueso-3); }
+  .item .cuenta { margin-left: auto; font: 500 11px/1 'IBM Plex Mono'; color: var(--sala); background: var(--oro); border-radius: 999px; padding: 3px 7px; }
+  .pie { margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 12px 8px 0; border-top: 1px solid var(--linea); font-size: 13px; color: var(--hueso-2); }
+  .avatar { width: 22px; height: 22px; border-radius: 50%; background: var(--s3); display: grid; place-items: center; font-size: 11px; color: var(--hueso); }
+
+  /* ───────── banco (mesa) ───────── */
+  .banco { background: var(--s1); border-right: 1px solid var(--linea); display: flex; flex-direction: column; min-height: 0; transition: opacity var(--t-sala) var(--curva-sala); }
+  .banco header { padding: 20px 20px 14px; border-bottom: 1px solid var(--linea); }
+  .titulo { font: 300 26px/1.1 'IBM Plex Sans'; letter-spacing: -.01em; }
+  .sub { margin-top: 6px; font-size: 13px; color: var(--hueso-2); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+  .chip { all: unset; cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border-radius: 6px; border: 1px dashed var(--borde-control); font-size: 12.5px; color: var(--hueso-2); transition: all var(--t-rapido) var(--curva); }
+  .chip[aria-pressed=true] { border-style: solid; border-color: var(--linea-2); background: var(--s2); color: var(--hueso); }
+  .chip .mono { font-size: 12px; color: var(--hueso-3); }
+  .lista { list-style: none; padding: 0; overflow-y: auto; flex: 1; scrollbar-width: thin; scrollbar-color: var(--s3) transparent; }
+  .frase { padding: 14px 20px; border-bottom: 1px solid var(--linea); cursor: pointer; transition: background var(--t-rapido) var(--curva); }
+  .frase:hover { background: var(--s2); }
+  .frase[aria-selected=true] { background: var(--s2); }
+  .frase p { font-size: 14px; line-height: 1.5; text-wrap: pretty; }
+  .frase .corte { color: var(--lacre); font: 500 12px/1 'IBM Plex Mono'; margin: 0 5px; }
+  .frase .giro { color: var(--hueso-2); }
+  .frase .meta { display: flex; gap: 14px; margin-top: 8px; font: 400 12px/1 'IBM Plex Mono'; color: var(--hueso-3); }
+  .frase .en { display: none; color: var(--oro); }
+  .frase[aria-selected=true] .en { display: inline; }
+
+  /* ───────── escenario (sala) ───────── */
+  .escenario { position: relative; display: grid; grid-template-rows: minmax(0,1fr) 112px; min-width: 0; overflow: hidden; }
+  .escenario::before { content: ''; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(42% 70% at 50% 0%, rgb(197 160 89 / .12), transparent 70%); opacity: 0; transition: opacity 1.6s var(--curva-sala); }
+  .escenario::after { content: ''; position: absolute; inset: 0; pointer-events: none; opacity: .05;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+  .encendida .escenario::before { opacity: 1; }
+  .proyeccion { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; padding: 24px 24px 8px; min-height: 0; position: relative; z-index: 1; }
+  .pantalla { flex: 1 1 auto; min-height: 0; max-height: 620px; aspect-ratio: 9/16; position: relative; border-radius: 14px; overflow: hidden; container-type: inline-size;
+    box-shadow: 0 40px 120px -20px rgb(0 0 0 / .9), 0 0 0 1px rgb(232 228 220 / .06);
+    opacity: 0; transition: opacity var(--t-sala) var(--curva-sala); }
+  .encendida .pantalla { opacity: 1; }
+  .pantalla img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: opacity var(--t-base) var(--curva); }
+  .pantalla .scrim { position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(10,10,10,.78), rgba(10,10,10,.55) 28%, transparent 52%); }
+  .pantalla .texto { position: absolute; left: 9.3%; right: 9.3%; top: 25%; transform: translateY(-50%); text-align: center; font: 700 3.89cqw/1.2 'Inter'; color: #E8E4DC; text-shadow: 0 1px 6px rgba(0,0,0,.55); }
+  .pantalla .texto p { transition: opacity var(--t-base) var(--curva); }
+  .pantalla .texto p + p { margin-top: 1.2em; }
+  .pantalla .texto p.oculto { opacity: 0; }
+  .pantalla .handle { position: absolute; bottom: 6%; width: 100%; text-align: center; font: 400 2.1cqw/1 'Inter'; color: #C5A059; }
+  .generar { all: unset; position: relative; z-index: 1; cursor: pointer; flex-shrink: 0;  /* sobre la sombra del preview */ display: inline-flex; align-items: center; gap: 12px; height: 48px; padding: 0 28px; border-radius: 999px; background: var(--sangre); color: var(--hueso); font: 500 15px/1 'IBM Plex Sans'; box-shadow: 0 10px 40px -12px rgb(139 26 26 / .9), inset 0 1px 0 rgb(255 255 255 / .1); transition: background var(--t-rapido) var(--curva), transform var(--t-rapido) var(--curva); }
+  .generar:hover { background: var(--sangre-hover); }
+  .generar:active { transform: scale(.98); }
+  .generar kbd { background: rgb(0 0 0 / .2); border-color: rgb(232 228 220 / .2); color: var(--hueso); }
+  .rec { width: 9px; height: 9px; border-radius: 50%; background: var(--hueso); }
+  .renderizando .rec { animation: latido 1s ease-in-out infinite; }
+  @keyframes latido { 50% { opacity: .25; } }
+  .renderizando .side, .renderizando .banco, .renderizando .insp, .renderizando .tira { opacity: .3; }
+  .tira { display: flex; align-items: center; gap: 20px; padding: 0 24px 16px; position: relative; z-index: 1; min-width: 0; transition: opacity var(--t-sala) var(--curva-sala); }
+  .tira .label { width: 76px; line-height: 1.5; flex-shrink: 0; }
+  .salidas { display: flex; gap: 8px; min-width: 0; overflow: hidden; -webkit-mask: linear-gradient(to right, #000 85%, transparent); mask: linear-gradient(to right, #000 85%, transparent); }
+  .salida { flex: 0 0 200px; display: flex; gap: 10px; align-items: center; padding: 6px 10px 6px 6px; border-radius: 10px; cursor: pointer; transition: background var(--t-rapido) var(--curva); }
+  .salida:hover { background: var(--s2); }
+  .salida img { width: 44px; height: 78px; border-radius: 6px; object-fit: cover; }
+  .salida b { display: block; font: 500 12.5px/1.35 'IBM Plex Sans'; }
+  .salida span { display: block; margin-top: 4px; font: 400 12px/1 'IBM Plex Mono'; color: var(--hueso-3); }
+
+  /* ───────── inspector ───────── */
+  .insp { background: var(--s1); border-left: 1px solid var(--linea); display: flex; flex-direction: column; min-height: 0; transition: opacity var(--t-sala) var(--curva-sala); }
+  .insp header { display: flex; justify-content: space-between; align-items: baseline; padding: 20px 20px 14px; border-bottom: 1px solid var(--linea); }
+  .insp header b { font-weight: 500; font-size: 14px; }
+  .insp section { padding: 16px 20px 6px; }
+  .insp section + section { border-top: 1px solid var(--linea); }
+  .insp .label { display: block; margin-bottom: 10px; }
+  .prop { display: grid; grid-template-columns: 96px 1fr; align-items: center; min-height: 32px; margin: 0 -8px; padding: 0 8px; border-radius: 6px; font-size: 13px; }
+  .prop:hover { background: var(--s2); }
+  .prop dt { color: var(--hueso-3); }
+  .prop dd { display: flex; flex-wrap: wrap; align-items: center; column-gap: 8px; min-width: 0; padding: 4px 0; }
+  .prop dd .mono { color: var(--hueso-2); font-size: 12px; }
+  .prop img { width: 18px; height: 32px; border-radius: 3px; object-fit: cover; }
+  .interruptor { margin-left: auto; width: 34px; height: 20px; border-radius: 999px; background: var(--s3); position: relative; cursor: pointer; border: 0; transition: background var(--t-base) var(--curva); }
+  .interruptor::after { content: ''; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: var(--hueso-2); transition: transform var(--t-base) var(--curva), background var(--t-base); }
+  .interruptor[aria-checked=true] { background: rgb(197 160 89 / .28); }
+  .interruptor[aria-checked=true]::after { transform: translateX(14px); background: var(--oro); }
+  .secundario { all: unset; cursor: pointer; display: flex; justify-content: space-between; align-items: center; height: 32px; padding: 0 12px; border-radius: 6px; border: 1px solid var(--borde-control); font-size: 13px; transition: background var(--t-rapido) var(--curva); }
+  .secundario:hover { background: var(--s2); }
+  .secundario span { display: inline-flex; gap: 8px; align-items: center; }
+  .acciones { display: grid; gap: 8px; padding: 16px 20px 20px; margin-top: auto; border-top: 1px solid var(--linea); }
+
+  /* ───────── revisión (el gesto del Cartel) ───────── */
+  .vista-revision { grid-template-columns: minmax(0,1fr) auto; gap: 64px; align-items: center; padding: 40px 72px; position: relative; overflow: hidden; }
+  .vista-revision::before { content: ''; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(40% 70% at 78% 0%, rgb(197 160 89 / .1), transparent 70%); }
+  .rev-izq { position: relative; max-width: 760px; }
+  .rev-cab { display: flex; gap: 16px; align-items: baseline; }
+  .rev-cab .mono { color: var(--hueso-2); font-size: 12px; }
+  .giro-titular { margin-top: 28px; font-family: 'Anton', sans-serif; text-transform: uppercase; line-height: .98; font-size: 54px; }
+  .giro-titular .t { display: block; overflow: hidden; padding-top: .16em; margin-top: -.16em; }
+  .giro-titular .t span { display: block; transform: translateY(105%); transition: transform 600ms var(--curva-sala); }
+  .giro-titular .b span { color: var(--lacre); }
+  .giro-titular .filete { display: block; width: 0; height: 3px; background: var(--hueso); margin: .4em 0 .45em; transition: width 300ms var(--curva-sala); }
+  .revelado .giro-titular .a span { transform: none; }
+  .revelado .giro-titular .filete { width: 72px; transition-delay: 450ms; }
+  .revelado .giro-titular .b span { transform: none; transition-delay: 600ms; }
+  .rev-props { display: flex; gap: 32px; margin-top: 36px; padding-top: 16px; border-top: 1px solid var(--linea); }
+  .rev-props dt { margin-bottom: 6px; }
+  .rev-props dd { font-size: 14px; }
+  .rev-acc { display: flex; gap: 10px; margin-top: 32px; }
+  .rev-acc .secundario { height: 40px; gap: 12px; padding: 0 16px; }
+  .rev-acc .aprobar { border-color: var(--hueso); }
+  .rev-acc .rechazar { color: var(--lacre); }
+  .rev-der { position: relative; height: min(76vh, 640px); aspect-ratio: 9/16; }
+  .rev-der .pantalla { height: 100%; max-height: none; opacity: 1; }
+  .miniaturas { display: flex; gap: 6px; margin-top: 40px; }
+  .miniaturas img { width: 36px; height: 64px; border-radius: 4px; object-fit: cover; opacity: .45; cursor: pointer; transition: opacity var(--t-rapido); }
+  .miniaturas img[aria-current] { opacity: 1; outline: 2px solid var(--oro); outline-offset: 2px; }
+
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 1ms !important; animation: none !important; transition-delay: 0ms !important; } }
+  @media (max-width: 1279px) {
+    .app { grid-template-columns: 64px 320px minmax(0,1fr) 280px; }
+    .app.revision { grid-template-columns: 64px minmax(0,1fr); }
+    .ws span, .ws, .buscar span, .buscar kbd, .grupo, .item span, .pie span { display: none; }
+    .item { justify-content: center; padding: 10px 0; } .buscar { justify-content: center; }
+  }
+  @media (max-width: 1023px) {
+    body { overflow: auto; }
+    .app, .app.revision { grid-template-columns: minmax(0,1fr); height: auto; }
+    .side { display: none; }
+    .escenario { order: -1; grid-template-rows: auto auto; }
+    .pantalla { flex: none; width: min(80vw, 340px); }
+    .banco { max-height: 70vh; }
+    .vista-revision { grid-template-columns: 1fr; padding: 24px 16px; gap: 24px; }
+    .rev-der { height: auto; width: min(80vw, 340px); }
+    .giro-titular { font-size: min(54px, 10vw); }
+  }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <nav class="side" aria-label="Navegación">
+    <div class="ws">BEBETTER <span>STUDIO</span></div>
+    <div class="buscar"><i class="ph ph-magnifying-glass"></i><span>Buscar</span><kbd>Ctrl K</kbd></div>
+    <button class="item" data-vista="editor" aria-current="page"><i class="ph ph-video-camera"></i><span>Video</span></button>
+    <button class="item" data-vista="editor"><i class="ph ph-image-square"></i><span>Imagen</span></button>
+    <button class="item" data-vista="editor"><i class="ph ph-cards"></i><span>Carrusel</span></button>
+    <div class="grupo label">Banco</div>
+    <button class="item" data-vista="editor"><i class="ph ph-quotes"></i><span>Frases</span><span class="n">118</span></button>
+    <button class="item" data-vista="editor"><i class="ph ph-images"></i><span>Imágenes</span><span class="n">238</span></button>
+    <button class="item" data-vista="editor"><i class="ph ph-waveform"></i><span>Audio</span><span class="n">34</span></button>
+    <div class="grupo label">Producción</div>
+    <button class="item" data-vista="editor"><i class="ph ph-stack"></i><span>Lotes</span></button>
+    <button class="item" data-vista="revision"><i class="ph ph-film-strip"></i><span>Revisión</span><span class="cuenta">12</span></button>
+    <button class="item" data-vista="editor"><i class="ph ph-queue"></i><span>Cola</span></button>
+    <button class="item" data-vista="editor"><i class="ph ph-calendar-dots"></i><span>Cadencia</span></button>
+    <div class="grupo label">Datos</div>
+    <button class="item" data-vista="editor"><i class="ph ph-chart-line-up"></i><span>Analítica</span></button>
+    <button class="item" data-vista="editor"><i class="ph ph-scroll"></i><span>Registro</span></button>
+    <div class="pie"><div class="avatar">D</div><span>David</span></div>
+  </nav>
+
+  <aside class="banco">
+    <header>
+      <h1 class="titulo">Frases</h1>
+      <p class="sub">61 en rotación, todas en dos tiempos</p>
+      <div class="chips">
+        <button class="chip" aria-pressed="true">En norma <span class="mono">61</span></button>
+        <button class="chip" aria-pressed="true">Sin usar</button>
+        <button class="chip" aria-pressed="false">Fuera de norma <span class="mono">57</span></button>
+      </div>
+    </header>
+    <ul class="lista" id="lista" role="listbox" aria-label="Banco de frases"></ul>
+  </aside>
+
+  <main class="escenario">
+    <div class="proyeccion">
+      <div class="pantalla" id="pantalla"><img id="fondo" alt=""><div class="scrim"></div><div class="texto" id="texto"><p></p><p></p></div><div class="handle">@bebetter.path</div></div>
+      <button class="generar" id="generar"><span class="rec"></span><span id="genTexto">Generar reel</span><kbd>G</kbd></button>
+    </div>
+    <section class="tira" aria-label="Próximas salidas">
+      <span class="label">Próximas salidas</span>
+      <div class="salidas" id="salidas"></div>
+    </section>
+  </main>
+
+  <aside class="insp">
+    <header><b>Pieza en edición</b><span class="mono" style="font-size:12px;color:var(--hueso-3)">9:16 · 7 s</span></header>
+    <section>
+      <span class="label">Material</span>
+      <dl>
+        <div class="prop"><dt>Fondo</dt><dd><img id="mini" alt=""><span id="fondoNombre"></span><span class="mono">IA</span></dd></div>
+        <div class="prop"><dt>Pista</dt><dd><span id="pista"></span></dd></div>
+        <div class="prop"><dt>Duración</dt><dd>7,0 s <span class="mono">del corte</span></dd></div>
+      </dl>
+    </section>
+    <section>
+      <span class="label">Render</span>
+      <dl>
+        <div class="prop"><dt>Preset</dt><dd>bebetter <span class="mono">Inter Bold 42</span></dd></div>
+        <div class="prop"><dt>Degradado</dt><dd>Carbón hasta el 52 %</dd></div>
+        <div class="prop"><dt>Grano</dt><dd>Cinematográfico <button class="interruptor" role="switch" aria-checked="true" aria-label="Grano cinematográfico"></button></dd></div>
+      </dl>
+    </section>
+    <section>
+      <span class="label">Destino</span>
+      <dl><div class="prop"><dt>Salida</dt><dd>Cola <span class="mono">próxima franja 19:00</span></dd></div></dl>
+    </section>
+    <div class="acciones">
+      <button class="secundario"><span><i class="ph ph-shuffle"></i>Otro fondo</span><kbd>F</kbd></button>
+      <button class="secundario"><span><i class="ph ph-queue"></i>Enviar a la cola</span><kbd>Q</kbd></button>
+    </div>
+  </aside>
+
+  <main class="vista-revision" id="revision">
+    <div class="rev-izq">
+      <div class="rev-cab"><span class="titulo">Revisión del lote</span><span class="mono" id="revPos">pieza 1 de 12 · ejemplo</span></div>
+      <h1 class="giro-titular" id="giro"></h1>
+      <dl class="rev-props">
+        <div><dt class="label">Fondo</dt><dd id="revFondo"></dd></div>
+        <div><dt class="label">Música</dt><dd id="revPista"></dd></div>
+        <div><dt class="label">Salida</dt><dd>Cola · 19:00</dd></div>
+      </dl>
+      <div class="rev-acc">
+        <button class="secundario aprobar" id="aprobar"><span><i class="ph ph-check"></i>Aprobar y enviar a la cola</span><kbd>A</kbd></button>
+        <button class="secundario rechazar" id="rechazar"><span><i class="ph ph-x"></i>Rechazar</span><kbd>X</kbd></button>
+        <button class="secundario" id="siguiente"><span>Siguiente</span><kbd>→</kbd></button>
+      </div>
+      <div class="miniaturas" id="miniaturas"></div>
+    </div>
+    <div class="rev-der"><div class="pantalla"><img id="revImg" alt=""><div class="scrim"></div><div class="texto" id="revTexto"></div><div class="handle">@bebetter.path</div></div></div>
+  </main>
+</div>
+
+<script src="assets/contenido.js"></script>
+<script>
+  const { frases, tiempos, img } = BB
+  const $ = (id) => document.getElementById(id)
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches
+  const nombres = { barra: 'La barra bajo la lluvia', caminante: 'El caminante', marioneta: 'La marioneta', forja: 'La forja', faro: 'El faro', reloj: 'El reloj de arena', faro2: 'Subida al faro', trofeo: 'El trofeo' }
+
+  // ── Editor ──
+  $('lista').innerHTML = frases.map((f, i) => {
+    const [a, b] = tiempos(f.texto)
+    return `<li class="frase" role="option" data-i="${i}" aria-selected="false">
+      <p>${a}${b ? `<span class="corte" aria-hidden="true">//</span><span class="giro">${b}</span>` : ''}</p>
+      <div class="meta"><span>${f.usos} usos</span><span>energía ${f.energia}</span>${f.autor ? `<span>${f.autor}</span>` : ''}<span class="en">en pantalla</span></div></li>`
+  }).join('')
+
+  let actual = 3, turno = 0
+  function mostrar(i) {
+    actual = (i + frases.length) % frases.length
+    const f = frases[actual], [a, b] = tiempos(f.texto), t = ++turno
+    document.querySelectorAll('.frase').forEach((el) => el.setAttribute('aria-selected', el.dataset.i == actual))
+    const ps = $('texto').querySelectorAll('p')
+    $('fondo').src = img(f.fondo); $('mini').src = img(f.fondo)
+    $('fondoNombre').textContent = nombres[f.fondo]
+    $('pista').innerHTML = `Textura ${f.pista} <span class="mono">energía ${f.energia}</span>`
+    // Dos tiempos: primero A, respiro de 450 ms, luego el giro. Cancelable.
+    ps[0].textContent = a; ps[1].textContent = b || ''
+    ps[1].classList.add('oculto')
+    setTimeout(() => t === turno && ps[1].classList.remove('oculto'), reduce ? 0 : 450)
+  }
+  $('lista').addEventListener('click', (e) => { const li = e.target.closest('.frase'); if (li) mostrar(+li.dataset.i) })
+
+  const cola = [['Hoy', '19:00', 6], ['Mañana', '07:00', 1], ['Mañana', '13:00', 4], ['Mañana', '19:00', 0], ['Miércoles', '07:00', 7]]
+  $('salidas').innerHTML = cola.map(([d, h, i]) => { const [a] = tiempos(frases[i].texto); return `<div class="salida"><img src="${img(frases[i].fondo)}" alt=""><div><b>${a.length > 44 ? a.slice(0, 42) + '…' : a}</b><span>${d} ${h}</span></div></div>` }).join('')
+
+  function generar() {
+    const app = $('app'); if (app.classList.contains('renderizando') || app.classList.contains('revision')) return
+    app.classList.add('renderizando'); $('genTexto').textContent = 'Renderizando'
+    setTimeout(() => { app.classList.remove('renderizando'); $('genTexto').textContent = 'Generar reel' }, 3000)
+  }
+  $('generar').addEventListener('click', generar)
+  document.querySelector('.interruptor').addEventListener('click', (e) => e.currentTarget.setAttribute('aria-checked', e.currentTarget.getAttribute('aria-checked') !== 'true'))
+  document.querySelectorAll('.chip').forEach((c) => c.addEventListener('click', () => c.setAttribute('aria-pressed', c.getAttribute('aria-pressed') !== 'true')))
+
+  // ── Revisión: el giro en Anton ──
+  const lote = [1, 4, 0, 6, 2, 7]
+  let pos = 0
+  $('miniaturas').innerHTML = lote.map((i, n) => `<img src="${img(frases[i].fondo)}" alt="" data-n="${n}">`).join('')
+  function revisar(n) {
+    pos = (n + lote.length) % lote.length
+    const f = frases[lote[pos]], [a, b] = tiempos(f.texto), r = $('revision')
+    r.classList.remove('revelado')
+    $('giro').innerHTML = `<span class="t a"><span>${a}</span></span>${b ? `<span class="filete"></span><span class="t b"><span>${b}</span></span>` : ''}`
+    $('giro').style.fontSize = f.texto.length > 105 ? '46px' : '54px'
+    $('revImg').src = img(f.fondo)
+    $('revTexto').innerHTML = `<p>${a}</p>${b ? `<p>${b}</p>` : ''}`
+    $('revFondo').textContent = nombres[f.fondo]; $('revPista').textContent = 'Textura ' + f.pista
+    $('revPos').textContent = `pieza ${pos + 1} de 12 · ejemplo`
+    document.querySelectorAll('.miniaturas img').forEach((m) => m.toggleAttribute('aria-current', m.dataset.n == pos))
+    requestAnimationFrame(() => requestAnimationFrame(() => r.classList.add('revelado')))
+  }
+  $('miniaturas').addEventListener('click', (e) => { if (e.target.dataset.n) revisar(+e.target.dataset.n) })
+  ;['aprobar', 'rechazar', 'siguiente'].forEach((id) => $(id).addEventListener('click', () => revisar(pos + 1)))
+
+  // ── Navegación ──
+  document.querySelectorAll('.item').forEach((b) => b.addEventListener('click', () => {
+    document.querySelectorAll('.item').forEach((x) => x.toggleAttribute('aria-current', x === b))
+    const rev = b.dataset.vista === 'revision'
+    $('app').classList.toggle('revision', rev)
+    if (rev) revisar(0)
+  }))
+
+  // Teclado: j/k o flechas en el banco, G genera; en Revisión A/X/→.
+  addEventListener('keydown', (e) => {
+    const rev = $('app').classList.contains('revision')
+    if (rev) { if (['a', 'x', 'ArrowRight'].includes(e.key)) revisar(pos + 1); if (e.key === 'ArrowLeft') revisar(pos - 1); return }
+    if (['ArrowDown', 'j'].includes(e.key)) { e.preventDefault(); mostrar(actual + 1) }
+    if (['ArrowUp', 'k'].includes(e.key)) { e.preventDefault(); mostrar(actual - 1) }
+    if (e.key === 'g') generar()
+  })
+
+  // Encendido: una vez, al cargar.
+  mostrar(3)
+  setTimeout(() => $('app').classList.add('encendida'), reduce ? 0 : 150)
+</script>
+</body>
+</html>

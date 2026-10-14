@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { RefreshCw, ExternalLink, ArrowLeft, TriangleAlert } from 'lucide-react'
+import { ArrowsClockwise, ArrowSquareOut, ArrowLeft, Warning, Check } from '@phosphor-icons/react'
 import { analyticsApi, PieceStats, DimensionSummary } from '../../api'
 import { useVideoStore } from '../../store/videoStore'
 
@@ -25,11 +25,12 @@ const ETIQUETA_DIMENSION: Record<string, string> = {
 }
 
 function pct(v?: number): string {
-  return v == null ? '—' : `${(v * 100).toFixed(1)}%`
+  return v == null ? '—' : `${(v * 100).toFixed(1).replace('.', ',')} %`
 }
 
+/** Miles con punto, a mano: `toLocaleString` no agrupa las cifras de 4 dígitos (`1687`). */
 function num(v?: number): string {
-  return v == null ? '—' : v.toLocaleString('es-CO')
+  return v == null ? '—' : String(Math.round(v)).replace(/\B(?=(\d{3})+(?!\d))/g, '.')
 }
 
 /** Segundos con un decimal: "4,2 s". */
@@ -59,12 +60,12 @@ function Cobertura({ p }: { p: PieceStats }) {
   return (
     <span
       className="inline-flex gap-[3px] align-middle"
-      title={bloques.map(([n, ok]) => `${ok ? '✓' : '·'} ${n}`).join('   ')}
+      title={bloques.map(([n, ok]) => `${n}: ${ok ? 'sí' : 'no'}`).join(' · ')}
     >
       {bloques.map(([n, ok]) => (
         <span
           key={n}
-          className={`w-1.5 h-1.5 rounded-full ${ok ? 'bg-gold-500' : 'bg-carbon-600'}`}
+          className={`h-1.5 w-1.5 rounded-full ${ok ? 'bg-oro' : 'bg-s3'}`}
         />
       ))}
     </span>
@@ -145,58 +146,59 @@ export default function AnalyticsPanel() {
     render: pieces.filter((p) => p.hasRender).length,
   }
 
-  return (
-    <div className="h-full overflow-y-auto px-8 py-6 text-bone-500">
-      {/* Cabecera */}
-      <div className="flex items-center justify-between mb-1">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setMode('video')}
-            className="flex items-center gap-1.5 text-xs text-bone-700 hover:text-bone-500 transition-colors"
-          >
-            <ArrowLeft size={13} />
-            Volver
-          </button>
-          <h1 className="text-lg font-semibold tracking-wide">Analítica</h1>
-        </div>
+  const th = 'px-3 py-2 font-normal'
+  const td = 'whitespace-nowrap px-3 py-2 text-right font-mono text-meta tabular-nums'
 
-        <button
-          onClick={recoger}
-          disabled={recogiendo}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md bg-carbon-700 hover:bg-carbon-600 disabled:opacity-50 transition-colors"
-        >
-          <RefreshCw size={12} className={recogiendo ? 'animate-spin' : ''} />
+  return (
+    <div className="h-full overflow-y-auto px-4 py-5 text-hueso sm:px-8 sm:py-6">
+      <header className="mb-2 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-4">
+          <button onClick={() => setMode('video')} className="btn-fantasma h-10 lg:h-8">
+            <ArrowLeft size={16} /> Volver
+          </button>
+          <h1 className="text-title font-light">Analítica</h1>
+        </div>
+        <button onClick={recoger} disabled={recogiendo} className="btn-sec">
+          <ArrowsClockwise size={16} />
           {recogiendo ? 'Consultando Instagram…' : 'Actualizar métricas'}
         </button>
-      </div>
+      </header>
 
-      <p className="text-xs text-bone-700 mb-1">
-        {pieces.length} publicaciones · {completas} con la receta entera · {medias} incompletas
-        {conDatos.length < pieces.length && ` · ${pieces.length - conDatos.length} sin métricas todavía`}
+      <p className="mb-1 text-ui text-hueso-2">
+        <span className="font-mono">{pieces.length}</span> publicaciones · <span className="font-mono">{completas}</span> con la receta entera ·{' '}
+        <span className="font-mono">{medias}</span> incompletas
+        {conDatos.length < pieces.length && <> · <span className="font-mono">{pieces.length - conDatos.length}</span> sin métricas todavía</>}
       </p>
-      <p className="text-[11px] text-bone-700 mb-5">
-        Se conoce la <span className="text-bone-500">frase</span> de {cobertura.frase}, la{' '}
-        <span className="text-bone-500">imagen</span> de {cobertura.imagen}, el{' '}
-        <span className="text-bone-500">audio</span> de {cobertura.audio} y el{' '}
-        <span className="text-bone-500">render</span> de {cobertura.render}. Una dimensión solo puede
-        compararse sobre las piezas donde ese bloque se conoce.
+      <p className="mb-5 max-w-[80ch] text-ui text-hueso-3">
+        Se conoce la <span className="text-hueso-2">frase</span> de {cobertura.frase}, la{' '}
+        <span className="text-hueso-2">imagen</span> de {cobertura.imagen}, el{' '}
+        <span className="text-hueso-2">audio</span> de {cobertura.audio} y el{' '}
+        <span className="text-hueso-2">render</span> de {cobertura.render}. Una dimensión solo se compara
+        sobre las piezas donde ese bloque se conoce.
       </p>
 
-      {aviso && <div className="mb-4 text-xs text-gold-500 bg-carbon-800 rounded-md px-3 py-2">{aviso}</div>}
+      {aviso && (
+        <p aria-live="polite" className="mb-4 flex items-center gap-1.5 text-ui text-hueso-2">
+          <Check size={16} className="shrink-0 text-oro" /> {aviso}
+        </p>
+      )}
 
       {cargando ? (
-        <p className="text-xs text-bone-700">Cargando…</p>
+        <p className="text-ui text-hueso-3">Cargando las métricas…</p>
       ) : !conDatos.length ? (
-        <div className="text-xs text-bone-700 bg-carbon-800 rounded-md px-4 py-6 text-center">
-          Todavía no hay métricas. Dale a <span className="text-bone-500">Actualizar métricas</span> para
-          traerlas de Instagram.
+        <div className="flex flex-col items-start gap-3 py-10">
+          <p className="pt-[.16em] font-display text-display uppercase text-hueso">Sin métricas</p>
+          <p className="text-body text-hueso-2">Todavía no se ha traído nada de Instagram.</p>
+          <button onClick={recoger} disabled={recogiendo} className="btn-sec mt-1">Actualizar métricas</button>
         </div>
       ) : (
         <>
           {/* --- Ranking ------------------------------------------------- */}
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="text-sm font-medium">Publicaciones</h2>
-            <div className="flex items-center rounded-md overflow-hidden border border-carbon-600 text-[11px]">
+          {/* En columna por debajo de `sm`: siete criterios no caben en 390 px al
+              lado del título. La tira se desplaza DENTRO de su caja, no la página. */}
+          <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <h2 className="rotulo shrink-0">Publicaciones</h2>
+            <div className="-mx-1 flex max-w-full gap-1.5 overflow-x-auto px-1 pb-1" role="group" aria-label="Ordenar por">
               {([
                 ['reach', 'Alcance'],
                 ['views', 'Vistas'],
@@ -206,67 +208,60 @@ export default function AnalyticsPanel() {
                 ['skipRate', 'Se lo saltan'],
                 ['fecha', 'Fecha'],
               ] as [Orden, string][]).map(([id, label]) => (
-                <button
-                  key={id}
-                  onClick={() => setOrden(id)}
-                  className={`px-2.5 py-1 transition-colors ${
-                    orden === id
-                      ? 'bg-carbon-700 text-bone-500'
-                      : 'bg-carbon-800 text-bone-700 hover:text-bone-500'
-                  }`}
-                >
+                <button key={id} onClick={() => setOrden(id)} aria-pressed={orden === id} className="chip shrink-0">
                   {label}
                 </button>
               ))}
             </div>
           </div>
 
-          <div className="overflow-x-auto rounded-md border border-carbon-600 mb-8">
-            <table className="w-full text-xs">
-              <thead className="bg-carbon-800 text-bone-700">
+          {/* `relative`: sin él, el `sr-only` (absolute) de la última columna escapa del
+              recorte y da scroll horizontal a toda la página en móvil. */}
+          <div className="relative mb-10 overflow-x-auto rounded-panel border border-linea-2">
+            <table className="w-full text-ui">
+              <thead className="bg-s1 text-meta text-hueso-3">
                 <tr>
-                  <th className="text-left font-normal px-3 py-2">Fecha</th>
-                  <th className="text-left font-normal px-3 py-2">Contenido</th>
-                  <th className="text-left font-normal px-3 py-2">Registro</th>
-                  <th className="text-right font-normal px-3 py-2">Alcance</th>
-                  <th className="text-right font-normal px-3 py-2" title="Reproducciones totales">Vistas</th>
-                  <th className="text-right font-normal px-3 py-2" title="Vistas por persona alcanzada: por encima de 1× hay quien lo repite">Repet.</th>
-                  <th className="text-right font-normal px-3 py-2" title="Segundos de visionado medio (solo reels)">Reten.</th>
-                  <th className="text-right font-normal px-3 py-2" title="Porcentaje que pasa de largo sin verlo. Cuanto más bajo, mejor engancha">Skip</th>
-                  <th className="text-right font-normal px-3 py-2" title="Guardados sobre alcance">Guard.</th>
-                  <th className="text-right font-normal px-3 py-2" title="Compartidos sobre alcance">Comp.</th>
-                  <th className="text-right font-normal px-3 py-2" title="Likes + comentarios + guardados + compartidos, sobre alcance">Interac.</th>
-                  <th className="px-2 py-2"></th>
+                  <th className={`${th} text-left`}>Fecha</th>
+                  <th className={`${th} text-left`}>Contenido</th>
+                  <th className={`${th} text-left`}>Registro</th>
+                  <th className={`${th} text-right`}>Alcance</th>
+                  <th className={`${th} text-right`} title="Reproducciones totales">Vistas</th>
+                  <th className={`${th} text-right`} title="Vistas por persona alcanzada: por encima de 1× hay quien lo repite">Repet.</th>
+                  <th className={`${th} text-right`} title="Segundos de visionado medio (solo reels)">Reten.</th>
+                  <th className={`${th} text-right`} title="Porcentaje que pasa de largo sin verlo. Cuanto más bajo, mejor engancha">Skip</th>
+                  <th className={`${th} text-right`} title="Guardados sobre alcance">Guard.</th>
+                  <th className={`${th} text-right`} title="Compartidos sobre alcance">Comp.</th>
+                  <th className={`${th} text-right`} title="Likes + comentarios + guardados + compartidos, sobre alcance">Interac.</th>
+                  <th className="px-2 py-2"><span className="sr-only">Abrir</span></th>
                 </tr>
               </thead>
               <tbody>
                 {ordenadas.map((p) => (
-                  <tr key={p.mediaId} className="border-t border-carbon-700 hover:bg-carbon-800/50">
-                    <td className="px-3 py-2 text-bone-700 whitespace-nowrap">{fecha(p.publishedAt)}</td>
-                    <td className="px-3 py-2 max-w-md">
-                      <span className="line-clamp-1">{p.texto ?? <em className="text-bone-700">sin identificar</em>}</span>
-                      <span className="ml-2">
-                        <Cobertura p={p} />
-                      </span>
+                  <tr key={p.mediaId} className="border-t border-linea transition-colors duration-rapido ease-mesa hover:bg-s2">
+                    <td className="whitespace-nowrap px-3 py-2 font-mono text-meta text-hueso-3">{fecha(p.publishedAt)}</td>
+                    <td className="max-w-md px-3 py-2">
+                      <span className="line-clamp-1">{p.texto ?? <span className="text-hueso-3">sin identificar</span>}</span>
+                      <span className="mt-1 block"><Cobertura p={p} /></span>
                     </td>
-                    <td className="px-3 py-2 text-bone-700 whitespace-nowrap">{p.moodCategory ?? '—'}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{num(p.reach)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{num(p.views)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums text-bone-700">{veces(p.viewsPerReach)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums text-bone-700">{seg(p.avgWatchTime)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums text-bone-700">{pct(p.skipRate)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{pct(p.saveRate)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{pct(p.shareRate)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{pct(p.engagementRate)}</td>
+                    <td className="whitespace-nowrap px-3 py-2 text-hueso-2">{p.moodCategory ?? '—'}</td>
+                    <td className={`${td} text-hueso`}>{num(p.reach)}</td>
+                    <td className={`${td} text-hueso`}>{num(p.views)}</td>
+                    <td className={`${td} text-hueso-2`}>{veces(p.viewsPerReach)}</td>
+                    <td className={`${td} text-hueso-2`}>{seg(p.avgWatchTime)}</td>
+                    <td className={`${td} text-hueso-2`}>{pct(p.skipRate)}</td>
+                    <td className={`${td} text-hueso`}>{pct(p.saveRate)}</td>
+                    <td className={`${td} text-hueso`}>{pct(p.shareRate)}</td>
+                    <td className={`${td} text-hueso`}>{pct(p.engagementRate)}</td>
                     <td className="px-2 py-2">
                       {p.permalink && (
                         <a
                           href={p.permalink}
                           target="_blank"
                           rel="noreferrer"
-                          className="text-bone-700 hover:text-bone-500"
+                          aria-label="Abrir en Instagram"
+                          className="grid h-10 w-10 place-items-center rounded-control text-hueso-3 lg:h-8 lg:w-8 transition-colors duration-rapido ease-mesa hover:bg-s3 hover:text-hueso"
                         >
-                          <ExternalLink size={12} />
+                          <ArrowSquareOut size={16} />
                         </a>
                       )}
                     </td>
@@ -277,60 +272,57 @@ export default function AnalyticsPanel() {
           </div>
 
           {/* --- Agregados ------------------------------------------------ */}
-          <h2 className="text-sm font-medium mb-1">Qué funciona</h2>
-          <p className="text-xs text-bone-700 mb-4 flex items-start gap-1.5">
-            <TriangleAlert size={12} className="mt-0.5 shrink-0" />
+          <h2 className="rotulo mb-2">Qué funciona</h2>
+          <p className="mb-4 flex max-w-[80ch] items-start gap-1.5 text-ui text-hueso-2">
+            <Warning size={16} className="mt-0.5 shrink-0 text-hueso-3" />
             <span>
-              Los grupos con menos de {minN} publicaciones se marcan como insuficientes: con tan pocas
-              piezas la diferencia es ruido, no señal. Las tasas van sobre el alcance, para que una pieza
-              muy vista no gane solo por serlo.
+              Los grupos con menos de <span className="font-mono">{minN}</span> publicaciones se marcan como
+              insuficientes: con tan pocas piezas la diferencia es ruido, no señal. Las tasas van sobre el
+              alcance, para que una pieza muy vista no gane solo por serlo.
             </span>
           </p>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pb-8">
+          <div className="grid grid-cols-1 gap-4 pb-8 md:grid-cols-2">
             {porDimension.map(([dimension, valores]) => (
-              <div key={dimension} className="rounded-md border border-carbon-600 overflow-hidden">
-                <div className="bg-carbon-800 px-3 py-2 text-xs font-medium flex items-center justify-between">
+              <section key={dimension} className="overflow-hidden rounded-panel border border-linea-2">
+                <h3 className="flex items-center justify-between gap-2 bg-s1 px-3 py-2 text-ui text-hueso">
                   <span>{ETIQUETA_DIMENSION[dimension] ?? dimension}</span>
                   {valores.length === 1 && (
-                    <span className="text-[10px] text-bone-700 font-normal">
-                      un solo valor — todavía no compara nada
-                    </span>
+                    <span className="text-meta text-hueso-3">un solo valor: aún no compara nada</span>
                   )}
-                </div>
-                <table className="w-full text-xs">
-                  <thead className="text-bone-700 text-[10px]">
-                    <tr className="border-t border-carbon-700">
-                      <th className="text-left font-normal px-3 py-1">Valor</th>
-                      <th className="text-left font-normal px-2 py-1">Piezas</th>
-                      <th className="text-right font-normal px-2 py-1">Alcance medio</th>
-                      <th className="text-right font-normal px-2 py-1">Guardados</th>
-                      <th className="text-right font-normal px-3 py-1">Compartidos</th>
+                </h3>
+                <table className="w-full text-ui">
+                  <thead className="text-meta text-hueso-3">
+                    <tr className="border-t border-linea">
+                      <th className="px-3 py-1 text-left font-normal">Valor</th>
+                      <th className="px-2 py-1 text-left font-normal">Piezas</th>
+                      <th className="px-2 py-1 text-right font-normal">Alcance medio</th>
+                      <th className="px-2 py-1 text-right font-normal">Guardados</th>
+                      <th className="px-3 py-1 text-right font-normal">Compartidos</th>
                     </tr>
                   </thead>
                   <tbody>
                     {valores.map((d) => {
+                      // Insuficiente: se apaga a hueso-3 (legible), no con opacidad.
                       const flojo = d.n < minN
+                      const c = flojo ? 'text-hueso-3' : 'text-hueso'
                       return (
-                        <tr
-                          key={d.valor}
-                          className={`border-t border-carbon-700 ${flojo ? 'opacity-40' : ''}`}
-                        >
-                          <td className="px-3 py-1.5">{d.valor}</td>
-                          <td className="px-2 py-1.5 text-bone-700 tabular-nums">n={d.n}</td>
-                          <td className="px-2 py-1.5 text-right tabular-nums">{num(d.reachMedio)}</td>
-                          <td className="px-2 py-1.5 text-right tabular-nums" title="Guardados sobre alcance">
+                        <tr key={d.valor} className="border-t border-linea">
+                          <td className={`px-3 py-1.5 ${c}`}>{d.valor}</td>
+                          <td className="px-2 py-1.5 font-mono text-meta tabular-nums text-hueso-3">n={d.n}</td>
+                          <td className={`whitespace-nowrap px-2 py-1.5 text-right font-mono text-meta tabular-nums ${c}`}>{num(d.reachMedio)}</td>
+                          <td className={`whitespace-nowrap px-2 py-1.5 text-right font-mono text-meta tabular-nums ${c}`} title="Guardados sobre alcance">
                             {pct(d.saveRate)}
                           </td>
-                          <td className="px-3 py-1.5 text-right tabular-nums" title="Compartidos sobre alcance">
-                            {flojo ? <span className="text-bone-700">insuficiente</span> : pct(d.shareRate)}
+                          <td className={`whitespace-nowrap px-3 py-1.5 text-right font-mono text-meta tabular-nums ${c}`} title="Compartidos sobre alcance">
+                            {flojo ? 'insuficiente' : pct(d.shareRate)}
                           </td>
                         </tr>
                       )
                     })}
                   </tbody>
                 </table>
-              </div>
+              </section>
             ))}
           </div>
         </>

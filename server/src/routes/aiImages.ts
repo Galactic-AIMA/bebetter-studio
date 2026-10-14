@@ -1,6 +1,8 @@
 import { Router } from 'express'
+import fs from 'fs'
 import path from 'path'
 import { config } from '../config'
+import { subirMedia, CLAVE_IMAGENES } from '../services/mediaStore'
 import db from '../db'
 import {
   analyzePhraseStructured,
@@ -10,7 +12,9 @@ import {
   PhraseAnalysis,
 } from '../services/geminiService'
 import { generateImage, downloadImage, KieAspect } from '../services/kieService'
+import { generateImage as generateImageVertex } from '../services/vertexImageService'
 import { invalidateImageCache } from './imageTags'
+import { logError } from '../services/logService'
 
 const router = Router()
 
@@ -86,7 +90,7 @@ router.post('/prompt', async (req, res) => {
   try {
     let text: string = phrase
     if (phraseId && !phrase) {
-      const row = db.prepare(`SELECT text FROM phrases WHERE id = ?`).get(phraseId) as any
+      const row = (await db.prepare(`SELECT text FROM phrases WHERE id = ?`).get(phraseId)) as any
       text = row?.text
       if (!text) return res.status(404).json({ error: 'Frase no encontrada' })
     }
@@ -100,11 +104,11 @@ router.post('/prompt', async (req, res) => {
 })
 
 const insertImage = db.prepare(`
-  INSERT INTO images (filename, tags, analysis_json, embedding, analyzed_at, usage_count, origen)
-  VALUES (@filename, @tags, @analysis_json, @embedding, @analyzed_at, 0, 'ia')
+  INSERT INTO images (filename, tags, analysis_json, embedding, analyzed_at, usage_count, origen, modelo)
+  VALUES (@filename, @tags, @analysis_json, @embedding, @analyzed_at, 0, 'ia', @modelo)
   ON CONFLICT(filename) DO UPDATE SET
     tags = @tags, analysis_json = @analysis_json, embedding = @embedding,
-    analyzed_at = @analyzed_at, origen = 'ia'
+    analyzed_at = @analyzed_at, origen = 'ia', modelo = @modelo
 `)
 
 // POST /api/ai-images/generate — genera la imagen con KIE, la guarda en el banco
@@ -116,13 +120,37 @@ router.post('/generate', async (req, res) => {
   const aspect: KieAspect = ASPECTS.includes(aspectRatio) ? aspectRatio : '9:16'
 
   try {
-    // 1. Generar en KIE (async con polling)
-    const resultUrl = await generateImage({ prompt, aspectRatio: aspect, resolution: '2K', outputFormat: 'png' })
-
-    // 2. Descargar al banco de imágenes
+    // 1-2. Generar y dejar la imagen en el banco.
+    // El backend lo decide IMAGE_BACKEND: 'vertex' (directo, con cargo a los
+    // créditos del ensayo) o 'kie' (revendedor). Cambiar la variable es todo el
+    // rollback: kieService sigue intacto.
     const filename = `ia-${Date.now()}.png`
     const outPath = path.join(config.paths.images, filename)
-    await downloadImage(resultUrl, outPath)
+
+    // El modelo que RESPONDIÓ, no el que se pidió: la cadena de respaldo puede
+    // haber cambiado a otro, y anotar el configurado falsearía la comparación.
+    let modelo = 'kie:nano-banana-pro'
+    if (config.imageBackend === 'vertex') {
+      // Vertex es síncrono y devuelve la imagen en base64: no hay URL que descargar.
+      const r = await generateImageVertex({ prompt, aspectRatio: aspect })
+      fs.mkdirSync(path.dirname(outPath), { recursive: true })
+      fs.writeFileSync(outPath, r.buffer)
+      modelo = r.modelo
+    } else {
+      const resultUrl = await generateImage({ prompt, aspectRatio: aspect, resolution: '2K', outputFormat: 'png' })
+      await downloadImage(resultUrl, outPath)
+    }
+
+    // 2b. Subir al banco de R2 (Fase 1). Sin esto la imagen solo existe en el disco
+    // de David: el lote en la nube la elegiría —la fila está en la base compartida—
+    // y luego no encontraría el archivo para renderizar. Best-effort a propósito: si
+    // R2 falla, la imagen ya está generada y en local, y la sube después el script
+    // `subir-banco-a-r2.ts`, que es idempotente.
+    try {
+      await subirMedia(CLAVE_IMAGENES, filename, outPath)
+    } catch (e: any) {
+      logError('s3', `No se pudo subir ${filename} a R2`, e.message)
+    }
 
     // 3. Analizar + vectorizar (mismo pipeline que el banco) para que entre al matching
     let tags: string[] = []
@@ -130,20 +158,21 @@ router.post('/generate', async (req, res) => {
       const analysis = await analyzeImageStructured(outPath)
       const embedding = await embedText(buildImageDocument(analysis))
       tags = [analysis.emocionDominante, analysis.composicion, ...analysis.paletaColores].slice(0, 8)
-      insertImage.run({
+      await insertImage.run({
         filename,
         tags: JSON.stringify(tags),
         analysis_json: JSON.stringify(analysis),
         embedding: Buffer.from(embedding.buffer),
         analyzed_at: new Date().toISOString(),
+        modelo,
       })
       invalidateImageCache()
     } catch (analyzeErr: any) {
       // La imagen se generó y guardó; el análisis es best-effort (se puede
       // re-analizar luego desde el banco). Igual devolvemos la imagen.
-      insertImage.run({
+      await insertImage.run({
         filename, tags: '[]', analysis_json: null, embedding: null,
-        analyzed_at: null,
+        analyzed_at: null, modelo,
       })
     }
 

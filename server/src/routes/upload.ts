@@ -5,6 +5,8 @@ import fs from 'fs'
 import { config } from '../config'
 import { analyzeImage } from '../services/geminiService'
 import db from '../db'
+import { subirMedia, CLAVE_IMAGENES } from '../services/mediaStore'
+import { logError } from '../services/logService'
 
 const router = Router()
 
@@ -42,8 +44,15 @@ router.post('/image', upload.single('image'), (req, res) => {
   // Analizar en background sin bloquear la respuesta
   const filePath = req.file.path
   const filename = req.file.filename
-  analyzeImage(filePath).then((tags) => {
-    db.prepare(`
+
+  // Y subirla al banco de R2 (Fase 1): si solo quedara en este disco, el render en
+  // la nube la elegiría —la fila entra en la base compartida— y luego no encontraría
+  // el archivo. Best-effort: `subir-banco-a-r2.ts` es idempotente y recoge lo que falle.
+  subirMedia(CLAVE_IMAGENES, filename, filePath).catch((e) =>
+    logError('s3', `Imagen subida ${filename} no llegó a R2`, e.message)
+  )
+  analyzeImage(filePath).then(async (tags) => {
+    await db.prepare(`
       INSERT INTO images (filename, tags, analyzed_at)
       VALUES (@filename, @tags, @analyzed_at)
       ON CONFLICT(filename) DO UPDATE SET tags = @tags, analyzed_at = @analyzed_at

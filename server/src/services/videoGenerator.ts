@@ -3,6 +3,9 @@ import path from 'path'
 import fs from 'fs'
 import { VideoConfig, WatermarkPosition, TextEffect } from '../types'
 import { config } from '../config'
+import { rutaLocal, CLAVE_AUDIO, CLAVE_IMAGENES } from './mediaStore'
+import db from '../db'
+import { resolveFontFile, resolveItalicFontFile, toFFmpegPath, wrapTextServer, watermarkFontFile } from '../text/fontMeasure'
 
 function wmXExpr(position: WatermarkPosition, isText = false): string {
   if (position === 'left') return '20'
@@ -18,19 +21,6 @@ export interface GenerateResult {
   filename: string
   localPath: string
   publicUrl: string
-}
-
-const WINDOWS_FONTS = 'C:/Windows/Fonts'
-
-const FONT_FALLBACKS: Record<string, string> = {
-  'Montserrat-Bold':          `${WINDOWS_FONTS}/arialbd.ttf`,
-  'Montserrat-Regular':       `${WINDOWS_FONTS}/arial.ttf`,
-  'PlayfairDisplay-Bold':     `${WINDOWS_FONTS}/georgiab.ttf`,
-  'PlayfairDisplay-Regular':  `${WINDOWS_FONTS}/georgia.ttf`,
-  'Lato-Regular':             `${WINDOWS_FONTS}/calibri.ttf`,
-  'Lato-Bold':                `${WINDOWS_FONTS}/calibrib.ttf`,
-  'Oswald-Bold':              `${WINDOWS_FONTS}/arialbd.ttf`,
-  'RobotoCondensed-Bold':     `${WINDOWS_FONTS}/arialbd.ttf`,
 }
 
 // ---------------------------------------------------------------------------
@@ -85,54 +75,60 @@ export function buildScrimFilter(
     if (y1 <= y0) continue
     boxes.push(`drawbox=x=0:y=${y0}:w=iw:h=${y1 - y0}:color=${color}@${alpha.toFixed(4)}:t=fill`)
   }
-  return boxes.join(',')
+  if (!boxes.length) return ''
+  // En RGB y no en el YUV 4:2:0 del decodificador: ahí cada muestra de color la
+  // comparten cuatro píxeles y drawbox la funde varias veces, así que el velo
+  // apagaba el color además de oscurecer (un rojo (225,45,0) salía (77,60,52) en
+  // vez de (130,29,4), que es lo que pinta el preview). El codificador vuelve a
+  // yuv420p al final (`-pix_fmt`), igual que antes.
+  return ['format=rgb24', ...boxes].join(',')
 }
 // ---------------------------------------------------------------------------
 
-function estimateTextWidth(text: string, fontSize: number): number {
-  return text.length * fontSize * 0.55
-}
-
-function wrapText(text: string, fontSize: number, maxPx: number): string[] {
-  const words = text.split(' ')
-  const lines: string[] = []
-  let current = ''
-
-  for (const word of words) {
-    const test = current ? `${current} ${word}` : word
-    if (estimateTextWidth(test, fontSize) > maxPx && current) {
-      lines.push(current)
-      current = word
-    } else {
-      current = test
-    }
-  }
-  if (current) lines.push(current)
-  return lines
-}
-
 function resolveFontPath(fontName: string): string {
-  const customFont = path.join(config.paths.fonts, `${fontName}.ttf`)
-  const resolved = fs.existsSync(customFont)
-    ? customFont
-    : (FONT_FALLBACKS[fontName] || `${WINDOWS_FONTS}/arial.ttf`)
-  return resolved.replace(/\\/g, '/').replace(/^([A-Z]):/, '$1\\:')
+  return toFFmpegPath(resolveFontFile(fontName))
 }
 
 function resolveItalicFontPath(fontName: string): string | null {
-  const familyKey = fontName.split('-')[0]
-  const italicKey = `${familyKey}-Italic`
-  const customFont = path.join(config.paths.fonts, `${italicKey}.ttf`)
-  if (fs.existsSync(customFont)) return customFont.replace(/\\/g, '/').replace(/^([A-Z]):/, '$1\\:')
-  return null
+  const italic = resolveItalicFontFile(fontName)
+  return italic ? toFFmpegPath(italic) : null
 }
 
 // Resuelve la pista de audio de fondo dentro de data/audio. Devuelve null si
 // no hay pista configurada o el archivo no existe (el video se genera sin audio).
-function resolveAudioPath(audioTrack?: string): string | null {
+/**
+ * Ruta local de la pista, bajándola de R2 si el disco no la tiene (Fase 1).
+ *
+ * En la máquina de David el banco está entero en `data/audio` y no se descarga
+ * nada; en el contenedor no hay banco, y sin esto los reels salían mudos.
+ */
+async function resolveAudioPath(audioTrack?: string): Promise<string | null> {
   if (!audioTrack) return null
-  const p = path.join(config.paths.audio, audioTrack)
-  return fs.existsSync(p) ? p : null
+  return rutaLocal(CLAVE_AUDIO, audioTrack)
+}
+
+/**
+ * Ruta local de la imagen de fondo. `cfg.imagePath` llega del cliente como ruta
+ * ABSOLUTA del servidor —el listado se la dio así—, y eso deja de valer en cuanto
+ * el render no ocurre en la misma máquina que el banco. Se toma como pista: manda
+ * el nombre del archivo, que sí identifica a la imagen en cualquier parte.
+ */
+async function resolveImagePath(imagePath: string): Promise<string> {
+  const local = await rutaLocal(CLAVE_IMAGENES, path.basename(imagePath))
+  // Si no aparece ni en disco ni en R2 se devuelve lo que vino: que falle FFmpeg
+  // con el nombre a la vista es más diagnosticable que un null aguas abajo.
+  return local ?? imagePath
+}
+
+/**
+ * Segundo por el que debe empezar a sonar la pista. Ver `audioSegment.ts`: con
+ * temas largos, arrancar en 0 se lleva la intro en vez del estribillo.
+ */
+async function resolveAudioOffset(audioTrack?: string): Promise<number> {
+  if (!audioTrack) return 0
+  const row = (await db.prepare(`SELECT offset_seg FROM audio_tracks WHERE filename = ?`).get(audioTrack)) as any
+  const off = Number(row?.offset_seg ?? 0)
+  return Number.isFinite(off) && off > 0 ? off : 0
 }
 
 const AUDIO_FADE = 1 // segundos de fade in/out del audio de fondo
@@ -193,18 +189,29 @@ export async function generateVideo(
 
   const { width, height } = cfg.resolution
   const { text, transition, transitionDuration, duration } = cfg
-  const audioPath = resolveAudioPath(cfg.audioTrack)
+  const audioPath = await resolveAudioPath(cfg.audioTrack)
+  const imagePath = await resolveImagePath(cfg.imagePath)
+  // Se resuelve AQUÍ y no donde se usa: allí abajo estamos dentro del callback que
+  // arma la orden de FFmpeg, que no puede ser asíncrono.
+  const offsetAudio = await resolveAudioOffset(cfg.audioTrack)
 
   const maxW = Math.round((text.maxWidth / 100) * width)
   const centerY = Math.round((text.position.y / 100) * height)
   const fontPath = resolveFontPath(text.font)
   const lineH = Math.round(text.fontSize * text.lineHeight)
 
-  // Usar las lineas pre-calculadas por el cliente (con canvas.measureText real).
-  // Si no vienen, calcular con la estimacion local como fallback.
+  // Si el cliente manda sus líneas (flujo del editor), se respetan. Si no vienen
+  // —lote sin navegador, bot, worker—, se calculan aquí midiendo con el mismo TTF
+  // que pinta FFmpeg, con la división por tiempos incluida.
   const lines = (cfg.wrappedLines && cfg.wrappedLines.length > 0)
     ? cfg.wrappedLines
-    : wrapText(text.content, text.fontSize, maxW)
+    : wrapTextServer({
+        text: text.content,
+        font: text.font,
+        fontSize: text.fontSize,
+        maxWidth: text.maxWidth,
+        resolutionWidth: width,
+      })
   const totalH = lines.length * lineH
   const startY = Math.max(10, centerY - Math.round(totalH / 2))
 
@@ -299,7 +306,7 @@ export async function generateVideo(
   const wmY = wm?.y ?? 90
 
   return new Promise((resolve, reject) => {
-    const cmd = ffmpeg(cfg.imagePath).inputOptions(['-loop 1', `-t ${duration}`])
+    const cmd = ffmpeg(imagePath).inputOptions(['-loop 1', `-t ${duration}`])
 
     // Cuando el watermark de imagen usa complexFilter, el mapeo automático de
     // streams se desactiva, así que el audio se debe plegar dentro del grafo.
@@ -308,7 +315,7 @@ export async function generateVideo(
     if (wmEnabled && wmType === 'text') {
       const wmText = escapeLine(wm!.text ?? '@bebetter.path')
       const opacity = (wm!.opacity ?? 0.35).toFixed(2)
-      const fontPath = `${WINDOWS_FONTS}/arial.ttf`.replace(/^([A-Z]):/, '$1\\:')
+      const fontPath = toFFmpegPath(watermarkFontFile())
       const wmFilter = `drawtext=text='${wmText}':fontfile='${fontPath}':fontsize=22:fontcolor=white@${opacity}:x=${wmXExpr(wmPos, true)}:y=${wmYExpr(wmY)}`
       cmd.videoFilters(vfilter + `,${wmFilter}`)
     } else if (wmEnabled && wmType === 'image') {
@@ -337,7 +344,13 @@ export async function generateVideo(
 
     // Audio de fondo: loop infinito (se recorta por -t) como último input.
     if (audioPath) {
-      cmd.input(audioPath).inputOptions(['-stream_loop -1'])
+      // `-ss` va como opción de ENTRADA (antes del input): busca sin decodificar
+      // todo lo anterior. Con `-stream_loop -1` la pista sigue repitiéndose si el
+      // reel dura más que lo que queda desde el offset.
+      const inOpts = ['-stream_loop -1']
+      const off = offsetAudio
+      if (off > 0) inOpts.push(`-ss ${off}`)
+      cmd.input(audioPath).inputOptions(inOpts)
       if (!audioInComplex) cmd.audioFilters(audioFilterChain(duration))
     }
 

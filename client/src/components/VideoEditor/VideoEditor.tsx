@@ -1,11 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { ChevronDown, Play, Pause } from 'lucide-react'
+import {
+  CaretDown, Play, Pause, X, Plus,
+  TextAlignLeft, TextAlignCenter, TextAlignRight, type Icon,
+} from '@phosphor-icons/react'
 import { useVideoStore } from '../../store/videoStore'
 import { TransitionType, TextAlign, TextEffect, VisualStyle } from '../../types'
 import { PRESETS } from '../../presets'
 import { usePresets, PresetConfig } from '../../hooks/usePresets'
 import { FONT_FAMILIES, FontStyleKey, parseFontKey } from '../../config/fonts'
 import { audioApi, AudioTrack, AutoPick } from '../../api'
+import { Segmentos, Rango, Interruptor, Campo } from '../ui/mesa'
 
 const VISUAL_STYLES = Object.entries(PRESETS) as [VisualStyle, (typeof PRESETS)[VisualStyle]][]
 
@@ -29,8 +33,13 @@ const TEXT_EFFECTS: { value: TextEffect; label: string }[] = [
   { value: 'glowPulse', label: 'Glow' },
 ]
 
-const activeBtn = 'border-neon-red text-neon-red bg-carbon-700'
-const idleBtn   = 'border-carbon-600 text-bone-700 bg-carbon-700 hover:text-bone-500 hover:border-bone-700'
+const ALIGN_ICONS: Record<TextAlign, { icon: Icon; label: string }> = {
+  left:   { icon: TextAlignLeft,   label: 'Izquierda' },
+  center: { icon: TextAlignCenter, label: 'Centro' },
+  right:  { icon: TextAlignRight,  label: 'Derecha' },
+}
+
+/* ── Piezas del inspector (las compartidas viven en ../ui/mesa) ───────────── */
 
 function SectionPanel({
   label, isOpen, onToggle, children,
@@ -38,21 +47,25 @@ function SectionPanel({
   label: string; isOpen: boolean; onToggle: () => void; children: React.ReactNode
 }) {
   return (
-    <div className="border-b border-carbon-600 last:border-b-0">
+    <section className="border-b border-linea">
       <button
         onClick={onToggle}
-        className="flex w-full items-center justify-between px-4 py-2.5 text-[10px] font-semibold uppercase tracking-widest text-bone-700 hover:text-bone-500 transition-colors"
+        aria-expanded={isOpen}
+        className="flex w-full items-center justify-between px-4 py-3 text-hueso-3 transition-colors duration-rapido ease-mesa hover:text-hueso"
       >
-        {label}
-        <ChevronDown
-          size={12}
-          className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+        <span className="font-cond text-label font-medium uppercase">{label}</span>
+        <CaretDown
+          size={14}
+          className={`transition-transform duration-base ease-mesa ${isOpen ? 'rotate-180' : ''}`}
         />
       </button>
-      {isOpen && <div className="px-4 pb-4">{children}</div>}
-    </div>
+      {isOpen && <div className="flex flex-col gap-3.5 px-4 pb-4">{children}</div>}
+    </section>
   )
 }
+
+const selectCls = 'campo text-ui py-1.5'
+const colorCls = 'h-8 w-full cursor-pointer rounded-control border border-borde-control bg-sala p-0.5'
 
 export default function VideoEditor() {
   const { config, mode, selectedPhraseId, setText, setConfig, setWatermark, setTextEffect, applyPreset, applyConfig } = useVideoStore()
@@ -141,444 +154,280 @@ export default function VideoEditor() {
   }
 
   const strokeEnabled = (text.strokeWidth ?? 0) > 0
+  const alinear = (['left', 'center', 'right'] as TextAlign[]).map((a) => {
+    const { icon: Icono, label } = ALIGN_ICONS[a]
+    return { value: a, label: <Icono size={16} />, aria: label }
+  })
 
   return (
-    <div className="flex flex-col divide-y divide-carbon-600">
+    <div className="flex flex-col">
 
       {/* Estilo visual */}
       <SectionPanel label="Estilo visual" isOpen={open.has('estilos')} onToggle={() => toggle('estilos')}>
-        <div className="grid grid-cols-3 gap-1">
-          {VISUAL_STYLES.map(([key, preset]) => (
-            <button
-              key={key}
-              onClick={() => applyPreset(key as VisualStyle)}
-              className={`py-1.5 rounded text-xs border transition-colors ${visualStyle === key ? activeBtn : idleBtn}`}
-            >
-              {preset.label}
-            </button>
-          ))}
-        </div>
+        <Segmentos
+          value={visualStyle as VisualStyle}
+          cols={3}
+          options={VISUAL_STYLES.map(([key, preset]) => ({ value: key, label: preset.label }))}
+          onChange={(k) => applyPreset(k)}
+        />
       </SectionPanel>
 
       {/* Mis presets */}
       <SectionPanel label="Mis presets" isOpen={open.has('presets')} onToggle={() => toggle('presets')}>
-        <div className="flex items-center justify-between mb-3">
-          <button
-            onClick={handleSave}
-            className="text-[10px] text-gold-500 hover:text-gold-600 transition-colors"
-          >
-            {savingName === null ? '+ Guardar actual' : 'Cancelar'}
-          </button>
-        </div>
-        {savingName !== null && (
-          <div className="flex gap-2 mb-2">
+        {savingName !== null ? (
+          <div className="flex gap-2">
             <input
               autoFocus
               type="text"
               value={savingName}
               onChange={(e) => setSavingName(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') setSavingName(null) }}
-              placeholder="Nombre del preset..."
-              className="flex-1 bg-carbon-700 border border-carbon-600 rounded-lg px-3 py-1.5 text-xs text-bone-500 focus:outline-none focus:ring-1 focus:ring-neon-red placeholder:text-bone-700"
+              placeholder="Nombre del preset"
+              aria-label="Nombre del preset"
+              className="campo text-ui"
             />
-            <button
-              onClick={handleSave}
-              disabled={!savingName.trim()}
-              className="px-3 py-1.5 bg-gold-500 hover:bg-gold-600 disabled:opacity-40 disabled:cursor-not-allowed text-carbon-900 text-xs rounded-lg transition-colors font-medium"
-            >
-              Guardar
+            <button onClick={handleSave} disabled={!savingName.trim()} className="btn-sec shrink-0">Guardar</button>
+            <button onClick={() => setSavingName(null)} className="btn-fantasma shrink-0" aria-label="Cancelar">
+              <X size={16} />
             </button>
           </div>
-        )}
-        {presets.length === 0 && savingName === null ? (
-          <p className="text-xs text-bone-700">No hay presets guardados.</p>
         ) : (
-          <div className="flex flex-col gap-1">
+          <button onClick={handleSave} className="btn-fantasma self-start">
+            <Plus size={16} /> Guardar el ajuste actual
+          </button>
+        )}
+        {presets.length === 0 ? (
+          savingName === null && <p className="text-ui text-hueso-3">Aún no has guardado ninguno.</p>
+        ) : (
+          <ul className="flex flex-col">
             {presets.map((p) => (
-              <div key={p.id} className="flex items-center gap-2 group">
+              <li key={p.id} className="group flex items-center border-b border-linea last:border-0">
                 <button
                   onClick={() => applyConfig(p.config)}
-                  className="flex-1 text-left px-3 py-1.5 rounded-lg bg-carbon-700 border border-carbon-600 hover:border-bone-700 text-xs text-bone-500 transition-colors truncate"
+                  className="h-8 flex-1 truncate rounded-control px-2 text-left text-ui text-hueso transition-colors duration-rapido ease-mesa hover:bg-s2"
                 >
                   {p.name}
                 </button>
                 <button
                   onClick={() => removePreset(p.id)}
-                  className="opacity-0 group-hover:opacity-100 text-bone-700 hover:text-neon-red transition-all text-xs px-1"
-                  title="Eliminar"
+                  className="btn-fantasma p-1.5 opacity-0 hover:text-lacre focus-visible:opacity-100 group-hover:opacity-100"
+                  aria-label={`Eliminar preset ${p.name}`}
                 >
-                  ✕
+                  <X size={16} />
                 </button>
-              </div>
+              </li>
             ))}
-          </div>
+          </ul>
         )}
       </SectionPanel>
 
       {/* Frase */}
       <SectionPanel label="Frase" isOpen={open.has('frase')} onToggle={() => toggle('frase')}>
         <textarea
-          className="w-full bg-[#1C1C1C] border border-white/10 rounded-lg p-3 text-sm text-[#E8E4DC] resize-none focus:outline-none focus:ring-0 focus:border-white/30 placeholder:text-[#E8E4DC]/40"
+          className="campo resize-none"
           rows={3}
           value={text.content}
           onChange={(e) => setText({ content: e.target.value })}
-          placeholder="Escribe tu frase..."
+          placeholder="Escribe la frase. Marca el giro con //"
+          aria-label="Texto de la frase"
         />
       </SectionPanel>
 
       {/* Tipografía */}
       <SectionPanel label="Tipografía" isOpen={open.has('tipografia')} onToggle={() => toggle('tipografia')}>
-        <div className="flex flex-col gap-3">
+        <Campo label="Fuente">
+          <select className={selectCls} value={currentFamily} onChange={(e) => handleFamilyChange(e.target.value)}>
+            {FONT_FAMILIES.map((f) => (
+              <option key={f.key} value={f.key}>{f.displayName}</option>
+            ))}
+          </select>
+        </Campo>
 
-          {/* Familia */}
-          <div>
-            <label className="text-xs text-bone-700 mb-1 block">Fuente</label>
-            <select
-              className="w-full bg-carbon-700 border border-carbon-600 rounded-lg p-2 text-xs text-bone-500"
-              value={currentFamily}
-              onChange={(e) => handleFamilyChange(e.target.value)}
-            >
-              {FONT_FAMILIES.map((f) => (
-                <option key={f.key} value={f.key}>{f.displayName}</option>
-              ))}
-            </select>
-          </div>
+        <Segmentos
+          label="Estilo"
+          value={currentStyle as FontStyleKey}
+          options={STYLE_LABELS.map(({ key, label }) => ({ value: key, label, disabled: !familyDef?.variants[key] }))}
+          onChange={handleStyleChange}
+        />
 
-          {/* Estilo */}
-          <div>
-            <label className="text-xs text-bone-700 mb-1 block">Estilo</label>
-            <div className="grid grid-cols-4 gap-1">
-              {STYLE_LABELS.map(({ key, label }) => {
-                const available = !!familyDef?.variants[key]
-                return (
-                  <button
-                    key={key}
-                    onClick={() => available && handleStyleChange(key)}
-                    disabled={!available}
-                    className={`py-1.5 rounded text-xs border transition-colors disabled:opacity-25 disabled:cursor-not-allowed ${
-                      currentStyle === key && available ? activeBtn : idleBtn
-                    }`}
-                  >
-                    {label}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* Tamaño + Espaciado */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-bone-700 mb-1 block">Tamaño: {text.fontSize}px</label>
-              <input type="range" min={24} max={120} value={text.fontSize}
-                onChange={(e) => setText({ fontSize: Number(e.target.value) })}
-                className="w-full accent-gold-500"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-bone-700 mb-1 block">Espaciado: {text.letterSpacing ?? 0}px</label>
-              <input type="range" min={-5} max={30} step={1} value={text.letterSpacing ?? 0}
-                onChange={(e) => setText({ letterSpacing: Number(e.target.value) })}
-                className="w-full accent-gold-500"
-              />
-            </div>
-          </div>
-
-          {/* Color + Alineación */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-bone-700 mb-1 block">Color</label>
-              <input type="color" value={text.color}
-                onChange={(e) => setText({ color: e.target.value })}
-                className="w-full h-9 rounded-lg bg-carbon-700 border border-carbon-600 cursor-pointer"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-bone-700 mb-1 block">Alineación</label>
-              <div className="flex gap-1">
-                {(['left', 'center', 'right'] as TextAlign[]).map((a) => (
-                  <button key={a} onClick={() => setText({ align: a })}
-                    className={`flex-1 py-1 rounded text-xs border transition-colors ${text.align === a ? activeBtn : idleBtn}`}
-                  >
-                    {a === 'left' ? '←' : a === 'center' ? '↔' : '→'}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Contorno */}
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <input type="checkbox" id="stroke-enabled"
-                  checked={strokeEnabled}
-                  onChange={(e) => handleStrokeToggle(e.target.checked)}
-                  className="accent-gold-500"
-                />
-                <label htmlFor="stroke-enabled" className="text-xs text-bone-500">Contorno</label>
-              </div>
-              {strokeEnabled && (
-                <input type="color" value={text.strokeColor ?? '#000000'}
-                  onChange={(e) => setText({ strokeColor: e.target.value })}
-                  className="w-8 h-6 rounded cursor-pointer border border-carbon-600"
-                />
-              )}
-            </div>
-            {strokeEnabled && (
-              <div>
-                <label className="text-xs text-bone-700 mb-1 block">Grosor: {text.strokeWidth}px</label>
-                <input type="range" min={1} max={15} value={text.strokeWidth ?? 1}
-                  onChange={(e) => setText({ strokeWidth: Number(e.target.value) })}
-                  className="w-full accent-gold-500"
-                />
-              </div>
-            )}
-          </div>
-
+        <div className="grid grid-cols-2 gap-3">
+          <Rango label="Tamaño" valor={`${text.fontSize} px`} min={24} max={120}
+            value={text.fontSize} onChange={(n) => setText({ fontSize: n })} />
+          <Rango label="Espaciado" valor={`${text.letterSpacing ?? 0} px`} min={-5} max={30}
+            value={text.letterSpacing ?? 0} onChange={(n) => setText({ letterSpacing: n })} />
         </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <Campo label="Color">
+            <input type="color" value={text.color} onChange={(e) => setText({ color: e.target.value })} className={colorCls} />
+          </Campo>
+          <Segmentos label="Alineación" value={text.align} options={alinear} onChange={(a) => setText({ align: a })} />
+        </div>
+
+        <Interruptor label="Contorno" checked={strokeEnabled} onChange={handleStrokeToggle}>
+          {strokeEnabled && (
+            <input
+              type="color"
+              value={text.strokeColor ?? '#000000'}
+              onChange={(e) => setText({ strokeColor: e.target.value })}
+              aria-label="Color del contorno"
+              className={`${colorCls} w-12`}
+            />
+          )}
+        </Interruptor>
+        {strokeEnabled && (
+          <Rango label="Grosor" valor={`${text.strokeWidth} px`} min={1} max={15}
+            value={text.strokeWidth ?? 1} onChange={(n) => setText({ strokeWidth: n })} />
+        )}
       </SectionPanel>
 
       {/* Posición */}
       <SectionPanel label="Posición" isOpen={open.has('posicion')} onToggle={() => toggle('posicion')}>
         <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="text-xs text-bone-700 mb-1 block">Horizontal: {text.position.x}%</label>
-            <input type="range" min={0} max={100} value={text.position.x}
-              onChange={(e) => setText({ position: { ...text.position, x: Number(e.target.value) } })}
-              className="w-full accent-gold-500"
-            />
-          </div>
-          <div>
-            <label className="text-xs text-bone-700 mb-1 block">Vertical: {text.position.y}%</label>
-            <input type="range" min={5} max={95} value={text.position.y}
-              onChange={(e) => setText({ position: { ...text.position, y: Number(e.target.value) } })}
-              className="w-full accent-gold-500"
-            />
-          </div>
-          <div>
-            <label className="text-xs text-bone-700 mb-1 block">Ancho máx: {text.maxWidth}%</label>
-            <input type="range" min={30} max={95} value={text.maxWidth}
-              onChange={(e) => setText({ maxWidth: Number(e.target.value) })}
-              className="w-full accent-gold-500"
-            />
-          </div>
-          <div>
-            <label className="text-xs text-bone-700 mb-1 block">Interlineado: {text.lineHeight}</label>
-            <input type="range" min={0.8} max={2.5} step={0.1} value={text.lineHeight}
-              onChange={(e) => setText({ lineHeight: Number(e.target.value) })}
-              className="w-full accent-gold-500"
-            />
-          </div>
-          <div className="flex items-center gap-2 pt-1">
-            <input type="checkbox" id="shadow" checked={text.shadow}
-              onChange={(e) => setText({ shadow: e.target.checked })}
-              className="accent-gold-500"
-            />
-            <label htmlFor="shadow" className="text-xs text-bone-500">Sombra</label>
-          </div>
+          <Rango label="Horizontal" valor={`${text.position.x} %`} min={0} max={100}
+            value={text.position.x} onChange={(n) => setText({ position: { ...text.position, x: n } })} />
+          <Rango label="Vertical" valor={`${text.position.y} %`} min={5} max={95}
+            value={text.position.y} onChange={(n) => setText({ position: { ...text.position, y: n } })} />
+          <Rango label="Ancho máx." valor={`${text.maxWidth} %`} min={30} max={95}
+            value={text.maxWidth} onChange={(n) => setText({ maxWidth: n })} />
+          <Rango label="Interlineado" valor={text.lineHeight.toFixed(1)} min={0.8} max={2.5} step={0.1}
+            value={text.lineHeight} onChange={(n) => setText({ lineHeight: n })} />
         </div>
+        <Interruptor label="Sombra" checked={text.shadow} onChange={(v) => setText({ shadow: v })} />
       </SectionPanel>
 
       {/* Efectos */}
       <SectionPanel label="Efectos" isOpen={open.has('efectos')} onToggle={() => toggle('efectos')}>
-        <div className="flex flex-col gap-3">
-          <div>
-            <label className="text-xs text-bone-700 mb-1 block">Efecto de texto</label>
-            <div className="grid grid-cols-2 gap-1">
-              {TEXT_EFFECTS.map((ef) => (
-                <button key={ef.value} onClick={() => setTextEffect(ef.value)}
-                  className={`py-1.5 rounded text-xs border transition-colors ${textEffect === ef.value ? activeBtn : idleBtn}`}
-                >
-                  {ef.label}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <input type="checkbox" id="grain" checked={grain ?? false}
-              onChange={(e) => setConfig({ grain: e.target.checked })}
-              className="accent-gold-500"
-            />
-            <label htmlFor="grain" className="text-xs text-bone-500">Grano cinematográfico</label>
-          </div>
-        </div>
+        <Segmentos
+          label="Efecto de texto"
+          value={(textEffect ?? 'none') as TextEffect}
+          cols={2}
+          options={TEXT_EFFECTS.map((ef) => ({ value: ef.value, label: ef.label }))}
+          onChange={setTextEffect}
+        />
+        <Interruptor label="Grano cinematográfico" checked={grain ?? false} onChange={(v) => setConfig({ grain: v })} />
       </SectionPanel>
 
       {/* Video */}
       <SectionPanel label="Video" isOpen={open.has('video')} onToggle={() => toggle('video')}>
+        <Segmentos
+          label="Formato"
+          value={config.resolution.height === 1080 ? '1:1' : '9:16'}
+          options={[{ value: '9:16', label: '9:16' }, { value: '1:1', label: '1:1' }]}
+          onChange={(r) => setConfig({ resolution: r === '1:1' ? { width: 1080, height: 1080 } : { width: 1080, height: 1920 } })}
+        />
         <div className="grid grid-cols-2 gap-3">
-          <div className="col-span-2">
-            <label className="text-xs text-bone-700 mb-1 block">Resolución</label>
-            <div className="flex gap-1">
-              {([{ label: '9:16', w: 1080, h: 1920 }, { label: '1:1', w: 1080, h: 1080 }] as const).map((r) => {
-                const active = config.resolution.width === r.w && config.resolution.height === r.h
-                return (
-                  <button key={r.label}
-                    onClick={() => setConfig({ resolution: { width: r.w, height: r.h } })}
-                    className={`flex-1 py-1 rounded text-xs border transition-colors ${active ? activeBtn : idleBtn}`}
-                  >
-                    {r.label}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-          <div>
-            <label className="text-xs text-bone-700 mb-1 block">Duración: {duration}s</label>
-            <input type="range" min={5} max={30} value={duration}
-              onChange={(e) => setConfig({ duration: Number(e.target.value) })}
-              className="w-full accent-gold-500"
-            />
-          </div>
-          <div>
-            <label className="text-xs text-bone-700 mb-1 block">Transición</label>
-            <select
-              className="w-full bg-carbon-700 border border-carbon-600 rounded-lg p-2 text-xs text-bone-500"
-              value={transition}
-              onChange={(e) => setConfig({ transition: e.target.value as TransitionType })}
-            >
+          <Rango label="Duración" valor={`${duration} s`} min={5} max={30}
+            value={duration} onChange={(n) => setConfig({ duration: n })} />
+          <Campo label="Transición">
+            <select className={selectCls} value={transition} onChange={(e) => setConfig({ transition: e.target.value as TransitionType })}>
               {TRANSITIONS.map((t) => (
                 <option key={t.value} value={t.value}>{t.label}</option>
               ))}
             </select>
-          </div>
-          {transition !== 'none' && (
-            <div className="col-span-2">
-              <label className="text-xs text-bone-700 mb-1 block">
-                Dur. transición: {transitionDuration}s
-              </label>
-              <input type="range" min={0.3} max={2} step={0.1} value={transitionDuration}
-                onChange={(e) => setConfig({ transitionDuration: Number(e.target.value) })}
-                className="w-full accent-gold-500"
-              />
-            </div>
-          )}
+          </Campo>
         </div>
+        {transition !== 'none' && (
+          <Rango label="Duración de la transición" valor={`${transitionDuration} s`} min={0.3} max={2} step={0.1}
+            value={transitionDuration} onChange={(n) => setConfig({ transitionDuration: n })} />
+        )}
       </SectionPanel>
 
       {/* Audio de fondo (solo video) */}
       {mode === 'video' && (
         <SectionPanel label="Audio de fondo" isOpen={open.has('audio')} onToggle={() => toggle('audio')}>
-          <div className="flex flex-col gap-1.5">
-            <div className="flex items-center gap-1.5">
-              {/* min-w-0: sin él, una opción larga fija el ancho mínimo del select
-                  y desborda el panel derecho con scroll horizontal. */}
-              <select
-                className="flex-1 min-w-0 bg-carbon-700 border border-carbon-600 rounded-lg p-2 text-xs text-bone-500"
-                value={audioTrack ?? ''}
-                onChange={(e) => setConfig({ audioTrack: e.target.value })}
-              >
-                <option value="">Sin audio</option>
-                <option value="auto">Auto (rotando)</option>
-                {audioTracks.map((t) => (
-                  <option key={t.filename} value={t.filename}>
-                    {t.textura ? `${t.textura} · e${t.energia} · …${t.filename.slice(-10, -4)}` : t.name}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                onClick={toggleAudioPreview}
-                disabled={!previewFile}
-                title={previewFile ? (audioPlaying ? 'Pausar' : 'Escuchar pista') : 'Selecciona una pista o frase'}
-                className="shrink-0 p-2 rounded-lg bg-carbon-700 border border-carbon-600 text-bone-500 hover:text-gold-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              >
-                {audioPlaying ? <Pause size={14} /> : <Play size={14} />}
-              </button>
-            </div>
-            <audio
-              ref={audioRef}
-              src={previewFile ? `/api/audio/file/${encodeURIComponent(previewFile)}` : undefined}
-              onPlay={() => setAudioPlaying(true)}
-              onPause={() => setAudioPlaying(false)}
-              onEnded={() => setAudioPlaying(false)}
-            />
-            {audioTrack === 'auto' && (
-              !selectedPhraseId ? (
-                <p className="text-[10px] text-bone-700">
-                  Selecciona una frase del banco para ver y oír la pista que se elegirá.
-                </p>
-              ) : autoPickLoading ? (
-                <p className="text-[10px] text-bone-700">Buscando la mejor pista…</p>
-              ) : autoPick ? (
-                <p className="text-[10px] text-gold-500 break-words">
-                  Elegida: <span className="font-medium">{autoPick.textura ?? 'sin textura'}</span> · energía {autoPick.energia} — escúchala con ▶ antes de generar.
-                </p>
-              ) : (
-                <p className="text-[10px] text-bone-700">
-                  No hay pistas etiquetadas para emparejar. Etiqueta pistas en el panel 🎵.
-                </p>
-              )
-            )}
-            {audioTracks.length === 0 && (
-              <p className="text-[10px] text-bone-700">
-                No hay pistas en <span className="text-gold-500">data/audio/</span>. Agrega archivos .mp3 royalty-free.
-              </p>
-            )}
+          <div className="flex items-center gap-1.5">
+            {/* min-w-0: sin él, una opción larga fija el ancho mínimo del select
+                y desborda el panel derecho con scroll horizontal. */}
+            <select
+              className={`${selectCls} min-w-0 flex-1`}
+              value={audioTrack ?? ''}
+              onChange={(e) => setConfig({ audioTrack: e.target.value })}
+              aria-label="Pista de audio"
+            >
+              <option value="">Sin audio</option>
+              <option value="auto">Auto (rotando)</option>
+              {audioTracks.map((t) => (
+                <option key={t.filename} value={t.filename}>
+                  {t.textura ? `${t.textura} · e${t.energia} · …${t.filename.slice(-10, -4)}` : t.name}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={toggleAudioPreview}
+              disabled={!previewFile}
+              aria-label={audioPlaying ? 'Pausar la pista' : 'Escuchar la pista'}
+              title={previewFile ? undefined : 'Elige una pista, o una frase si está en Auto'}
+              className="btn-sec w-8 shrink-0 px-0"
+            >
+              {audioPlaying ? <Pause size={16} /> : <Play size={16} />}
+            </button>
           </div>
+          <audio
+            ref={audioRef}
+            src={previewFile ? `/api/audio/file/${encodeURIComponent(previewFile)}` : undefined}
+            onPlay={() => setAudioPlaying(true)}
+            onPause={() => setAudioPlaying(false)}
+            onEnded={() => setAudioPlaying(false)}
+          />
+          {audioTrack === 'auto' && (
+            !selectedPhraseId ? (
+              <p className="text-ui text-hueso-3">Elige una frase del banco para ver y oír la pista que saldrá.</p>
+            ) : autoPickLoading ? (
+              <p className="text-ui text-hueso-3">Buscando la pista que mejor encaja…</p>
+            ) : autoPick ? (
+              <p className="break-words text-ui text-hueso-2">
+                Saldrá <span className="text-hueso">{autoPick.textura ?? 'sin textura'}</span>
+                <span className="font-mono text-meta text-hueso-3"> · energía {autoPick.energia}</span>.
+                Escúchala antes de generar.
+              </p>
+            ) : (
+              <p className="text-ui text-hueso-3">No hay pistas etiquetadas para emparejar. Etiquétalas en Banco · Audio.</p>
+            )
+          )}
+          {audioTracks.length === 0 && (
+            <p className="text-ui text-hueso-3">
+              No hay pistas en <span className="font-mono text-meta text-hueso-2">data/audio/</span>. Agrega archivos .mp3 libres de derechos.
+            </p>
+          )}
         </SectionPanel>
       )}
 
       {/* Marca de agua */}
       <SectionPanel label="Marca de agua" isOpen={open.has('watermark')} onToggle={() => toggle('watermark')}>
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-2">
-            <input type="checkbox" id="wm-enabled" checked={watermark?.enabled ?? false}
-              onChange={(e) => setWatermark({ enabled: e.target.checked })}
-              className="accent-gold-500"
+        <Interruptor label="Activar" checked={watermark?.enabled ?? false} onChange={(v) => setWatermark({ enabled: v })} />
+        {watermark?.enabled && (
+          <>
+            <Segmentos
+              label="Tipo"
+              value={watermark.type ?? 'text'}
+              options={[{ value: 'image', label: 'Imagen' }, { value: 'text', label: 'Texto' }]}
+              onChange={(t) => setWatermark({ type: t })}
             />
-            <label htmlFor="wm-enabled" className="text-xs text-bone-500">Activar watermark</label>
-          </div>
-          {watermark?.enabled && (
-            <>
-              <div className="grid grid-cols-2 gap-1">
-                {(['image', 'text'] as const).map((t) => (
-                  <button key={t} onClick={() => setWatermark({ type: t })}
-                    className={`py-1.5 rounded text-xs border transition-colors ${(watermark.type ?? 'text') === t ? activeBtn : idleBtn}`}
-                  >
-                    {t === 'image' ? 'Imagen' : 'Texto'}
-                  </button>
-                ))}
-              </div>
-              {(watermark.type ?? 'text') === 'text' && (
-                <input
-                  type="text"
-                  value={watermark.text ?? '@bebetter.path'}
-                  onChange={(e) => setWatermark({ text: e.target.value })}
-                  className="w-full bg-[#1C1C1C] border border-white/10 rounded-lg px-3 py-1.5 text-xs text-[#E8E4DC] focus:outline-none focus:ring-0 focus:border-white/30"
-                />
-              )}
-              <div className="grid grid-cols-3 gap-1">
-                {(['left', 'center', 'right'] as const).map((p) => (
-                  <button key={p} onClick={() => setWatermark({ position: p })}
-                    className={`py-1.5 rounded text-xs border transition-colors ${(watermark.position ?? 'right') === p ? activeBtn : idleBtn}`}
-                  >
-                    {p === 'left' ? '←' : p === 'center' ? '↔' : '→'}
-                  </button>
-                ))}
-              </div>
-              <div>
-                <label className="text-xs text-bone-700 mb-1 block">Vertical: {watermark.y ?? 90}%</label>
-                <input type="range" min={0} max={100} value={watermark.y ?? 90}
-                  onChange={(e) => setWatermark({ y: Number(e.target.value) })}
-                  className="w-full accent-gold-500"
-                />
-              </div>
-              {(watermark.type ?? 'text') === 'text' && (
-                <div>
-                  <label className="text-xs text-bone-700 mb-1 block">
-                    Opacidad: {Math.round((watermark.opacity ?? 0.35) * 100)}%
-                  </label>
-                  <input type="range" min={5} max={100} value={Math.round((watermark.opacity ?? 0.35) * 100)}
-                    onChange={(e) => setWatermark({ opacity: Number(e.target.value) / 100 })}
-                    className="w-full accent-gold-500"
-                  />
-                </div>
-              )}
-            </>
-          )}
-        </div>
+            {(watermark.type ?? 'text') === 'text' && (
+              <input
+                type="text"
+                value={watermark.text ?? '@bebetter.path'}
+                onChange={(e) => setWatermark({ text: e.target.value })}
+                aria-label="Texto de la marca de agua"
+                className="campo text-ui"
+              />
+            )}
+            <Segmentos
+              label="Posición"
+              value={watermark.position ?? 'right'}
+              options={alinear}
+              onChange={(p) => setWatermark({ position: p })}
+            />
+            <Rango label="Vertical" valor={`${watermark.y ?? 90} %`} min={0} max={100}
+              value={watermark.y ?? 90} onChange={(n) => setWatermark({ y: n })} />
+            {(watermark.type ?? 'text') === 'text' && (
+              <Rango label="Opacidad" valor={`${Math.round((watermark.opacity ?? 0.35) * 100)} %`} min={5} max={100}
+                value={Math.round((watermark.opacity ?? 0.35) * 100)} onChange={(n) => setWatermark({ opacity: n / 100 })} />
+            )}
+          </>
+        )}
       </SectionPanel>
 
     </div>

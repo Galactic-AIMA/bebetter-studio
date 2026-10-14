@@ -1,26 +1,32 @@
-import { X, Download, Palette } from 'lucide-react'
+import { Star, DownloadSimple, PaintBrush, ArrowSquareOut } from '@phosphor-icons/react'
+import { splitByTiempos } from '@shared/splitByTiempos'
 import { HistoryItem, VideoRecord } from '../../types'
 import { useVideoStore } from '../../store/videoStore'
+import PanelDeslizante from '../ui/PanelDeslizante'
 
 interface Props {
   item: HistoryItem
   onClose: () => void
 }
 
+const ALINEACION: Record<string, string> = { left: 'Izquierda', center: 'Centro', right: 'Derecha' }
+
+/** Fila de propiedad (DESIGN.md §6): rejilla 112 px / 1fr, alto 32. */
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="flex justify-between items-center py-1.5 border-b border-carbon-600 last:border-0">
-      <span className="text-[11px] text-bone-700">{label}</span>
-      <span className="text-[11px] text-bone-500 text-right max-w-[60%]">{value}</span>
+    <div className="grid min-h-8 grid-cols-[112px_minmax(0,1fr)] items-center gap-2 border-b border-linea px-5 py-1 transition-colors duration-rapido ease-mesa hover:bg-s2">
+      <span className="text-ui text-hueso-3">{label}</span>
+      <span className="truncate text-ui text-hueso">{value}</span>
     </div>
   )
 }
 
+/** Muestra del color guardado en la pieza: es un DATO, por eso el hex va en línea. */
 function ColorSwatch({ hex }: { hex: string }) {
   return (
-    <span className="flex items-center gap-1.5 justify-end">
-      <span className="inline-block w-3 h-3 rounded-sm border border-white/10" style={{ background: hex }} />
-      <span>{hex}</span>
+    <span className="flex items-center gap-1.5">
+      <span className="inline-block h-3 w-3 rounded-[3px] border border-linea-2" style={{ background: hex }} />
+      <span className="font-mono text-meta text-hueso-2">{hex}</span>
     </span>
   )
 }
@@ -60,123 +66,91 @@ export default function HistoryModal({ item, onClose }: Props) {
     onClose()
   }
 
+  const [a, b] = splitByTiempos(text.content)
+  const mono = (v: React.ReactNode) => <span className="font-mono text-meta text-hueso-2">{v}</span>
+
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+    <PanelDeslizante
+      titulo={isVideo ? 'Reel' : 'Imagen'}
+      meta={
+        <span className="flex shrink-0 items-center gap-2 font-mono text-meta text-hueso-3">
+          {formatDate(item.createdAt)}
+          {item.viral && <span className="flex items-center gap-1 text-oro"><Star size={12} weight="fill" /> viral</span>}
+        </span>
+      }
+      onClose={onClose}
+      pie={
+        <>
+          <button onClick={handleLoadStyle} className="btn-sec flex-1" title="Solo tipografía y ajustes, sin frase ni fondo">
+            <PaintBrush size={16} /> Cargar estilo
+          </button>
+          <button onClick={handleLoadFull} className="btn-sec flex-1 border-hueso" title="Frase, fondo y ajustes, como estaba">
+            <DownloadSimple size={16} /> Cargar todo
+          </button>
+        </>
+      }
     >
-      <div className="relative w-full max-w-md bg-carbon-800 rounded-xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
-        {/* Close */}
-        <button
-          onClick={onClose}
-          className="absolute top-3 right-3 z-10 p-1 rounded-lg bg-carbon-700/80 text-bone-700 hover:text-bone-500 transition-colors"
-        >
-          <X size={14} />
-        </button>
+      {/* Preview: el vídeo reproducible o la miniatura de la imagen. */}
+      {isVideo && videoSrc ? (
+        <div className="flex justify-center bg-sala px-5 py-4">
+          <video src={videoSrc} poster={thumbnailUrl ?? undefined} controls playsInline className="max-h-[45dvh] w-auto rounded-control" />
+        </div>
+      ) : thumbnailUrl ? (
+        <div className="flex justify-center bg-sala px-5 py-4">
+          <img src={thumbnailUrl} alt="" className="max-h-[45dvh] w-auto rounded-control" />
+        </div>
+      ) : null}
 
-        {/* Preview: video reproducible (si es video) o thumbnail de la imagen */}
-        {isVideo && videoSrc ? (
-          <div className="bg-black flex items-center justify-center shrink-0 max-h-[45vh]">
-            <video src={videoSrc} controls playsInline className="max-h-[45vh] w-auto" />
-          </div>
-        ) : thumbnailUrl ? (
-          <div className="h-36 bg-carbon-900 overflow-hidden shrink-0">
-            <img src={thumbnailUrl} alt="" className="w-full h-full object-cover" />
-          </div>
-        ) : null}
+      <p className="border-b border-linea px-5 py-4 text-body text-hueso">
+        {a}
+        {b && <><span aria-hidden="true" className="mx-1.5 font-mono text-meta text-lacre">//</span><span className="text-hueso-2">{b}</span></>}
+      </p>
 
-        <div className="overflow-y-auto flex-1 p-4 flex flex-col gap-3">
-          {/* Header */}
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-2">
-              <span className={`text-[10px] px-2 py-0.5 rounded font-medium ${
-                isVideo ? 'bg-carbon-600 text-bone-700' : 'bg-carbon-600 text-gold-500'
-              }`}>
-                {isVideo ? 'Video' : 'Imagen'}
-              </span>
-              {item.viral && (
-                <span className="text-[10px] px-2 py-0.5 rounded font-medium bg-gold-500/10 text-gold-500">
-                  ⭐ Viral
-                </span>
-              )}
-              <span className="text-[10px] text-bone-700 ml-auto">{formatDate(item.createdAt)}</span>
-            </div>
-            <p className="text-sm text-bone-500 leading-snug">{text.content}</p>
-          </div>
+      <h3 className="rotulo px-5 pb-1.5 pt-4">Texto</h3>
+      <Row label="Fuente" value={formatFont(text.font)} />
+      <Row label="Tamaño" value={mono(`${text.fontSize} px`)} />
+      <Row label="Color" value={<ColorSwatch hex={text.color} />} />
+      <Row label="Alineación" value={ALINEACION[text.align as string] ?? text.align} />
+      <Row label="Interlineado" value={mono(text.lineHeight)} />
+      <Row label="Ancho máx." value={mono(`${text.maxWidth} %`)} />
+      {(text.letterSpacing ?? 0) !== 0 && <Row label="Espaciado" value={mono(`${text.letterSpacing} px`)} />}
+      {(text.strokeWidth ?? 0) > 0 && (
+        <Row label="Contorno" value={
+          <span className="flex items-center gap-2">
+            {mono(`${text.strokeWidth} px`)}
+            <ColorSwatch hex={text.strokeColor ?? '#000000'} />
+          </span>
+        } />
+      )}
+      <Row label="Sombra" value={text.shadow ? 'Sí' : 'No'} />
 
-          {/* Params */}
-          <div className="bg-carbon-900 rounded-lg px-3 py-1">
-            <Row label="Fuente" value={formatFont(text.font)} />
-            <Row label="Tamaño" value={`${text.fontSize}px`} />
-            <Row label="Color" value={<ColorSwatch hex={text.color} />} />
-            <Row label="Alineación" value={text.align} />
-            <Row label="Interlineado" value={text.lineHeight} />
-            <Row label="Ancho máx." value={`${text.maxWidth}%`} />
-            {(text.letterSpacing ?? 0) !== 0 && (
-              <Row label="Letter spacing" value={`${text.letterSpacing}px`} />
-            )}
-            {(text.strokeWidth ?? 0) > 0 && (
-              <Row label="Contorno" value={
-                <span className="flex items-center gap-1.5 justify-end">
-                  {`${text.strokeWidth}px`}
-                  <span className="inline-block w-3 h-3 rounded-sm border border-white/10" style={{ background: text.strokeColor ?? '#000' }} />
-                </span>
-              } />
-            )}
-            <Row label="Sombra" value={text.shadow ? 'Sí' : 'No'} />
-            {isVideo && vidRecord && (
-              <>
-                <Row label="Efecto texto" value={vidRecord.config.textEffect ?? 'none'} />
-                <Row label="Estilo visual" value={vidRecord.config.visualStyle ?? '—'} />
-                <Row label="Resolución" value={`${config.resolution.width} × ${config.resolution.height}`} />
-                <Row label="Duración" value={`${vidRecord.config.duration}s`} />
-                <Row label="Transición" value={vidRecord.config.transition} />
-                <Row label="Grano" value={vidRecord.config.grain ? 'Sí' : 'No'} />
-              </>
-            )}
-            {!isVideo && (
-              <Row label="Resolución" value={`${config.resolution.width} × ${config.resolution.height}`} />
-            )}
-            {config.watermark?.enabled && (
-              <Row label="Marca de agua" value={config.watermark.text ?? 'imagen'} />
-            )}
-          </div>
+      <h3 className="rotulo px-5 pb-1.5 pt-5">{isVideo ? 'Vídeo' : 'Imagen'}</h3>
+      <Row label="Resolución" value={mono(`${config.resolution.width} × ${config.resolution.height}`)} />
+      {isVideo && vidRecord && (
+        <>
+          <Row label="Duración" value={mono(`${vidRecord.config.duration} s`)} />
+          <Row label="Efecto" value={vidRecord.config.textEffect ?? 'Ninguno'} />
+          <Row label="Estilo visual" value={vidRecord.config.visualStyle ?? '—'} />
+          <Row label="Transición" value={vidRecord.config.transition} />
+          <Row label="Grano" value={vidRecord.config.grain ? 'Sí' : 'No'} />
+        </>
+      )}
+      {config.watermark?.enabled && <Row label="Marca de agua" value={config.watermark.text ?? 'Imagen'} />}
 
-          {/* Links */}
-          {isVideo && vidRecord && (vidRecord.s3Url || vidRecord.driveUrl) && (
-            <div className="flex flex-col gap-1">
-              {vidRecord.s3Url && (
-                <a href={vidRecord.s3Url} target="_blank" rel="noreferrer" className="text-[11px] text-gold-500 hover:underline truncate">
-                  S3: {vidRecord.s3Url}
-                </a>
-              )}
-              {vidRecord.driveUrl && (
-                <a href={vidRecord.driveUrl} target="_blank" rel="noreferrer" className="text-[11px] text-gold-500 hover:underline truncate">
-                  Drive: {vidRecord.driveUrl}
-                </a>
-              )}
-            </div>
+      {isVideo && vidRecord && (vidRecord.s3Url || vidRecord.driveUrl) && (
+        <div className="flex flex-wrap gap-2 px-5 py-4">
+          {vidRecord.s3Url && (
+            <a href={vidRecord.s3Url} target="_blank" rel="noreferrer" className="btn-sec" title={vidRecord.s3Url}>
+              <ArrowSquareOut size={16} /> Abrir en R2
+            </a>
+          )}
+          {vidRecord.driveUrl && (
+            <a href={vidRecord.driveUrl} target="_blank" rel="noreferrer" className="btn-sec" title={vidRecord.driveUrl}>
+              <ArrowSquareOut size={16} /> Abrir en Drive
+            </a>
           )}
         </div>
-
-        {/* Actions */}
-        <div className="p-3 flex gap-2 border-t border-carbon-700 shrink-0">
-          <button
-            onClick={handleLoadStyle}
-            className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-carbon-700 text-bone-500 hover:bg-carbon-600 text-xs font-medium transition-colors"
-          >
-            <Palette size={12} />
-            Cargar estilo
-          </button>
-          <button
-            onClick={handleLoadFull}
-            className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-[#E8E4DC] text-[#0A0A0A] hover:bg-bone-700 text-xs font-medium transition-colors"
-          >
-            <Download size={12} />
-            Cargar todo
-          </button>
-        </div>
-      </div>
-    </div>
+      )}
+    </PanelDeslizante>
   )
 }

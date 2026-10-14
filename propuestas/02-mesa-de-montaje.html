@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mesa de montaje · bebetter</title>
+<!--
+  DIRECCIÓN 2 · MESA DE MONTAJE
+  Referencias: Linear (escalera de superficies, un solo acento, precisión), Notion
+  (propiedades como datos legibles), y una sala de montaje (DaVinci: el material
+  ordenado, el visor a un lado).
+  Form desde el contenido: el banco es un MATERIAL con propiedades (estructura,
+  persona, usos, energía). La norma de marca se ve como columnas, no como fe.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&family=Inter:wght@700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
+<style>
+  :root {
+    /* Paleta «Montaje»: escalera de carbones con tinte del hueso + un rojo de UI */
+    --s0: #0E0E0D;   /* lienzo */
+    --s1: #141413;   /* sidebar */
+    --s2: #1B1A18;   /* fila activa / tarjetas */
+    --s3: #23221F;   /* hover fuerte */
+    --l1: #24231F;   /* hairline */
+    --l2: #33312C;   /* hairline fuerte */
+    --t1: #ECE8E1;   /* 15.8:1 */
+    --t2: #A8A39A;   /* 7.7:1 */
+    --t3: #7C786F;   /* 4.2:1 solo metadatos */
+    /* «Lacre»: el rojo sangre en el mismo tono (27°) pero con luz para leerse sobre carbón */
+    --lacre: #D9534A;      /* texto/estado 4.9:1 */
+    --lacre-fill: #B4231F; /* botón, con texto claro 5.8:1 */
+    --oro: #C9A35E;        /* metadatos de marca 8.2:1 */
+    --r: 6px;
+    --fast: 120ms;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; }
+  body { background: var(--s0); color: var(--t1); font: 400 13.5px/1.45 'Geist', system-ui, sans-serif; -webkit-font-smoothing: antialiased; overflow: hidden; }
+  .mono { font-family: 'Geist Mono', ui-monospace, monospace; font-feature-settings: 'tnum'; }
+  button { font: inherit; color: inherit; }
+  .app { height: 100dvh; display: grid; grid-template-columns: 236px minmax(0,1fr) 404px; }
+
+  /* ───────── sidebar ───────── */
+  .side { background: var(--s1); border-right: 1px solid var(--l1); display: flex; flex-direction: column; padding: 12px 10px; gap: 2px; }
+  .ws { display: flex; align-items: center; gap: 10px; padding: 6px 8px 14px; }
+  .ws .logo { width: 24px; height: 24px; border-radius: 6px; background: var(--t1); color: var(--s0); display: grid; place-items: center; font: 600 13px/1 'Geist'; }
+  .ws b { font-weight: 600; font-size: 13.5px; }
+  .ws .ph { margin-left: auto; color: var(--t3); }
+  .buscar { display: flex; align-items: center; gap: 8px; margin: 0 2px 14px; padding: 7px 10px; border: 1px solid var(--l2); border-radius: var(--r); color: var(--t3); cursor: text; }
+  .buscar kbd { margin-left: auto; }
+  kbd { font: 500 11px/1 'Geist Mono'; color: var(--t2); padding: 3px 5px; border-radius: 4px; background: var(--s2); border: 1px solid var(--l2); }
+  .grupo { font: 500 11.5px/1 'Geist'; color: var(--t3); padding: 14px 8px 6px; }
+  .item { all: unset; display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: var(--r); color: var(--t2); cursor: pointer; transition: background var(--fast), color var(--fast); }
+  .item .ph { font-size: 16px; }
+  .item:hover { background: var(--s2); color: var(--t1); }
+  .item[aria-current] { background: var(--s3); color: var(--t1); }
+  .item .n { margin-left: auto; font: 400 11.5px/1 'Geist Mono'; color: var(--t3); }
+  .item .n.alerta { color: var(--s0); background: var(--oro); padding: 3px 6px; border-radius: 4px; font-weight: 500; }
+  .side .pie { margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 10px 8px 4px; color: var(--t2); border-top: 1px solid var(--l1); }
+  .avatar { width: 22px; height: 22px; border-radius: 50%; background: var(--s3); display: grid; place-items: center; font: 500 11px/1 'Geist'; color: var(--t1); }
+
+  /* ───────── centro: material ───────── */
+  .main { display: flex; flex-direction: column; min-width: 0; }
+  .barra { height: 48px; display: flex; align-items: center; gap: 10px; padding: 0 20px; border-bottom: 1px solid var(--l1); }
+  .miga { color: var(--t3); }
+  .miga b { color: var(--t1); font-weight: 500; }
+  .barra .der { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+  .btn { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 12px; border-radius: var(--r); border: 1px solid var(--l2); color: var(--t1); font-size: 13px; transition: background var(--fast), border-color var(--fast); }
+  .btn:hover { background: var(--s2); }
+  .btn:active { transform: translateY(1px); }
+  .btn.primario { background: var(--lacre-fill); border-color: transparent; color: #F4F1EB; }
+  .btn.primario:hover { background: #C42B26; }
+  .btn > span { display: inline-flex; align-items: center; gap: 7px; }
+  .btn, .buscar { white-space: nowrap; }
+  .btn kbd { background: rgba(0,0,0,.18); border-color: rgba(255,255,255,.14); color: inherit; }
+  .filtros { display: flex; align-items: center; gap: 6px; padding: 10px 20px; border-bottom: 1px solid var(--l1); }
+  .filtro { all: unset; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; height: 26px; padding: 0 10px; border-radius: 999px; border: 1px dashed var(--l2); color: var(--t2); font-size: 12.5px; transition: all var(--fast); }
+  .filtro[aria-pressed=true] { border-style: solid; background: var(--s2); color: var(--t1); }
+  .filtro .mono { color: var(--t3); }
+  .filtros .orden { margin-left: auto; color: var(--t3); font-size: 12.5px; display: flex; gap: 6px; align-items: center; }
+
+  .tabla { overflow-y: auto; flex: 1; }
+  .cab, .fila { display: grid; grid-template-columns: minmax(0,1fr) 108px 84px 56px 64px; gap: 16px; align-items: start; padding: 0 20px; }
+  .cab { position: sticky; top: 0; background: var(--s0); height: 34px; align-items: center; font: 500 11.5px/1 'Geist'; color: var(--t3); border-bottom: 1px solid var(--l1); z-index: 1; }
+  .cab .num, .fila .num { text-align: right; }
+  .fila { padding-top: 14px; padding-bottom: 14px; border-bottom: 1px solid var(--l1); cursor: pointer; transition: background var(--fast); position: relative; }
+  .fila:hover { background: var(--s1); }
+  .fila[aria-selected=true] { background: var(--s2); }
+  .texto-frase { line-height: 1.5; text-wrap: pretty; }
+  .texto-frase .giro { color: var(--t2); }
+  /* el respiro entre tiempos, visible como marca de corte */
+  .corte { display: inline-block; margin: 0 6px; color: var(--lacre); font: 500 12px/1 'Geist Mono'; transform: translateY(-1px); }
+  .autor { display: block; margin-top: 4px; color: var(--t3); font-size: 12px; }
+  .tag { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--t2); white-space: nowrap; }
+  .tag::before { content: ''; width: 6px; height: 6px; border-radius: 2px; background: var(--t2); }
+  .tag.ok::before { background: var(--oro); }
+  .fila .num { font: 400 12.5px/1.5 'Geist Mono'; color: var(--t2); }
+  .energia { display: inline-flex; gap: 2px; justify-content: flex-end; width: 100%; padding-top: 6px; }
+  .energia i { width: 4px; height: 10px; border-radius: 1px; background: var(--l2); }
+  .energia i.on { background: var(--t2); }
+
+  /* ───────── inspector ───────── */
+  .insp { border-left: 1px solid var(--l1); background: var(--s1); display: flex; flex-direction: column; min-height: 0; }
+  .insp .barra { justify-content: space-between; }
+  .insp .barra b { font-weight: 500; }
+  .visor { padding: 20px 20px 0; display: grid; grid-template-columns: 172px 1fr; gap: 16px; }
+  .pantalla { aspect-ratio: 9/16; width: 172px; position: relative; border-radius: 8px; overflow: hidden; container-type: inline-size; box-shadow: 0 0 0 1px var(--l2); }
+  .pantalla img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .pantalla .scrim { position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(10,10,10,.78), rgba(10,10,10,.55) 28%, transparent 52%); }
+  .pantalla .texto { position: absolute; left: 9.3%; right: 9.3%; top: 25%; transform: translateY(-50%); text-align: center; font: 700 3.89cqw/1.2 'Inter'; color: #E8E4DC; text-shadow: 0 1px 4px rgba(0,0,0,.6); }
+  .pantalla .texto p + p { margin-top: 1.2em; }
+  .pantalla .handle { position: absolute; bottom: 6%; width: 100%; text-align: center; font: 400 2.1cqw/1 'Inter'; color: #C5A059; }
+  .fade { animation: fade .16s ease-out; }
+  @keyframes fade { from { opacity: .4; } }
+  .acciones-visor { display: flex; flex-direction: column; gap: 8px; justify-content: flex-end; }
+  .acciones-visor .btn { justify-content: space-between; }
+  .acciones-visor .nota { font-size: 12px; color: var(--t3); line-height: 1.45; margin-bottom: auto; }
+  .props { padding: 18px 20px; overflow-y: auto; }
+  .props h4 { font: 500 11.5px/1 'Geist'; color: var(--t3); margin: 6px 0 10px; }
+  .prop { display: grid; grid-template-columns: 112px 1fr; align-items: center; min-height: 32px; border-radius: var(--r); padding: 0 8px; margin: 0 -8px; cursor: default; }
+  .prop:hover { background: var(--s2); }
+  .prop dt { color: var(--t3); }
+  .prop dd { color: var(--t1); display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .prop dd .mono { color: var(--t2); font-size: 12.5px; }
+  .prop img { width: 18px; height: 32px; border-radius: 3px; object-fit: cover; }
+  .sep { height: 1px; background: var(--l1); margin: 14px 0; }
+  .lote { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+  .lote div { aspect-ratio: 9/16; border-radius: 4px; background-size: cover; background-position: center; position: relative; box-shadow: 0 0 0 1px var(--l2); }
+  .lote div.pend::after { content: ''; position: absolute; inset: 0; border-radius: 4px; background: rgba(14,14,13,.55); }
+  .leyenda { display: flex; justify-content: space-between; margin-top: 8px; font-size: 12px; color: var(--t3); }
+  .leyenda .mono { color: var(--t2); }
+
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+  @media (max-width: 1100px) { .app { grid-template-columns: 64px minmax(0,1fr) 360px; } .side .grupo, .side b, .item span, .item .n, .buscar span, .buscar kbd, .pie span { display: none; } }
+  @media (max-width: 760px) {
+    body { overflow: auto; }
+    .app { grid-template-columns: 1fr; height: auto; }
+    .side { display: none; }
+    .insp { border-left: 0; border-top: 1px solid var(--l1); }
+    .barra .der .btn:first-child { display: none; }
+    .filtros { overflow-x: auto; white-space: nowrap; }
+    .filtros .orden { display: none; }
+    .filtro { flex-shrink: 0; }
+    .visor { grid-template-columns: 150px 1fr; } .pantalla { width: 150px; }
+    .cab, .fila { grid-template-columns: minmax(0,1fr) 56px; }
+    .cab span:nth-child(2), .cab span:nth-child(3), .cab span:nth-child(5), .fila > :nth-child(2), .fila > :nth-child(3), .fila > :nth-child(5) { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <nav class="side" aria-label="Navegación">
+    <div class="ws"><div class="logo">b</div><b>bebetter.path</b><i class="ph ph-caret-up-down"></i></div>
+    <div class="buscar"><i class="ph ph-magnifying-glass"></i><span>Buscar</span><kbd>Ctrl K</kbd></div>
+    <button class="item"><i class="ph ph-video-camera"></i><span>Crear video</span></button>
+    <button class="item"><i class="ph ph-image-square"></i><span>Crear imagen</span></button>
+    <button class="item"><i class="ph ph-cards"></i><span>Carrusel</span></button>
+    <div class="grupo">Banco</div>
+    <button class="item" aria-current="page"><i class="ph ph-quotes"></i><span>Frases</span><span class="n">118</span></button>
+    <button class="item"><i class="ph ph-images"></i><span>Imágenes</span><span class="n">238</span></button>
+    <button class="item"><i class="ph ph-waveform"></i><span>Audio</span><span class="n">34</span></button>
+    <div class="grupo">Producción</div>
+    <button class="item"><i class="ph ph-stack"></i><span>Lotes</span></button>
+    <button class="item"><i class="ph ph-check-square-offset"></i><span>Revisión</span><span class="n alerta">12</span></button>
+    <button class="item"><i class="ph ph-queue"></i><span>Cola de publicación</span></button>
+    <button class="item"><i class="ph ph-calendar-dots"></i><span>Cadencia</span></button>
+    <div class="grupo">Datos</div>
+    <button class="item"><i class="ph ph-chart-line-up"></i><span>Analítica</span></button>
+    <button class="item"><i class="ph ph-scroll"></i><span>Registro</span></button>
+    <div class="pie"><div class="avatar">D</div><span>David</span></div>
+  </nav>
+
+  <main class="main">
+    <div class="barra">
+      <span class="miga">Banco / <b>Frases</b></span>
+      <div class="der">
+        <button class="btn"><i class="ph ph-sparkle"></i>Analizar nuevas</button>
+        <button class="btn"><i class="ph ph-plus"></i>Nueva frase<kbd>N</kbd></button>
+      </div>
+    </div>
+    <div class="filtros">
+      <button class="filtro" aria-pressed="true">En norma <span class="mono">61</span></button>
+      <button class="filtro" aria-pressed="false">Fuera de norma <span class="mono">57</span></button>
+      <button class="filtro" aria-pressed="true">Sin usar</button>
+      <button class="filtro" aria-pressed="false"><i class="ph ph-plus"></i>Filtro</button>
+      <span class="orden"><i class="ph ph-sort-ascending"></i>Menos usadas primero</span>
+    </div>
+    <div class="tabla" role="listbox" aria-label="Frases">
+      <div class="cab"><span>Frase</span><span>Estructura</span><span>Persona</span><span class="num">Usos</span><span class="num">Energía</span></div>
+      <div id="filas"></div>
+    </div>
+  </main>
+
+  <aside class="insp">
+    <div class="barra"><b>Pieza en edición</b><span class="mono" style="color:var(--t3);font-size:12px">9:16 · 7 s</span></div>
+    <div class="visor">
+      <div class="pantalla"><img id="fondo" alt=""><div class="scrim"></div><div class="texto" id="texto"></div><div class="handle">@bebetter.path</div></div>
+      <div class="acciones-visor">
+        <p class="nota">Frase, fondo y pista emparejados por el planificador. Cambia cualquiera desde sus propiedades.</p>
+        <button class="btn"><span><i class="ph ph-play"></i> Previsualizar</span><kbd>P</kbd></button>
+        <button class="btn"><span><i class="ph ph-shuffle"></i> Otro fondo</span><kbd>F</kbd></button>
+        <button class="btn primario"><span><i class="ph ph-film-slate"></i> Generar</span><kbd>G</kbd></button>
+      </div>
+    </div>
+    <div class="props">
+      <h4>Propiedades</h4>
+      <dl>
+        <div class="prop"><dt>Fondo</dt><dd><img id="mini" alt=""><span id="fondoNombre"></span><span class="mono">IA</span></dd></div>
+        <div class="prop"><dt>Pista</dt><dd><span id="pista"></span></dd></div>
+        <div class="prop"><dt>Duración</dt><dd>7,0 s <span class="mono">del corte</span></dd></div>
+        <div class="prop"><dt>Preset</dt><dd>bebetter <span class="mono">Inter Bold 42</span></dd></div>
+        <div class="prop"><dt>Degradado</dt><dd>Carbón, hasta el 52 %</dd></div>
+        <div class="prop"><dt>Destino</dt><dd>Cola · próxima franja <span class="mono">19:00</span></dd></div>
+      </dl>
+      <div class="sep"></div>
+      <h4>Lote en curso <span class="mono" style="color:var(--t3)">(ejemplo)</span></h4>
+      <div class="lote" id="lote"></div>
+      <div class="leyenda"><span>18 de 30 renderizadas</span><span class="mono">12 en revisión</span></div>
+    </div>
+  </aside>
+</div>
+
+<script src="assets/contenido.js"></script>
+<script>
+  const { frases, tiempos, img } = BB
+  const $ = (id) => document.getElementById(id)
+  const nombres = { barra: 'La barra bajo la lluvia', caminante: 'El caminante', marioneta: 'La marioneta', forja: 'La forja', faro: 'El faro', reloj: 'El reloj de arena', faro2: 'Subida al faro', trofeo: 'El trofeo' }
+
+  $('filas').innerHTML = frases.map((f, i) => {
+    const [a, b] = tiempos(f.texto)
+    const barras = [1,2,3,4,5].map((n) => `<i class="${n <= f.energia ? 'on' : ''}"></i>`).join('')
+    return `<div class="fila" role="option" data-i="${i}" aria-selected="false" tabindex="-1">
+      <div class="texto-frase">${a}${b ? `<span class="corte" aria-hidden="true">//</span><span class="giro">${b}</span>` : ''}${f.autor ? `<span class="autor">${f.autor}</span>` : ''}</div>
+      <span class="tag ok">Dos tiempos</span>
+      <span class="tag">3.ª persona</span>
+      <span class="num">${f.usos}</span>
+      <span class="energia" aria-label="Energía ${f.energia} de 5">${barras}</span>
+    </div>`
+  }).join('')
+
+  let actual = 0
+  function seleccionar(i) {
+    actual = (i + frases.length) % frases.length
+    const f = frases[actual], [a, b] = tiempos(f.texto)
+    document.querySelectorAll('.fila').forEach((el) => el.setAttribute('aria-selected', el.dataset.i == actual))
+    $('fondo').src = img(f.fondo); $('mini').src = img(f.fondo)
+    $('texto').innerHTML = `<p>${a}</p>${b ? `<p>${b}</p>` : ''}`
+    $('texto').classList.remove('fade'); void $('texto').offsetWidth; $('texto').classList.add('fade')
+    $('fondoNombre').textContent = nombres[f.fondo]
+    $('pista').innerHTML = `Textura ${f.pista} <span class="mono">energía ${f.energia}</span>`
+  }
+  $('filas').addEventListener('click', (e) => { const r = e.target.closest('.fila'); if (r) seleccionar(+r.dataset.i) })
+  // Teclado como en Linear: j/k o flechas para moverse por el material.
+  addEventListener('keydown', (e) => {
+    if (['ArrowDown', 'j'].includes(e.key)) { e.preventDefault(); seleccionar(actual + 1) }
+    if (['ArrowUp', 'k'].includes(e.key)) { e.preventDefault(); seleccionar(actual - 1) }
+  })
+  document.querySelectorAll('.filtro').forEach((b) => b.addEventListener('click', () => b.setAttribute('aria-pressed', b.getAttribute('aria-pressed') !== 'true')))
+
+  // Lote de ejemplo: 6 miniaturas, las 2 últimas aún pendientes de render.
+  $('lote').innerHTML = [0,1,2,4,5,6].map((i, n) => `<div class="${n > 3 ? 'pend' : ''}" style="background-image:url(${img(frases[i].fondo)})"></div>`).join('')
+  seleccionar(1)
+</script>
+</body>
+</html>

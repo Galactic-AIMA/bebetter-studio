@@ -1,5 +1,6 @@
-﻿import React, { useEffect, useRef, useState } from 'react'
-import { Shuffle, Plus, Trash2, Pencil, ClipboardList, X, Check, Sparkles, GripVertical } from 'lucide-react'
+﻿import { useEffect, useMemo, useRef, useState } from 'react'
+import { Shuffle, Plus, Trash, PencilSimple, ClipboardText, Check, Sparkle, WarningCircle } from '@phosphor-icons/react'
+import { splitByTiempos } from '@shared/splitByTiempos'
 import { phrasesApi } from '../../api'
 import { Phrase } from '../../types'
 import { useVideoStore } from '../../store/videoStore'
@@ -10,6 +11,18 @@ function esNueva(p: Phrase): boolean {
   if (!p.createdAt) return false
   const t = Date.parse(p.createdAt)
   return !Number.isNaN(t) && Date.now() - t < DIAS_NUEVA * 24 * 60 * 60 * 1000
+}
+
+/**
+ * Por qué una frase se queda fuera de la rotación. Espejo de `fueraDeNorma()` del
+ * servidor (`utils/norma.ts`), que es quien decide de verdad: aquí solo se pinta.
+ * Sin clasificar tampoco cumple — es la dirección segura, pero hay que verlo.
+ */
+function motivosFueraDeNorma(p: Phrase): string[] {
+  const motivos: string[] = []
+  if (p.estructura !== 'dos_tiempos') motivos.push(p.estructura ? 'un golpe' : 'sin clasificar')
+  if (p.persona !== 'tercera') motivos.push(p.persona ? 'segunda persona' : 'persona sin marcar')
+  return motivos
 }
 
 function extractAuthor(line: string): { text: string; author?: string } {
@@ -70,10 +83,9 @@ export default function PhraseBank() {
   const [preview, setPreview] = useState<{ text: string; author?: string }[]>([])
   const [importing, setImporting] = useState(false)
   const [hideUsed, setHideUsed] = useState(false)
+  const [soloFueraDeNorma, setSoloFueraDeNorma] = useState(false)
   const [analyzeResult, setAnalyzeResult] = useState<string | null>(null)
-  const dragId = useRef<string | null>(null)
-  const dragOverId = useRef<string | null>(null)
-  const { setText, setConfig, setSelectedPhraseId, compatiblePhraseIds } = useVideoStore()
+  const { setText, setConfig, setSelectedPhraseId, selectedPhraseId, compatiblePhraseIds } = useVideoStore()
 
   const load = async () => {
     const data = await phrasesApi.list()
@@ -169,282 +181,277 @@ export default function PhraseBank() {
 
   const cancelEdit = () => { setEditId(null); setNewText(''); setNewAuthor('') }
 
-  const handleDragStart = (id: string) => { dragId.current = id }
-  const handleDragOver = (e: React.DragEvent, id: string) => {
-    e.preventDefault()
-    dragOverId.current = id
-  }
-  const handleDrop = async () => {
-    if (!dragId.current || !dragOverId.current || dragId.current === dragOverId.current) return
-    const from = dragId.current
-    const to = dragOverId.current
-    dragId.current = null
-    dragOverId.current = null
+  // Lo que se ve, en el orden en que se ve. Responde a «¿cuál produzco ahora?»:
+  //  - con una imagen activa manda la afinidad (lo que encaja con lo que estás
+  //    montando ahora mismo);
+  //  - sin ella, suben las que nunca has producido y, dentro de cada grupo, las
+  //    más nuevas primero. Por eso ya no hay arrastre manual: con 137 frases el
+  //    orden lo decide el uso, y el que se arrastraba no se veía.
+  const visibles = useMemo(() => {
+    const filtered = phrases
+      .filter((p) => !hideUsed || (p.usageCount ?? 0) === 0)
+      .filter((p) => !soloFueraDeNorma || motivosFueraDeNorma(p).length > 0)
+    const porUso = (a: Phrase, b: Phrase) => {
+      const ua = a.usageCount ?? 0
+      const ub = b.usageCount ?? 0
+      if (ua !== ub) return ua - ub
+      return (b.createdAt ?? '').localeCompare(a.createdAt ?? '')
+    }
+    if (compatiblePhraseIds.length === 0) return [...filtered].sort(porUso)
+    return [
+      ...filtered.filter((p) => scorePhrase(p) > 0).sort((a, b) => scorePhrase(b) - scorePhrase(a)),
+      ...filtered.filter((p) => scorePhrase(p) === 0).sort(porUso),
+    ]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phrases, hideUsed, soloFueraDeNorma, compatiblePhraseIds])
 
-    const next = [...phrases]
-    const fromIdx = next.findIndex((p) => p.id === from)
-    const toIdx = next.findIndex((p) => p.id === to)
-    const [moved] = next.splice(fromIdx, 1)
-    next.splice(toIdx, 0, moved)
-    setPhrases(next)
-    await phrasesApi.reorder(next.map((p) => p.id))
-  }
+  // j / k recorren el banco (DESIGN.md §7). El componente sigue montado aunque
+  // esté oculto, así que solo escucha si la lista se ve de verdad.
+  const listaRef = useRef<HTMLUListElement>(null)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'j' && e.key !== 'k') return
+      if (e.ctrlKey || e.metaKey || e.altKey) return
+      const t = e.target as HTMLElement
+      if (t.closest('input, textarea, select, [contenteditable="true"]')) return
+      if (!listaRef.current?.offsetParent || visibles.length === 0) return
+      e.preventDefault()
+      const idx = visibles.findIndex((p) => p.id === selectedPhraseId)
+      const next = e.key === 'j'
+        ? Math.min(visibles.length - 1, idx + 1)
+        : Math.max(0, idx === -1 ? 0 : idx - 1)
+      selectPhrase(visibles[next])
+      // El foco va con la selección: si no, el anillo se quedaba en la fila clicada.
+      const fila = listaRef.current.querySelector<HTMLElement>(`[data-id="${visibles[next].id}"]`)
+      fila?.focus({ preventScroll: true })
+      fila?.scrollIntoView({ block: 'nearest' })
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibles, selectedPhraseId])
+
+  const fuera = phrases.filter((p) => motivosFueraDeNorma(p).length > 0).length
+  const usadas = phrases.some((p) => (p.usageCount ?? 0) > 0)
 
   return (
-    <div className="flex flex-col gap-3 p-4">
-      {/* Acciones principales */}
-      <div className="flex gap-2">
-        <button
-          onClick={pickRandom}
-          className="flex items-center gap-1.5 text-xs bg-carbon-700 hover:bg-carbon-600 border border-carbon-600 rounded-lg px-3 py-2 text-bone-500 transition-colors"
-        >
-          <Shuffle size={13} /> Aleatoria
-        </button>
-        <button
-          onClick={() => { setShowImport(!showImport); setImportText('') }}
-          className={`flex items-center gap-1.5 text-xs border rounded-lg px-3 py-2 transition-colors ${
-            showImport
-              ? 'bg-neon-red border-neon-red text-bone-500'
-              : 'bg-carbon-700 hover:bg-carbon-600 border-carbon-600 text-bone-500'
-          }`}
-        >
-          <ClipboardList size={13} /> Importar lista
-        </button>
-      </div>
-
-      {/* Panel de importaciÃ³n masiva */}
-      {showImport && (
-        <div className="bg-carbon-800 border border-carbon-600 rounded-xl p-3 flex flex-col gap-3">
-          <p className="text-xs text-bone-700">
-            Pega tu lista de frases. Se detectan automÃ¡ticamente separadas por pÃ¡rrafos,
-            lÃ­neas en blanco, nÃºmeros (1. 2.) o guiones.
-          </p>
-          <textarea
-            className="w-full bg-carbon-700 border border-carbon-600 rounded-lg p-2 text-sm text-bone-500 resize-none focus:outline-none focus:ring-1 focus:ring-neon-red"
-            rows={6}
-            value={importText}
-            onChange={(e) => setImportText(e.target.value)}
-            placeholder={"1. La disciplina es libertad.\n2. CÃ¡ete 7 veces, levÃ¡ntate 8.\n3. El dolor de hoy es la fuerza de maÃ±ana."}
-          />
-
-          {/* Preview de frases detectadas */}
-          {preview.length > 0 && (
-            <div className="flex flex-col gap-1.5">
-              <p className="text-xs font-medium text-gold-500">
-                {preview.length} frase{preview.length !== 1 ? 's' : ''} detectada{preview.length !== 1 ? 's' : ''}
-              </p>
-              <div className="max-h-40 overflow-y-auto flex flex-col gap-1">
-                {preview.map((p, i) => (
-                  <div key={i} className="flex items-start gap-2 text-xs text-bone-500 bg-carbon-700 rounded px-2 py-1.5">
-                    <span className="text-bone-700 shrink-0 w-4">{i + 1}.</span>
-                    <span className="leading-relaxed flex-1">
-                      {p.text}
-                      {p.author && <span className="block text-[10px] text-gold-500 mt-0.5">– {p.author} –</span>}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="flex gap-2">
-            <button
-              onClick={handleBulkImport}
-              disabled={!preview.length || importing}
-              className="flex items-center gap-1.5 text-xs bg-neon-red hover:bg-gold-600 disabled:bg-carbon-600 disabled:cursor-not-allowed text-bone-500 rounded-lg px-3 py-2 transition-colors"
-            >
-              <Check size={13} /> {importing ? 'Importando...' : `Agregar ${preview.length} frases`}
-            </button>
-            <button
-              onClick={() => { setShowImport(false); setImportText('') }}
-              className="flex items-center gap-1.5 text-xs bg-carbon-700 hover:bg-carbon-600 border border-carbon-600 text-bone-700 rounded-lg px-3 py-2 transition-colors"
-            >
-              <X size={13} /> Cancelar
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Agregar / Editar frase */}
-      <div className="flex flex-col gap-1.5">
-        {editId && (
-          <p className="text-xs font-medium text-gold-500 flex items-center gap-1">
-            <Pencil size={11} /> Editando frase...
+    <div className="flex flex-col">
+      <div className="flex flex-col gap-3 border-b border-linea px-5 pb-4 pt-4 lg:pt-3">
+        {phrases.length > 0 && (
+          <p className="text-ui text-hueso-2">
+            <span className="font-mono">{phrases.length - fuera}</span> en rotación
+            {fuera > 0 && <> · <span className="font-mono">{fuera}</span> fuera de norma</>}
           </p>
         )}
-        <div className="flex gap-2">
-          <div className="flex-1 flex flex-col gap-1.5">
+
+        {/* Filtros. «Fuera de norma» existe desde el 2026-08-18 y decide qué se
+            publica, así que tiene que verse: sin él, el pool baja de 118 a 61 y la
+            app no lo dice en ninguna parte. */}
+        {(usadas || fuera > 0) && (
+          <div className="flex flex-wrap gap-1.5">
+            {usadas && (
+              <button className="chip" aria-pressed={hideUsed} onClick={() => setHideUsed(!hideUsed)}>
+                Sin usar
+              </button>
+            )}
+            {fuera > 0 && (
+              <button
+                className="chip"
+                aria-pressed={soloFueraDeNorma}
+                onClick={() => setSoloFueraDeNorma(!soloFueraDeNorma)}
+                title="Un golpe o segunda persona: fuera de la rotación hasta reconvertirlas"
+              >
+                Fuera de norma <span className="font-mono text-meta text-hueso-3">{fuera}</span>
+              </button>
+            )}
+          </div>
+        )}
+
+        <div className="flex flex-wrap gap-2">
+          <button onClick={pickRandom} className="btn-sec">
+            <Shuffle size={16} /> Otra frase
+          </button>
+          <button
+            onClick={() => { setShowImport(!showImport); setImportText('') }}
+            aria-pressed={showImport}
+            className="btn-sec"
+          >
+            <ClipboardText size={16} /> Importar lista
+          </button>
+          <button
+            onClick={handleEmbedAll}
+            disabled={embedding}
+            className="btn-fantasma ml-auto"
+            title="Vectoriza las frases para ordenarlas por afinidad con la imagen"
+          >
+            <Sparkle size={16} className={embedding ? 'text-oro' : ''} />
+            {embedding ? 'Vectorizando…' : 'Embeddings'}
+          </button>
+        </div>
+
+        {analyzeResult && (
+          <p role="status" className={`flex items-center gap-1.5 text-ui ${analyzeResult.startsWith('Error') ? 'text-lacre' : 'text-hueso-2'}`}>
+            {analyzeResult.startsWith('Error') ? <WarningCircle size={16} /> : <Check size={16} />}
+            {analyzeResult}
+          </p>
+        )}
+
+        {/* Importación masiva */}
+        {showImport && (
+          <div className="flex flex-col gap-3 rounded-panel border border-linea-2 bg-s2 p-3">
+            <p className="text-ui text-hueso-2">
+              Pega tu lista. Se separa sola por párrafos, líneas, números (1. 2.) o guiones.
+            </p>
             <textarea
-              className={`w-full bg-carbon-700 border rounded-lg p-2 text-sm text-bone-500 resize-none focus:outline-none focus:ring-1 transition-colors ${
-                editId
-                  ? 'border-yellow-400 focus:ring-yellow-400'
-                  : 'border-carbon-600 focus:ring-neon-red'
-              }`}
-              rows={2}
-              value={newText}
-              onChange={(e) => setNewText(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter' && e.ctrlKey) addPhrase() }}
-              placeholder={editId ? 'Edita el texto...' : 'Nueva frase... (Ctrl+Enter para guardar)'}
+              className="campo resize-none"
+              rows={6}
+              value={importText}
+              onChange={(e) => setImportText(e.target.value)}
+              placeholder={'1. Quien se domina no necesita que lo dominen.\n2. El que espera el momento perfecto se queda esperando.'}
             />
+            {preview.length > 0 && (
+              <div className="flex flex-col gap-1.5">
+                <p className="rotulo">
+                  {preview.length} frase{preview.length !== 1 ? 's' : ''} detectada{preview.length !== 1 ? 's' : ''}
+                </p>
+                <ol className="flex max-h-40 flex-col overflow-y-auto">
+                  {preview.map((p, i) => (
+                    <li key={i} className="flex gap-2 border-b border-linea py-1.5 text-ui text-hueso last:border-0">
+                      <span className="w-5 shrink-0 font-mono text-meta text-hueso-3">{i + 1}</span>
+                      <span className="flex-1">
+                        {p.text}
+                        {p.author && <span className="block font-mono text-meta text-hueso-3">{p.author}</span>}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
+            <div className="flex gap-2">
+              <button onClick={handleBulkImport} disabled={!preview.length || importing} className="btn-sec">
+                <Check size={16} /> {importing ? 'Agregando…' : `Agregar ${preview.length} frase${preview.length !== 1 ? 's' : ''}`}
+              </button>
+              <button onClick={() => { setShowImport(false); setImportText('') }} className="btn-fantasma px-2">
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Nueva frase / edición */}
+        <div className="flex flex-col gap-1.5">
+          {editId && <p className="rotulo text-oro">Editando frase</p>}
+          <textarea
+            className="campo resize-none"
+            rows={2}
+            value={newText}
+            onChange={(e) => setNewText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && e.ctrlKey) addPhrase()
+              if (e.key === 'Escape' && editId) cancelEdit()
+            }}
+            placeholder={editId ? 'Edita el texto' : 'Nueva frase. Marca el giro con //'}
+            aria-label={editId ? 'Texto de la frase' : 'Nueva frase'}
+          />
+          <div className="flex gap-2">
             <input
               type="text"
-              className="w-full bg-carbon-700 border border-carbon-600 rounded-lg px-2 py-1.5 text-xs text-bone-500 placeholder-bone-700 focus:outline-none focus:ring-1 focus:ring-neon-red"
+              className="campo text-ui"
               value={newAuthor}
               onChange={(e) => setNewAuthor(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') addPhrase() }}
               placeholder="Fuente o autor (opcional)"
+              aria-label="Fuente o autor"
             />
-          </div>
-          <div className="flex flex-col gap-1">
-            <button
-              onClick={addPhrase}
-              className={`flex items-center justify-center gap-1 text-bone-500 rounded-lg px-3 py-1.5 transition-colors flex-1 ${
-                editId
-                  ? 'bg-yellow-500 hover:bg-yellow-400'
-                  : 'bg-neon-red hover:bg-gold-600'
-              }`}
-            >
-              {editId ? <><Check size={14} /> <span className="text-xs">Guardar</span></> : <Plus size={16} />}
+            <button onClick={addPhrase} disabled={!newText.trim()} className="btn-sec shrink-0" title="Ctrl + Enter">
+              {editId ? <><Check size={16} /> Guardar</> : <><Plus size={16} /> Añadir</>}
             </button>
             {editId && (
-              <button
-                onClick={cancelEdit}
-                className="flex items-center justify-center gap-1 text-xs bg-carbon-600 hover:bg-carbon-600 text-bone-500 rounded-lg px-3 py-1.5 transition-colors"
-              >
-                <X size={12} /> Cancelar
-              </button>
+              <button onClick={cancelEdit} className="btn-fantasma shrink-0 px-1">Cancelar</button>
             )}
           </div>
         </div>
       </div>
 
-      {/* Botón embeddings semánticos */}
-      <button
-        onClick={handleEmbedAll}
-        disabled={embedding}
-        className="flex items-center justify-between gap-2 text-xs bg-carbon-700/50 hover:bg-carbon-700 border border-carbon-600/50 rounded-lg px-3 py-2 text-bone-700 hover:text-bone-500 transition-colors disabled:opacity-50"
-      >
-        <span className="flex items-center gap-1.5">
-          <Sparkles size={11} className={embedding ? 'animate-pulse text-gold-500' : ''} />
-          {embedding ? 'Vectorizando frases...' : 'Generar embeddings semánticos'}
-        </span>
-      </button>
-
-      {analyzeResult && (
-        <p className={`text-[11px] px-1 ${analyzeResult.startsWith('Error') ? 'text-neon-red' : 'text-gold-500'}`}>
-          {analyzeResult}
+      {compatiblePhraseIds.length > 0 && (
+        <p className="flex items-center gap-1.5 border-b border-linea px-5 py-2 font-mono text-meta text-hueso-3">
+          <Sparkle size={14} className="text-oro" /> Ordenadas por afinidad con la imagen
         </p>
       )}
 
-      {/* Toggle ocultar usadas */}
-      {phrases.some((p) => (p.usageCount ?? 0) > 0) && (
-        <button
-          onClick={() => setHideUsed(!hideUsed)}
-          className="text-xs text-bone-700 hover:text-bone-500 transition-colors text-left"
-        >
-          {hideUsed ? '+ Mostrar todas' : '○ Ocultar usadas'}
-        </button>
-      )}
-
-      {compatiblePhraseIds.length > 0 && (
-        <p className="text-[10px] text-gold-500/70 px-1">✦ Ordenadas por compatibilidad con la imagen</p>
-      )}
-
-      {/* Lista de frases */}
-      <div className="flex flex-col gap-2">
-        {(() => {
-          const filtered = phrases.filter((p) => !hideUsed || (p.usageCount ?? 0) === 0)
-          const hasRecs = compatiblePhraseIds.length > 0
-          // El orden responde a "¿cuál produzco ahora?":
-          //  - con una imagen activa manda la afinidad (lo que encaja con lo que
-          //    estás montando ahora mismo);
-          //  - sin ella, suben las que nunca has producido y, dentro de cada
-          //    grupo, las más nuevas primero. El arrastre manual dejó de tener
-          //    sentido con 137 frases.
-          const porUso = (a: Phrase, b: Phrase) => {
-            const ua = a.usageCount ?? 0
-            const ub = b.usageCount ?? 0
-            if (ua !== ub) return ua - ub
-            return (b.createdAt ?? '').localeCompare(a.createdAt ?? '')
-          }
-          const sorted = hasRecs
-            ? [
-                ...filtered.filter((p) => scorePhrase(p) > 0).sort((a, b) => scorePhrase(b) - scorePhrase(a)),
-                ...filtered.filter((p) => scorePhrase(p) === 0).sort(porUso),
-              ]
-            : [...filtered].sort(porUso)
-          return sorted.map((phrase) => {
-            const score = scorePhrase(phrase)
-            const isCompatible = score > 0
+      {phrases.length === 0 ? (
+        <div className="flex flex-col items-start gap-3 px-5 py-10">
+          <p className="pt-[.16em] font-display text-display uppercase text-hueso">Sin frases</p>
+          <p className="text-body text-hueso-2">El banco está vacío. Agrega la primera arriba o pega una lista entera.</p>
+          <button onClick={() => setShowImport(true)} className="btn-sec">
+            <ClipboardText size={16} /> Importar lista
+          </button>
+        </div>
+      ) : (
+        <ul ref={listaRef} role="listbox" aria-label="Banco de frases" className="flex flex-col">
+          {visibles.map((phrase) => {
+            const [a, b] = splitByTiempos(phrase.text)
+            const usos = phrase.usageCount ?? 0
+            const motivos = motivosFueraDeNorma(phrase)
+            const seleccionada = phrase.id === selectedPhraseId
             return (
-              <div
+              <li
                 key={phrase.id}
-                draggable
-                onDragStart={() => handleDragStart(phrase.id)}
-                onDragOver={(e) => handleDragOver(e, phrase.id)}
-                onDrop={handleDrop}
-                className={`group relative flex items-start gap-2 rounded-lg p-3 cursor-pointer transition-colors ${
-                  isCompatible
-                    ? 'bg-carbon-700 hover:bg-carbon-600 border border-gold-500/30'
-                    : 'bg-carbon-700 hover:bg-carbon-600 border border-transparent'
-                }`}
+                data-id={phrase.id}
+                role="option"
+                aria-selected={seleccionada}
+                tabIndex={0}
                 onClick={() => selectPhrase(phrase)}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectPhrase(phrase) } }}
+                className={`group relative cursor-pointer border-b border-linea px-5 py-3.5 transition-colors duration-rapido ease-mesa hover:bg-s2 focus-visible:-outline-offset-2 ${
+                  seleccionada ? 'bg-s2' : ''
+                }`}
               >
-                <div
-                  className="shrink-0 mt-0.5 text-bone-700 opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing transition-opacity"
-                  onMouseDown={(e) => e.stopPropagation()}
-                >
-                  <GripVertical size={13} />
-                </div>
-                <div className="flex-1 pr-1">
-                  <p className="text-sm text-bone-500 leading-relaxed">{phrase.text}</p>
-                  {phrase.author && (
-                    <p className="text-[10px] text-gold-500/80 mt-0.5">– {phrase.author} –</p>
+                <p className="pr-14 text-body text-hueso [text-wrap:pretty]">
+                  {a}
+                  {b && (
+                    <>
+                      <span aria-hidden="true" className="mx-1.5 font-mono text-meta font-medium text-lacre">//</span>
+                      <span className="text-hueso-2">{b}</span>
+                    </>
                   )}
-                </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  {esNueva(phrase) && (
+                </p>
+                <div className="mt-2 flex flex-wrap gap-x-3.5 gap-y-1 font-mono text-meta text-hueso-3">
+                  <span>{usos === 0 ? 'sin usar' : `${usos} uso${usos !== 1 ? 's' : ''}`}</span>
+                  {phrase.author && <span className="truncate">{phrase.author}</span>}
+                  {esNueva(phrase) && <span className="text-hueso-2" title="Añadida en los últimos 7 días">nueva</span>}
+                  {scorePhrase(phrase) > 0 && <span className="text-hueso-2">afín</span>}
+                  {motivos.length > 0 && (
                     <span
-                      className="text-[9px] uppercase tracking-wider text-gold-500 border border-gold-500/40 rounded px-1 py-0.5"
-                      title="Añadida en los últimos 7 días"
+                      className="text-lacre"
+                      title={`Fuera de norma (${motivos.join(' + ')}): no entra en la rotación ni la propone el lote`}
                     >
-                      nueva
+                      fuera: {motivos.join(', ')}
                     </span>
                   )}
-                  {isCompatible && (
-                    <span className="text-[10px] text-gold-500 font-bold">✦</span>
-                  )}
-                  {(phrase.usageCount ?? 0) > 0 && (
-                    <span className="text-xs bg-neon-red/20 text-gold-500 rounded px-1.5 py-0.5 font-medium">
-                      ×{phrase.usageCount}
-                    </span>
-                  )}
-                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); startEdit(phrase) }}
-                      className="text-bone-700 hover:text-bone-500 p-1"
-                    >
-                      <Pencil size={12} />
-                    </button>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); deletePhrase(phrase.id) }}
-                      className="text-bone-700 hover:text-neon-red p-1"
-                    >
-                      <Trash2 size={12} />
-                    </button>
-                  </div>
+                  {seleccionada && <span className="text-oro">en pantalla</span>}
                 </div>
-              </div>
+                <div className="absolute right-3 top-2.5 flex opacity-0 transition-opacity duration-rapido ease-mesa focus-within:opacity-100 group-hover:opacity-100">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); startEdit(phrase) }}
+                    className="btn-fantasma grid h-10 w-10 place-items-center lg:h-auto lg:w-auto lg:p-1.5"
+                    aria-label="Editar frase"
+                  >
+                    <PencilSimple size={16} />
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); deletePhrase(phrase.id) }}
+                    className="btn-fantasma grid h-10 w-10 place-items-center hover:text-lacre lg:h-auto lg:w-auto lg:p-1.5"
+                    aria-label="Borrar frase"
+                  >
+                    <Trash size={16} />
+                  </button>
+                </div>
+              </li>
             )
-          })
-        })()}
-        {phrases.length === 0 && (
-          <p className="text-xs text-bone-700 text-center py-6">
-            No hay frases. Agrega la primera o importa una lista.
-          </p>
-        )}
-      </div>
+          })}
+        </ul>
+      )}
     </div>
   )
 }
-
-

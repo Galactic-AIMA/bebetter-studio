@@ -1,15 +1,43 @@
+// ⚠️ dotenv AQUÍ, y no solo en `config.ts` (2026-08-19).
+//
+// `USA_PG` se evalúa al CARGAR este módulo. Un script que hace
+// `import db from '../src/db'` sin cargar antes el .env ve `DB_ENGINE` vacío, cae a
+// SQLite **sin decir nada** y escribe en la base equivocada mientras la app corre
+// sobre Postgres. Pasó de verdad con `aplicar-tanda-D.ts`: archivó 28 frases y creó
+// otras 28 en el fichero SQLite, e imprimió un resumen correcto — del motor
+// equivocado. Cargarlo aquí hace que el motor no dependa del orden de los imports.
+import 'dotenv/config'
 import Database from 'better-sqlite3'
 import path from 'path'
+import { Pool } from 'pg'
+import { clienteSqlite, clientePostgres, DbClient } from './dbClient'
+import { ESQUEMA_PG, VISTA_PG } from './schemaPg'
+
+/**
+ * Qué motor usa la app. `postgres` o cualquier otra cosa → SQLite.
+ *
+ * Es un INTERRUPTOR y no un salto sin red: mientras el fichero siga ahí se puede
+ * volver atrás cambiando una variable, que es justo lo que hace falta cuando el
+ * cambio de motor destapa algo en producción y hay que publicar igualmente.
+ */
+const USA_PG = (process.env.DB_ENGINE || 'sqlite').toLowerCase() === 'postgres'
+
+/** Qué motor quedó elegido. Los scripts lo IMPRIMEN antes de escribir: es la única
+ *  forma barata de que un fallo de configuración se vea antes y no después. */
+export const MOTOR: 'postgres' | 'sqlite' = USA_PG ? 'postgres' : 'sqlite'
 
 const DB_FILE = path.join(__dirname, '../../data/bebetter.db')
 
-const db = new Database(DB_FILE)
+// Instancia CRUDA de SQLite. Solo la usan el arranque del esquema (aquí abajo) y
+// los scripts de migración: el código de la app habla con `db`, que es el cliente
+// asíncrono y por tanto lo único que hay que cambiar al pasar a Postgres.
+export const sqlite = new Database(DB_FILE)
 
-db.pragma('journal_mode = WAL')
-db.pragma('foreign_keys = ON')
-db.pragma('synchronous = NORMAL')
+sqlite.pragma('journal_mode = WAL')
+sqlite.pragma('foreign_keys = ON')
+sqlite.pragma('synchronous = NORMAL')
 
-db.exec(`
+sqlite.exec(`
   CREATE TABLE IF NOT EXISTS phrases (
     id            TEXT PRIMARY KEY,
     text          TEXT NOT NULL,
@@ -74,6 +102,43 @@ db.exec(`
     usage_count   INTEGER DEFAULT 0,
     analyzed_at   TEXT
   );
+
+  -- Reels del nicho de los que salió cada corte de audio (2026-08-18).
+  --
+  -- Tabla aparte de "audio_tracks" porque la relación es 1:N: VARIOS reels usan el
+  -- mismo tema, y cada uno aporta una frase de origen distinta. Colapsarlo en una
+  -- columna de "audio_tracks" haría dos daños: bajaría N copias casi idénticas del
+  -- mismo mp3, y la regla de "no repetir pista" —que compara por filename— dejaría
+  -- de verlas como la misma, así que dos reels seguidos sonarían igual.
+  --
+  -- Por qué existe la tabla. El emparejamiento por "energia" se midió el 2026-08-18
+  -- sobre 40 publicaciones y no predice nada (el desajuste grande tenía incluso
+  -- mejor watch). La causa: la «energía» de una frase la infiere un prompt que pide
+  -- «encontrarle la IMAGEN de fondo ideal» — describe qué imagen le pega, no qué
+  -- música. Lo que sustituye a ese eje no es un eje musical mejor, es una señal de
+  -- nicho: cuando alguien usó ESE corte para ESA frase, ya emparejó por nosotros.
+  --
+  --   "source_phrase"    la frase que se leía EN PANTALLA en ese reel. NULL = aún
+  --                      sin confirmar; sin ella la fila no puntúa.
+  --   "audio_asset_id"   id del audio en Instagram. Es la clave de deduplicación
+  --                      REAL: dos reels con el mismo id comparten tema aunque sus
+  --                      URLs no se parezcan en nada.
+  --   "start_ms"         segundo del tema por el que entra ESE reel. El 18-ago se
+  --                      dio por hecho que ese dato no existía en ninguna API; sí
+  --                      existe, dentro del payload del propio reel.
+  CREATE TABLE IF NOT EXISTS audio_sources (
+    source_url       TEXT PRIMARY KEY,
+    filename         TEXT NOT NULL,
+    source_phrase    TEXT,
+    source_embedding BLOB,
+    audio_asset_id   TEXT,
+    audio_title      TEXT,
+    audio_artist     TEXT,
+    start_ms         INTEGER,
+    harvested_at     TEXT DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_audio_sources_file ON audio_sources(filename);
+  CREATE INDEX IF NOT EXISTS idx_audio_sources_asset ON audio_sources(audio_asset_id);
 
   CREATE TABLE IF NOT EXISTS carousels (
     id            TEXT PRIMARY KEY,
@@ -173,8 +238,111 @@ for (const sql of [
   // llegó a contradecir su propia descripción). El mood se conserva como dato
   // informativo; quien manda ahora es energía (compatibilidad) + textura (variedad).
   `ALTER TABLE audio_tracks ADD COLUMN textura TEXT`,
+  // Las dos columnas de NORMA de marca (2026-08-18). Hasta ahora el filtro de
+  // norma era David mirando la pantalla; en automático hace falta que esté en la
+  // base, o el bot propondría frases que no se publicarían nunca.
+  //
+  // `estructura`: 'dos_tiempos' | 'un_golpe' | null.
+  //   Norma desde el 2026-08-02: una frase que no esté en dos tiempos NO se publica.
+  //   ⚠️ Es una propiedad SEMÁNTICA: partir por el punto no la detecta (ese fue el
+  //   error de Gemini, que confundía dos oraciones con dos tiempos y falló en 21 de
+  //   139). Se puebla desde `scripts/clasificacion-estructura-manual.json`, que son
+  //   las 139 clasificadas A MANO. No se reclasifica: se carga.
+  //   Y es columna aparte de `archived` a propósito: colapsarlas impediría
+  //   distinguir "retirada" de "pendiente de reconvertir".
+  //
+  // `persona`: 'segunda' | 'tercera' | null.
+  //   Norma desde el 2026-08-02: se publica en tercera persona. Este dato NO existía
+  //   en ninguna parte. Hoy está tapado por casualidad —las nunca usadas salieron de
+  //   las tandas de reconversión, así que ya están en 3.ª—, pero en cuanto el bot
+  //   consuma esas, se colaría lo que no cumple.
+  `ALTER TABLE phrases ADD COLUMN estructura TEXT`,
+  `ALTER TABLE phrases ADD COLUMN persona TEXT`,
+  // Estado de revisión de un vídeo (2026-08-18). NULL = flujo manual de siempre:
+  // se genera en el editor y se decide en el momento, sin cola intermedia.
+  //
+  //   'pendiente_revision' → lo produjo un lote y NADIE lo ha mirado aún
+  //   'aprobado'           → encolado para publicar (encolar ES aprobar)
+  //   'rechazado'          → descartado; no gasta frase ni copies
+  //
+  // Existe por un fallo concreto que el lote automático habría destapado: el
+  // contador de uso sube al ENCOLAR (`bumpUsageForVideo`), lo cual es correcto
+  // cuando encolar es una decisión de David, pero un lote de 30 encolando solo
+  // dejaría 30 frases marcadas como usadas ANTES de que opine — y al rechazar 10,
+  // esas 10 caerían al fondo de la rotación sin haberse publicado nunca, porque
+  // `batchPlanner` ordena por `usage_count ASC` y nada lo revierte. Sería la
+  // cuarta vez que un contador miente (usage_count el 02-ago, publications el 03).
+  //
+  // La salida elegida (2026-08-18) no mueve el contador: hace que **el lote no
+  // encole**. Las piezas nacen en 'pendiente_revision' y solo al aprobarlas se
+  // llama a `/queue`, que es quien genera los copies y cuenta el uso. Así se
+  // conserva el criterio original —contar cuando decides sacarlo— sin tocar n8n
+  // ni dejar el mensaje de Telegram sin el caption que hay que aprobar. Y de paso
+  // los copies solo se pagan por lo aprobado: 30 llamadas menos por lote.
+  `ALTER TABLE videos ADD COLUMN estado TEXT`,
+  // Segundo por el que empieza a sonar la pista (2026-08-18). Hasta ahora el audio
+  // entraba siempre desde el 0, y con las 12 pistas actuales daba igual: duran
+  // 10,102086 s clavadas, son recortes fijos y no hay de dónde elegir. Existe para
+  // poder subir temas de 30-40 s, donde arrancar en 0 se lleva la intro en vez del
+  // estribillo. Lo propone `mejorTramo()` midiendo la sonoridad segundo a segundo,
+  // y se puede corregir a mano: en algo orquestal que crece, el pico está al final
+  // y entrar justo ahí suena abrupto.
+  `ALTER TABLE audio_tracks ADD COLUMN offset_seg REAL`,
+  // Id de la fila de la cola (Google Sheet) que generó este vídeo al encolarse.
+  // Es el único hilo que une la pieza con lo que decide David EN TELEGRAM: n8n
+  // escribe ahí `approved` o `rejected` (nodo `Parse Aprobacion` de `[Pub]`), y
+  // sin este id la app no tiene forma de saber cuál de sus vídeos fue rechazado.
+  // Hace falta porque el contador sube al encolar: si luego se descarta por
+  // Telegram, la frase queda marcada como usada sin haberse publicado nunca.
+  // Ver `reconciliarRechazos()` en services/queueReconcile.ts.
+  `ALTER TABLE videos ADD COLUMN queue_id TEXT`,
+  // ── Procedencia del audio (2026-08-18) ──────────────────────────────────────
+  // La pista y su procedencia viven en tablas distintas (`audio_sources`), porque
+  // VARIOS reels del nicho usan el mismo tema. Ver la definición más abajo.
+  // Embedding del TEXTO CRUDO de la frase, y por qué no vale el que ya había.
+  // `phrases.embedding` NO vectoriza la frase: vectoriza sus `metaforasVisuales`
+  // (ver `buildPhraseDocument`), porque nació para buscar imagen de fondo. Usarlo
+  // para el audio repetiría exactamente el error que se acaba de jubilar — comparar
+  // por un eje medido para otra cosa. Este va con taskType SEMANTIC_SIMILARITY
+  // sobre el texto tal cual, que es lo mismo que se guarda de la frase de origen
+  // del corte, así que los dos lados hablan por fin el mismo idioma.
+  `ALTER TABLE phrases ADD COLUMN embedding_texto BLOB`,
+  // Corte al que se fusionó este, por ser EL MISMO TEMA (2026-08-18).
+  //
+  // Varios reels del nicho usan la misma canción: de la primera cosecha, 68 cortes
+  // eran solo 41 temas. Al fusionarlos, las procedencias se reapuntan al canónico y
+  // el duplicado se queda sin ninguna — o sea, fuera del pool.
+  //
+  // Sin esta columna ese estado es INDISTINGUIBLE del de una pista vieja que nunca
+  // tuvo procedencia, y el panel acababa diciéndole a David que un corte recién
+  // cosechado "es anterior a la cosecha". Guarda el porqué, que es lo único que
+  // separa "duplicado, su frase vive en otro sitio" de "sin cosechar".
+  //
+  // No se borra la fila del duplicado a propósito: su nombre puede aparecer en
+  // `videos.config_extra` de reels ya publicados, y borrarlo dejaría el historial
+  // sin resolver.
+  `ALTER TABLE audio_tracks ADD COLUMN merged_into TEXT`,
+  // Duración del corte en segundos (2026-08-18). Se guarda en vez de medirla con
+  // ffprobe cada vez porque desde hoy DECIDE la duración del reel (ver
+  // `utils/duracionReel.ts`), o sea que se consulta en cada elección de audio y en
+  // cada pieza de un lote de 30.
+  `ALTER TABLE audio_tracks ADD COLUMN duracion_seg REAL`,
+  // Modelo que generó la imagen (2026-08-19). NULL = del banco, no la hizo una IA.
+  //
+  // Existe para poder DECIDIR CON DATOS entre `gemini-3-pro-image` y
+  // `gemini-2.5-flash-image` en vez de por intuición. El 18-ago se midió que el Pro
+  // tardaba 430,5 s contra 7,2 s del flash con el mismo prompt —cuota compartida
+  // saturada— y que la calidad no era de otra categoría, solo de otro estilo: el Pro
+  // más minimalista, el flash con más textura. Con una imagen de cada no se decide
+  // nada, pero `publications` ya permite cruzar rendimiento por imagen, así que
+  // guardando esta columna un mes de publicaciones lo resuelve solo.
+  //
+  // Es el mismo movimiento que ya funcionó con `images.origen` (IA vs banco): esa
+  // columna es la que permitió medir que las piezas con imagen de IA hacen 5,80 s de
+  // watch contra 5,63 s del banco. Sin ella habría sido una discusión de opiniones.
+  `ALTER TABLE images ADD COLUMN modelo TEXT`,
 ]) {
-  try { db.exec(sql) } catch (_) { /* columna ya existe */ }
+  try { sqlite.exec(sql) } catch (_) { /* columna ya existe */ }
 }
 
 // Cobertura de la receta de cada publicación, DERIVADA por bloques.
@@ -194,11 +362,17 @@ for (const sql of [
 // En carruseles, `audio` y `render` NO APLICAN (no llevan música y el "render" es
 // el prompt de marca, que ya vive en slides_json) → cuentan como cubiertos, para
 // no marcarlos incompletos por algo que nunca van a tener.
-db.exec(`DROP VIEW IF EXISTS v_publication_recipe`)
-db.exec(`
+sqlite.exec(`DROP VIEW IF EXISTS v_publication_recipe`)
+sqlite.exec(`
   CREATE VIEW v_publication_recipe AS
   SELECT
     p.*,
+    -- La imagen de fondo, venga de donde venga: identificada a posteriori en la
+    -- miniatura (\`p.image_filename\`, publicaciones anteriores al historial) o
+    -- guardada en la receta del vídeo. Se expone AQUÍ y no se calcula en cada
+    -- consulta porque \`json_extract\` es sintaxis de SQLite y Postgres usa \`->>\`:
+    -- teniéndolo solo en la vista, el cambio de motor toca un sitio y no seis.
+    COALESCE(p.image_filename, json_extract(v.config_extra, '$.imageId')) AS imagen_archivo,
     CASE WHEN p.phrase_id IS NOT NULL OR v.phrase_id IS NOT NULL OR p.carousel_id IS NOT NULL
          THEN 1 ELSE 0 END AS has_phrase,
     CASE WHEN p.image_filename IS NOT NULL
@@ -233,5 +407,27 @@ db.exec(`
   FROM publications p
   LEFT JOIN videos v ON v.id = p.video_id
 `)
+
+// Lo que consume la app. Asíncrono desde el 2026-08-19 aunque detrás siga SQLite:
+// ver `dbClient.ts` para por qué el contrato cambia ANTES que el motor.
+const db: DbClient = USA_PG
+  ? clientePostgres(new Pool({ connectionString: process.env.DATABASE_URL }))
+  : clienteSqlite(sqlite)
+
+/**
+ * Prepara el esquema. Hay que llamarla ANTES de servir peticiones.
+ *
+ * Con SQLite no hace nada: el esquema ya se creó arriba, al importar el módulo,
+ * porque `better-sqlite3` es síncrono y podía. Con Postgres no se puede —crear
+ * tablas es asíncrono— así que este es el hueco donde encaja, y por eso existe
+ * aunque parezca vacía en el camino de SQLite.
+ */
+export async function initDb(): Promise<void> {
+  if (!USA_PG) return
+  if (!process.env.DATABASE_URL) throw new Error('DB_ENGINE=postgres pero falta DATABASE_URL')
+  await db.exec(ESQUEMA_PG)
+  await db.exec(VISTA_PG)
+  console.log('[db] Postgres listo')
+}
 
 export default db

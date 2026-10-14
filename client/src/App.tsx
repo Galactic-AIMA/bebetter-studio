@@ -1,5 +1,10 @@
 import Editor from './pages/Editor'
+import Puerta from './components/Puerta'
 
 export default function App() {
-  return <Editor />
+  return (
+    <Puerta>
+      <Editor />
+    </Puerta>
+  )
 }

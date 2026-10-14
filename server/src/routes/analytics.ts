@@ -17,9 +17,9 @@ router.post('/collect', async (req, res) => {
 })
 
 // GET /api/analytics/pieces — ranking de publicaciones con su receta y métricas.
-router.get('/pieces', (_req, res) => {
+router.get('/pieces', async (_req, res) => {
   try {
-    res.json(pieceStats())
+    res.json(await pieceStats())
   } catch (err: any) {
     res.status(500).json({ error: err.message })
   }
@@ -28,9 +28,9 @@ router.get('/pieces', (_req, res) => {
 // GET /api/analytics/summary — agregados por dimensión de receta.
 // `minN` se devuelve para que el cliente sepa a partir de cuándo un grupo es
 // mirable: con menos piezas la diferencia entre grupos es ruido, no señal.
-router.get('/summary', (_req, res) => {
+router.get('/summary', async (_req, res) => {
   try {
-    res.json({ minN: MIN_N, dimensions: summaryByDimension() })
+    res.json({ minN: MIN_N, dimensions: await summaryByDimension() })
   } catch (err: any) {
     res.status(500).json({ error: err.message })
   }

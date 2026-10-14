@@ -3,6 +3,9 @@ import { cosine, rerankScore } from '../utils/matching'
 import { ImageAnalysis } from './geminiService'
 import { getAllAudioMeta, getRecentAudio } from './audioMetadata'
 import { bestAudio, noteChosen, RotationState } from './audioMatching'
+import { getSourcesByTrack } from './audioSources'
+import { duracionSegunAudio } from '../utils/duracionReel'
+import { EN_NORMA_SQL } from '../utils/norma'
 
 /**
  * Planificador del batch "por cantidad" (rediseño 2026-07-25).
@@ -23,10 +26,20 @@ export interface PlannedPair {
   imageId: string        // filename (PK de images)
   imageUrl: string
   score: number
-  audioTrack?: string     // filename de la pista (o ausente si no hay etiquetadas)
+  audioTrack?: string     // filename del corte (ausente si no hay ninguno cosechado)
   audioMood?: string
-  audioTextura?: string   // familia sonora — es lo que hace que el lote no suene igual
+  audioTextura?: string   // familia sonora — dato informativo desde el 18-ago
   audioEnergia?: number
+  /** Frase del reel del que salió el corte: el porqué visible de la elección. */
+  audioSourcePhrase?: string
+  /** Coseno frase↔frase de origen (0..1). */
+  audioScore?: number
+  /**
+   * Duración de ESTA pieza, sacada de la del corte (2026-08-18). Va por par y no por
+   * lote porque cada frase se lleva un corte distinto: con una duración común, los
+   * cortes más cortos que el vídeo darían la vuelta al bucle y la costura se oye.
+   */
+  duracionSeg?: number
 }
 
 // Jitter al score para dar VARIEDAD entre "Proponer lote" sucesivos: mueve el
@@ -48,6 +61,7 @@ interface PhraseRow {
   author?: string
   usage_count: number
   embedding: Buffer
+  embedding_texto: Buffer | null
   nivel_energia: number | null
   paleta: string | null
   mood_category: string | null
@@ -72,16 +86,24 @@ function vec(b: Buffer): Float32Array {
 /**
  * Arma un lote de `count` piezas emparejando frases↔imágenes (+ audio por mood).
  */
-export function planBatch(driver: BatchDriver, count: number, allowRepeat: boolean): PlannedPair[] {
-  const phrases = db.prepare(
-    `SELECT id, text, author, usage_count, embedding, nivel_energia, paleta, mood_category
-     FROM phrases WHERE embedding IS NOT NULL AND archived = 0
+export async function planBatch(
+  driver: BatchDriver,
+  count: number,
+  allowRepeat: boolean,
+  /** Duración de reserva, solo para los cortes cuya duración no esté medida. */
+  duracionLote = 10
+): Promise<PlannedPair[]> {
+  // Solo frases EN NORMA: es el planificador del que tira la automatizacion, y
+  // una frase fuera de norma no se publicaria nunca. Ver `utils/norma.ts`.
+  const phrases = (await db.prepare(
+    `SELECT id, text, author, usage_count, embedding, embedding_texto, nivel_energia, paleta, mood_category
+     FROM phrases WHERE embedding IS NOT NULL AND archived = 0 AND ${EN_NORMA_SQL}
      ORDER BY usage_count ASC, created_at DESC`
-  ).all() as PhraseRow[]
-  const images = db.prepare(
+  ).all()) as PhraseRow[]
+  const images = (await db.prepare(
     `SELECT filename, usage_count, embedding, analysis_json
      FROM images WHERE embedding IS NOT NULL ORDER BY usage_count ASC`
-  ).all() as ImageRow[]
+  ).all()) as ImageRow[]
 
   if (phrases.length === 0 || images.length === 0) return []
 
@@ -136,8 +158,11 @@ export function planBatch(driver: BatchDriver, count: number, allowRepeat: boole
   // así que sin este estado las N frases del lote verían contadores idénticos y
   // saldrían todas con la misma pista. Se siembra con lo que sonó en los últimos
   // reels para que el primero del lote tampoco repita.
-  const audioMeta = [...getAllAudioMeta().values()]
-  const reciente = getRecentAudio(3)
+  const audioMeta = [...(await getAllAudioMeta()).values()]
+  const reciente = await getRecentAudio(3)
+  // Las procedencias se cargan UNA vez por lote, no una por pieza: `bestAudio` es
+  // pura y las recibe ya cargadas.
+  const fuentes = await getSourcesByTrack()
   const rotation: RotationState = {
     extraUsage: new Map<string, number>(),
     recentTextures: reciente.textures,
@@ -148,7 +173,7 @@ export function planBatch(driver: BatchDriver, count: number, allowRepeat: boole
   for (const [, c] of pairsByDriver) {
     const p = pList[c.pIdx]
     const img = iList[c.iIdx]
-    const audio = bestAudio(audioMeta, p.nivel_energia, p.mood_category, rotation)
+    const audio = bestAudio(audioMeta, p.embedding_texto ? vec(p.embedding_texto) : null, rotation, fuentes)
     if (audio) noteChosen(rotation, audio)
     out.push({
       phraseId: p.id, phraseText: p.text, author: p.author,
@@ -156,7 +181,10 @@ export function planBatch(driver: BatchDriver, count: number, allowRepeat: boole
       audioTrack: audio?.filename,
       audioMood: audio?.moodCategory ?? undefined,
       audioTextura: audio?.textura ?? undefined,
-      audioEnergia: audio?.energia,
+      audioEnergia: audio?.energia ?? undefined,
+      audioSourcePhrase: audio?.sourcePhrase ?? undefined,
+      audioScore: audio?.score,
+      duracionSeg: audio ? duracionSegunAudio(audio.duracionSeg, duracionLote) : undefined,
     })
   }
   return out

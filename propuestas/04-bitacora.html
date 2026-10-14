@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bitácora · bebetter</title>
+<!--
+  DIRECCIÓN 4 · BITÁCORA
+  Referencias: las salas de control de Nolan (Interstellar, Tenet), SpaceX (negro,
+  mayúsculas, ingeniería) y la telemetría brutalista: rejilla visible, cero radios,
+  monoespaciada para todo lo que es dato.
+  Form desde el contenido: la app ya ES un sistema que opera solo (lotes en el
+  servidor, cola, franjas, reconciliación). Esta dirección lo enseña en vez de
+  esconderlo: cada reel es una salida, cada lote un manifiesto.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,500..900&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* Paleta «Bitácora»: fósforo hueso sobre carbón, UN acento de señal */
+    --bg: #0B0B0A;
+    --celda: #111110;
+    --celda-2: #171715;
+    --rejilla: #2A2925;     /* la rejilla es estructura, no decoración */
+    --fosforo: #E8E4DC;     /* 15.5:1 */
+    --fosforo-2: #8E8A82;   /* 5.7:1 */
+    --fosforo-3: #5E5B55;   /* solo guías y marcas, no texto de lectura */
+    --senal: #FF4A3D;       /* rojo señal 5.9:1: el rojo sangre con la luz encendida */
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; }
+  body { background: var(--bg); color: var(--fosforo); font: 400 12.5px/1.45 'JetBrains Mono', ui-monospace, monospace; -webkit-font-smoothing: antialiased; overflow: hidden; text-transform: uppercase; letter-spacing: .03em; }
+  button { all: unset; cursor: pointer; }
+  .num { font-family: 'Archivo', sans-serif; font-variation-settings: 'wdth' 62; font-weight: 800; letter-spacing: -.01em; text-transform: none; }
+  .dim { color: var(--fosforo-2); }
+
+  /* gap 1px sobre fondo de rejilla = líneas exactas sin bordes */
+  .consola { height: 100dvh; display: grid; gap: 1px; background: var(--rejilla);
+    grid-template-columns: minmax(0,1fr) 400px 316px;
+    grid-template-rows: 44px 104px minmax(0,1fr) 168px;
+    grid-template-areas: 'cab cab cab' 'tel tel tel' 'man visor par' 'log log par'; }
+  .consola > * { background: var(--bg); min-width: 0; min-height: 0; }
+
+  /* ───────── cabecera ───────── */
+  .cab { grid-area: cab; display: grid; grid-template-columns: 240px 1fr auto; gap: 1px; background: var(--rejilla); }
+  .cab > * { background: var(--bg); display: flex; align-items: center; padding: 0 16px; }
+  .marca { font: 900 17px/1 'Archivo'; font-variation-settings: 'wdth' 100; letter-spacing: .06em; gap: 8px; }
+  .marca span { font: 500 11px/1 'JetBrains Mono'; color: var(--fosforo-2); letter-spacing: .12em; }
+  .modos { gap: 4px; }
+  .modos button { padding: 6px 12px; color: var(--fosforo-2); }
+  .modos button:hover { color: var(--fosforo); }
+  .modos button[aria-current] { background: var(--fosforo); color: var(--bg); }
+  .modos .sep { flex: 1; }
+  .modos a { color: var(--fosforo-2); text-decoration: none; padding: 6px 10px; }
+  .modos a:hover { color: var(--fosforo); }
+  .modos a b { color: var(--senal); font-weight: 500; }
+  .salida { gap: 14px; }
+  .salida .t { font-size: 22px; color: var(--fosforo); }
+
+  /* ───────── telemetría ───────── */
+  .tel { grid-area: tel; display: grid; grid-template-columns: 1.5fr 1fr 1.2fr 1fr 1fr 1fr; gap: 1px; background: var(--rejilla); }
+  .tel > div { background: var(--bg); padding: 14px 16px 12px; display: flex; flex-direction: column; justify-content: space-between; }
+  .tel label { color: var(--fosforo-2); font-size: 11px; letter-spacing: .1em; }
+  .tel .num { font-size: 52px; line-height: .9; }
+  .tel .num small { font-size: 26px; }
+  .tel > div:first-child .num { color: var(--fosforo); }
+
+  /* ───────── manifiesto ───────── */
+  .man { grid-area: man; display: flex; flex-direction: column; }
+  .titulo { display: flex; justify-content: space-between; align-items: center; height: 36px; padding: 0 16px; border-bottom: 1px solid var(--rejilla); color: var(--fosforo-2); letter-spacing: .1em; font-size: 11px; flex-shrink: 0; }
+  .titulo b { color: var(--fosforo); font-weight: 500; }
+  .filas { overflow-y: auto; flex: 1; }
+  .fila { display: grid; grid-template-columns: 56px minmax(0,1fr) 116px 96px 168px; gap: 16px; align-items: center; padding: 0 16px; height: 44px; border-bottom: 1px solid #1B1A17; cursor: pointer; }
+  .fila.cab-t { height: 30px; color: var(--fosforo-3); font-size: 10.5px; letter-spacing: .1em; cursor: default; position: sticky; top: 0; background: var(--bg); }
+  .fila:not(.cab-t):hover { background: var(--celda-2); }
+  .fila[aria-selected=true] { background: var(--fosforo); color: var(--bg); }
+  .fila[aria-selected=true] .dim { color: #4A4740; }
+  .fila .frase { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-transform: none; letter-spacing: 0; font-size: 12.5px; }
+  .estado { display: flex; align-items: center; gap: 8px; }
+  .estado.err { color: var(--senal); }
+  .fila[aria-selected=true] .estado.err { color: #A3150B; }
+  .barra { letter-spacing: -.5px; }
+
+  /* ───────── visor ───────── */
+  .visor { grid-area: visor; display: flex; flex-direction: column; }
+  .encuadre { flex: 1; display: grid; place-items: center; position: relative; padding: 16px; min-height: 0; }
+  .pantalla { height: 100%; aspect-ratio: 9/16; position: relative; overflow: hidden; container-type: inline-size; }
+  .pantalla img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .pantalla .scrim { position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(10,10,10,.78), rgba(10,10,10,.55) 28%, transparent 52%); }
+  .pantalla .texto { position: absolute; left: 9.3%; right: 9.3%; top: 25%; transform: translateY(-50%); text-align: center; font: 700 3.89cqw/1.2 'Inter'; color: #E8E4DC; text-transform: none; letter-spacing: 0; text-shadow: 0 1px 4px rgba(0,0,0,.6); }
+  .pantalla .texto p + p { margin-top: 1.2em; }
+  .pantalla .handle { position: absolute; bottom: 6%; width: 100%; text-align: center; font: 400 2.1cqw/1 'Inter'; color: #C5A059; text-transform: none; letter-spacing: 0; }
+  /* guías del visor: zona segura y línea del 25% donde vive el texto */
+  .guia { position: absolute; inset: 0; pointer-events: none; }
+  .guia::before { content: ''; position: absolute; left: 0; right: 0; top: 25%; border-top: 1px dashed rgba(232,228,220,.28); }
+  .guia::after { content: '25%'; position: absolute; left: 4px; top: calc(25% + 4px); font-size: 9.5px; color: rgba(232,228,220,.55); }
+  .esquinas { position: absolute; inset: 8px; pointer-events: none;
+    background:
+      linear-gradient(var(--fosforo),var(--fosforo)) top left/14px 1px no-repeat, linear-gradient(var(--fosforo),var(--fosforo)) top left/1px 14px no-repeat,
+      linear-gradient(var(--fosforo),var(--fosforo)) top right/14px 1px no-repeat, linear-gradient(var(--fosforo),var(--fosforo)) top right/1px 14px no-repeat,
+      linear-gradient(var(--fosforo),var(--fosforo)) bottom left/14px 1px no-repeat, linear-gradient(var(--fosforo),var(--fosforo)) bottom left/1px 14px no-repeat,
+      linear-gradient(var(--fosforo),var(--fosforo)) bottom right/14px 1px no-repeat, linear-gradient(var(--fosforo),var(--fosforo)) bottom right/1px 14px no-repeat; }
+  .barrido { position: absolute; left: 0; right: 0; height: 2px; background: var(--senal); box-shadow: 0 0 10px var(--senal); top: 0; display: none; }
+  .renderizando .barrido { display: block; animation: barrido 1.6s steps(24) infinite; }
+  @keyframes barrido { to { top: 100%; } }
+  .pie-visor { display: flex; justify-content: space-between; align-items: center; height: 36px; padding: 0 16px; border-top: 1px solid var(--rejilla); }
+  .rec { color: var(--senal); visibility: hidden; }
+  .renderizando .rec { visibility: visible; animation: parpadeo 1s steps(2) infinite; }
+  @keyframes parpadeo { 50% { opacity: 0; } }
+
+  /* ───────── parámetros ───────── */
+  .par { grid-area: par; display: flex; flex-direction: column; }
+  .par dl { padding: 4px 16px; flex: 1; overflow-y: auto; }
+  .par .g { color: var(--fosforo-3); font-size: 10.5px; letter-spacing: .12em; margin: 14px 0 4px; }
+  .par .kv { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px solid #1B1A17; }
+  .par .kv dt { color: var(--fosforo-2); }
+  .par .kv dd { text-align: right; }
+  .par .ok { color: var(--fosforo); }
+  .par .ok::before { content: '[x] '; color: var(--fosforo-2); }
+  .mandos { display: grid; gap: 1px; background: var(--rejilla); border-top: 1px solid var(--rejilla); }
+  .mandos button { background: var(--bg); padding: 16px; display: flex; justify-content: space-between; align-items: center; }
+  .mandos button:hover { background: var(--celda-2); }
+  .mandos .go { background: var(--senal); color: var(--bg); font: 800 22px/1 'Archivo'; font-variation-settings: 'wdth' 80; letter-spacing: .04em; padding: 22px 16px; }
+  .mandos .go:hover { background: #FF6155; }
+  .mandos .go:active { transform: translateY(1px); }
+  .mandos kbd { font: 500 11px/1 'JetBrains Mono'; border: 1px solid currentColor; padding: 3px 6px; }
+
+  /* ───────── registro ───────── */
+  .log { grid-area: log; display: flex; flex-direction: column; }
+  .lineas { padding: 8px 16px; overflow: hidden; flex: 1; text-transform: none; letter-spacing: 0; }
+  .lineas p { display: grid; grid-template-columns: 84px 108px 1fr; gap: 12px; padding: 2px 0; }
+  .lineas .h { color: var(--fosforo-3); }
+  .lineas .m { color: var(--fosforo-2); }
+  .lineas .err { color: var(--senal); }
+  .cursor::after { content: '_'; animation: parpadeo 1s steps(2) infinite; }
+
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; } }
+  @media (max-width: 1100px) {
+    body { overflow: auto; }
+    .consola { height: auto; grid-template-columns: 1fr; grid-template-rows: auto; grid-template-areas: 'cab' 'tel' 'visor' 'par' 'man' 'log'; }
+    .cab { grid-template-columns: 1fr; } .modos { overflow-x: auto; } .modos a { white-space: nowrap; } .cab > * { min-height: 44px; } .tel { grid-template-columns: repeat(2, 1fr); }
+    .encuadre { height: 72vh; } .pantalla { height: calc(72vh - 32px); } .fila { grid-template-columns: 48px minmax(0,1fr) 110px; } .fila > :nth-child(3), .fila > :nth-child(4) { display: none; }
+    .log { height: 200px; }
+  }
+</style>
+</head>
+<body>
+<div class="consola" id="consola">
+  <header class="cab">
+    <div class="marca">BEBETTER <span>/ STUDIO</span></div>
+    <nav class="modos">
+      <button aria-current="page">Video</button><button>Imagen</button><button>Carrusel</button>
+      <span class="sep"></span>
+      <a href="#">Banco</a><a href="#">Revisión <b>[12]</b></a><a href="#">Cadencia</a><a href="#">Analítica</a>
+    </nav>
+    <div class="salida"><span class="dim">Próxima salida 19:00</span><span class="t num" id="cuenta">T-00:00:00</span></div>
+  </header>
+
+  <section class="tel" aria-label="Telemetría de la cuenta">
+    <div><label>Reproducciones acumuladas</label><span class="num" data-v="755151">0</span></div>
+    <div><label>Piezas medidas</label><span class="num" data-v="124">0</span></div>
+    <div><label>Pico en una pieza</label><span class="num" data-v="127404">0</span></div>
+    <div><label>Alcance mediano</label><span class="num" data-v="1687">0</span></div>
+    <div><label>Guardados / alcance</label><span class="num">1,56<small> %</small></span></div>
+    <div><label>Compartidos / alcance</label><span class="num">0,65<small> %</small></span></div>
+  </section>
+
+  <section class="man">
+    <div class="titulo"><span><b>Manifiesto del lote</b> · 30 piezas pedidas (ejemplo)</span><span>18 listas · 1 error</span></div>
+    <div class="filas" role="listbox" aria-label="Piezas del lote">
+      <div class="fila cab-t"><span>Pieza</span><span>Primer tiempo</span><span>Fondo</span><span>Pista</span><span>Estado</span></div>
+      <div id="filas"></div>
+    </div>
+  </section>
+
+  <section class="visor" id="visor">
+    <div class="titulo"><span><b>Visor</b> · 1080×1920</span><span id="pieza">F-04</span></div>
+    <div class="encuadre">
+      <div class="pantalla"><img id="fondo" alt=""><div class="scrim"></div><div class="texto" id="texto"></div><div class="handle">@bebetter.path</div><div class="guia"></div><div class="barrido"></div></div>
+      <div class="esquinas"></div>
+    </div>
+    <div class="pie-visor"><span class="rec">● Rec</span><span id="tc">00:00:00:00 / 00:00:07:00</span></div>
+  </section>
+
+  <aside class="par">
+    <div class="titulo"><b>Parámetros</b><span>Preset bebetter</span></div>
+    <dl>
+      <div class="g">Norma de marca</div>
+      <div class="kv"><dt>Estructura</dt><dd class="ok">Dos tiempos</dd></div>
+      <div class="kv"><dt>Persona</dt><dd class="ok">Tercera</dd></div>
+      <div class="kv"><dt>Firma</dt><dd class="ok">@bebetter.path</dd></div>
+      <div class="g">Render</div>
+      <div class="kv"><dt>Fuente</dt><dd>Inter Bold 42</dd></div>
+      <div class="kv"><dt>Color</dt><dd>#E8E4DC</dd></div>
+      <div class="kv"><dt>Interlineado</dt><dd>1,2</dd></div>
+      <div class="kv"><dt>Degradado</dt><dd>Carbón 52%</dd></div>
+      <div class="g">Sonido</div>
+      <div class="kv"><dt>Textura</dt><dd id="pista"></dd></div>
+      <div class="kv"><dt>Energía</dt><dd id="energia"></dd></div>
+      <div class="kv"><dt>Duración</dt><dd>7,0 s</dd></div>
+    </dl>
+    <div class="mandos">
+      <button class="go" id="go"><span>Generar</span><kbd>G</kbd></button>
+      <button><span>Encolar</span><kbd>Q</kbd></button>
+      <button><span>Rechazar pieza</span><kbd>X</kbd></button>
+    </div>
+  </aside>
+
+  <section class="log">
+    <div class="titulo"><b>Registro</b><span>Servidor · VM</span></div>
+    <div class="lineas" id="lineas"></div>
+  </section>
+</div>
+
+<script src="assets/contenido.js"></script>
+<script>
+  const { frases, tiempos, img } = BB
+  const $ = (id) => document.getElementById(id)
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches
+  const nombres = { barra: 'BARRA', caminante: 'CAMINANTE', marioneta: 'MARIONETA', forja: 'FORJA', faro: 'FARO', reloj: 'RELOJ', faro2: 'FARO II', trofeo: 'TROFEO' }
+  // Estados de ejemplo para enseñar cómo se ve un lote corriendo.
+  const estados = [['Listo'], ['Listo'], ['En cola 07:00'], ['Revisión'], ['Render', 62], ['Error', 'R2 timeout'], ['Esperando'], ['Esperando']]
+  const bloques = (p) => '▮'.repeat(Math.round(p / 12.5)) + '▯'.repeat(8 - Math.round(p / 12.5))
+
+  $('filas').innerHTML = frases.map((f, i) => {
+    const [e, x] = estados[i]
+    const est = e === 'Render' ? `<span class="barra">${bloques(x)}</span> ${x}%` : e === 'Error' ? `Error ${x}` : e
+    return `<div class="fila" role="option" data-i="${i}" aria-selected="false"><span class="dim">F-0${i + 1}</span><span class="frase">${tiempos(f.texto)[0]}</span><span>${nombres[f.fondo]}</span><span class="dim">${f.pista.toUpperCase()}</span><span class="estado ${e === 'Error' ? 'err' : ''}">${est}</span></div>`
+  }).join('')
+
+  function ver(i) {
+    const f = frases[i], [a, b] = tiempos(f.texto)
+    document.querySelectorAll('#filas .fila').forEach((r) => r.setAttribute('aria-selected', r.dataset.i == i))
+    $('fondo').src = img(f.fondo)
+    $('texto').innerHTML = `<p>${a}</p>${b ? `<p>${b}</p>` : ''}`
+    $('pieza').textContent = 'F-0' + (i + 1)
+    $('pista').textContent = f.pista.toUpperCase()
+    $('energia').textContent = f.energia + ' / 5'
+  }
+  $('filas').addEventListener('click', (e) => { const r = e.target.closest('.fila'); if (r) ver(+r.dataset.i) })
+  document.querySelectorAll('.modos button').forEach((b) => b.addEventListener('click', () => document.querySelectorAll('.modos button').forEach((x) => x.toggleAttribute('aria-current', x === b))))
+
+  // Telemetría: los contadores suben por pasos, como un instrumento, no con easing.
+  const fmt = (n) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.')  // es-ES no agrupa 4 cifras: 1.687, no 1687
+  document.querySelectorAll('[data-v]').forEach((el) => {
+    const v = +el.dataset.v
+    if (reduce) { el.textContent = fmt(v); return }
+    let k = 0; const pasos = 18
+    const t = setInterval(() => { k++; el.textContent = fmt(Math.round(v * k / pasos)); if (k >= pasos) clearInterval(t) }, 45)
+  })
+
+  // Cuenta atrás real hasta las 19:00 (o las 19:00 de mañana).
+  function cuenta() {
+    const now = new Date(), obj = new Date(now); obj.setHours(19, 0, 0, 0); if (obj <= now) obj.setDate(obj.getDate() + 1)
+    const s = Math.floor((obj - now) / 1000), p = (n) => String(n).padStart(2, '0')
+    $('cuenta').textContent = `T-${p(Math.floor(s / 3600))}:${p(Math.floor(s / 60) % 60)}:${p(s % 60)}`
+  }
+  cuenta(); setInterval(cuenta, 1000)
+
+  // Registro: eventos que este sistema emite de verdad (textos de ejemplo).
+  const log = [
+    ['19:02:11', 'lote', 'planBatch(30) → 30 planificadas · tope del pool 61'],
+    ['19:02:12', 'norma', '0 frases fuera de norma en el plan'],
+    ['19:06:40', 'render', 'F-01 listo · 7,0 s · audio cortado al corte cosechado'],
+    ['19:07:58', 'render', 'F-02 listo · encolada para la franja 07:00'],
+    ['19:09:15', 'r2', 'F-06 subida fallida: timeout · reintento 1 de 3', 'err'],
+    ['19:10:02', 'reconcilia', 'reconciliarRechazos(): 0 cambios'],
+    ['19:10:30', 'render', 'F-05 renderizando 62 %'],
+  ]
+  log.forEach(([h, m, t, c], i) => setTimeout(() => {
+    const p = document.createElement('p')
+    p.innerHTML = `<span class="h">${h}</span><span class="m">${m}</span><span class="${c || ''}">${t}</span>`
+    document.querySelectorAll('.cursor').forEach((x) => x.classList.remove('cursor'))
+    p.lastChild.classList.add('cursor'); $('lineas').append(p)
+  }, reduce ? 0 : 300 + i * 260))
+
+  // Generar: barrido de render en el visor y timecode corriendo (demo de 4 s).
+  $('go').addEventListener('click', () => {
+    const v = $('visor'); if (v.classList.contains('renderizando')) return
+    v.classList.add('renderizando'); let f = 0
+    const t = setInterval(() => { f++; const s = Math.floor(f / 25), fr = f % 25; $('tc').textContent = `00:00:${String(s).padStart(2, '0')}:${String(fr).padStart(2, '0')} / 00:00:07:00`; if (f >= 175) { clearInterval(t); v.classList.remove('renderizando') } }, 1000 / 44)
+  })
+  ver(3)
+</script>
+</body>
+</html>

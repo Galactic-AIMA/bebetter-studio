@@ -2,6 +2,15 @@ node_modules/
 dist/
 .env
 server/.env
+# Y sus copias de seguridad: llevan las mismas credenciales dentro y el patrón
+# `.env` a secas no las cubre (2026-08-18).
+.env.*
+server/.env.*
+# Las plantillas SIN valores sí van al repo: son documentación de qué hace falta
+# configurar. La negación tiene que ir DESPUÉS de `.env.*` — gana la última regla
+# que coincide. (`.env.example` se libraba solo por estar trackeado de antes.)
+!.env.example
+!.env.production.example
 
 # Generated videos
 output/
@@ -47,9 +56,15 @@ data/bebetter.db.bak-*
 # (el patrón antiguo era solo `wf_*_backup_*.json` y dejaba pasar toda la familia `wf_backup_*`)
 server/scripts/wf_*.json
 server/scripts/__pycache__/
+scripts/__pycache__/
 
-# Lockfile
-package-lock.json
+# Lockfile: VA AL REPO a propósito (2026-08-19).
+# Estuvo ignorado y eso rompía dos cosas a la vez. `npm ci` —el que usa el
+# Dockerfile— EXIGE el lockfile y falla sin él. Y sin fijar las versiones, dos
+# builds del mismo commit pueden traer dependencias distintas por los rangos `^`,
+# lo que contradice la decisión 6 del diseño: *una sola imagen con dos entrypoints
+# al MISMO digest*. Esa garantía necesita que el build sea reproducible.
+# Ignorar el lockfile tiene sentido en una librería. Esto es una aplicación.
 
 # Claude Code local config
 .claude/
@@ -128,6 +143,12 @@ server/scripts/reparar-vinculo-tanda2.ts
 # dentro el runtime del visor). Se rehacen con:
 #   node <skills>/archify/bin/archify.mjs deliver <tipo> <spec>.json <salida>.html --quality showcase
 docs/diagramas/*.html
+
+beBetterStudio-app.pem
+# La URL del webhook de avisos de lote. Semisecreta: quien la tenga puede
+# mandarte un mensaje falso de Telegram. El repo es publico.
+.webhook-lote-url
+.n8n-cred-id
 
 # Referencias visuales descargadas (no versionar)
 referencias/

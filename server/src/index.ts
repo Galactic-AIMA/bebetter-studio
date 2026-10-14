@@ -19,15 +19,43 @@ import batchRouter from './routes/batch'
 import aiImagesRouter from './routes/aiImages'
 import carouselsRouter from './routes/carousels'
 import analyticsRouter from './routes/analytics'
+import devWrapRouter from './routes/devWrap'
 import { collectInsights, haySnapshotDeHoy } from './services/insightsService'
 import { syncBoardImages } from './services/pinterestService'
 import { runCleanup } from './services/cleanupService'
+import { reconciliarRechazosSeguro } from './services/queueReconcile'
 import { logInfo } from './services/logService'
+import { initDb } from './db'
+import authRouter from './routes/auth'
+import { exigirSesion, revisarPuerta } from './middleware/auth'
 
 const app = express()
 
 app.use(cors({ origin: config.clientUrl }))
 app.use(express.json())
+
+// ─── La puerta ───────────────────────────────────────────────────────────────
+// El login va FUERA del guardia: es la puerta, y no puede estar cerrada por
+// dentro. Todo lo demás queda detrás.
+app.use('/auth', authRouter)
+
+// Las tipografías quedan FUERA del guardia, y a propósito: son los TTF de Google
+// Fonts, redistribuibles y sin nada que proteger. Y protegerlas rompería la propia
+// pantalla de login, que las carga por CSS con `font-display: block` — un 401 ahí
+// deja el texto invisible hasta que vence el tiempo de espera.
+// Las tipografías salen de aquí, no del CDN de Google: el navegador tiene que
+// medir el MISMO TTF que pinta FFmpeg o el corte de línea del preview y el del
+// vídeo no pueden coincidir. De paso, la app deja de depender de una red externa
+// para renderizar bien —que es condición para el contenedor.
+app.use('/api/fonts', express.static(path.resolve(config.paths.fonts), {
+  maxAge: '30d',
+  setHeaders: (res) => res.setHeader('Access-Control-Allow-Origin', '*'),
+}))
+
+// El guardia sobre `/api` y `/output`, montado ANTES que nada de lo que protege:
+// Express ejecuta en orden de registro, y puesto después no vería esas peticiones.
+app.use('/api', exigirSesion)
+app.use('/output', exigirSesion)
 
 // Servir videos generados como archivos estáticos (URL pública directa para n8n/Meta)
 app.use('/output', express.static(path.resolve(config.paths.output)))
@@ -48,6 +76,12 @@ app.use('/api/ai-images', aiImagesRouter)
 app.use('/api/carousels', carouselsRouter)
 app.use('/api/analytics', analyticsRouter)
 
+// Verificación del wrap servidor↔navegador (Fase 0.1). Fuera de producción:
+// escribe en disco y solo sirve para comprobar que los dos cortan igual.
+if (process.env.NODE_ENV !== 'production') {
+  app.use('/api/dev', devWrapRouter)
+}
+
 app.get('/api/watermark', (req, res) => {
   const wmPath = config.watermark.path
   if (!wmPath || !fs.existsSync(wmPath)) return res.status(404).json({ error: 'Watermark not configured' })
@@ -56,6 +90,82 @@ app.get('/api/watermark', (req, res) => {
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }))
 
+// ─── El build de React, servido por el propio Express (Fase 3) ───────────────
+//
+// Cliente y API en el MISMO origen ⇒ el `baseURL: '/api'` del cliente deja de
+// cruzar orígenes y **CORS desaparece**: no hay preflight que configurar ni una
+// lista de orígenes que mantener a mano cada vez que cambia el dominio.
+//
+// Va DESPUÉS de todas las rutas `/api` a propósito: montado antes, el comodín se
+// las tragaría y la API devolvería el HTML del index.
+//
+// Si no hay build (desarrollo, con Vite aparte en el 5173) no se monta nada y la
+// app sigue sirviendo solo la API. Así el mismo `index.ts` vale en los dos sitios.
+const CLIENT_DIST = process.env.CLIENT_DIST_PATH || path.join(__dirname, '../../client/dist')
+
+if (fs.existsSync(path.join(CLIENT_DIST, 'index.html'))) {
+  app.use(express.static(CLIENT_DIST))
+
+  // Comodín para el enrutado del lado del cliente: recargar en una ruta interna
+  // tiene que devolver el index, no un 404. Se excluyen los prefijos que sirve el
+  // servidor de verdad, porque un 404 de la API debe seguir siendo un 404 y no
+  // una página HTML que el cliente no sabe interpretar.
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api') || req.path.startsWith('/output') || req.path === '/health') {
+      return next()
+    }
+    res.sendFile(path.join(CLIENT_DIST, 'index.html'))
+  })
+
+  console.log(`Cliente: sirviendo el build desde ${CLIENT_DIST}`)
+} else {
+  console.log('Cliente: sin build, se sirve solo la API (modo desarrollo)')
+}
+
+// La puerta ANTES de escuchar, por el mismo motivo que el esquema: una variable
+// que falta aquí no falla, ELIGE — y elegiría dejar la app abierta en silencio.
+// Es la lección del «motor equivocado»: arrancar mal es peor que no arrancar.
+const fallosPuerta = revisarPuerta()
+if (fallosPuerta.length > 0) {
+  console.error('[auth] AUTH_ENABLED=true pero la puerta está mal montada:')
+  fallosPuerta.forEach((f) => console.error(`  · ${f}`))
+  console.error('[auth] Se aborta el arranque en vez de servir la app sin protección.')
+  process.exit(1)
+}
+console.log(
+  config.auth.activo
+    ? `Puerta: login de Google activo (${config.auth.correos.length} correo(s) autorizado(s))`
+      + (config.auth.tokenServicio ? ' + token de servicio' : ' — SIN token de servicio')
+    : 'Puerta: DESACTIVADA (AUTH_ENABLED != true) — solo para local'
+)
+
+// El esquema ANTES de escuchar: si la base no está lista, es mejor no arrancar que
+// aceptar peticiones que van a fallar una por una.
+initDb().then(() => arrancar()).catch((e: any) => {
+  console.error('[db] No se pudo preparar la base:', e.message)
+  process.exit(1)
+})
+
+/**
+ * Si esta instancia ejecuta las tareas programadas que TOCAN EL MUNDO DE FUERA:
+ * recoger insights de la Graph API, reconciliar rechazos contra el Google Sheet y
+ * sincronizar Pinterest.
+ *
+ * Existe porque puede haber DOS instancias vivas a la vez —la de casa y la de la
+ * nube— y estas tareas no son inocuas por duplicado: gastan cuota de la Graph API
+ * dos veces y, sobre todo, cada una escribe en SU base. Dos historiales de `videos`
+ * distintos son dos rotaciones de frases distintas, y ahí es donde se acaba
+ * publicando dos veces la misma frase sin que nada avise.
+ *
+ * La limpieza de ficheros viejos NO entra aquí: es higiene del disco local y cada
+ * instancia debe hacer la suya.
+ *
+ * Ponerlo a `false` deja la instancia como banco de pruebas: sirve, genera y
+ * renderiza, pero no toca nada compartido.
+ */
+const TAREAS_EXTERNAS = process.env.TAREAS_EXTERNAS !== 'false'
+
+function arrancar() {
 app.listen(config.port, () => {
   logInfo('system', `Servidor iniciado en http://localhost:${config.port}`)
   console.log(`Server running on http://localhost:${config.port}`)
@@ -65,35 +175,56 @@ app.listen(config.port, () => {
   cron.schedule('0 */6 * * *', () => { runCleanup() })
   console.log('Cleanup: activo (cada 6 horas, archivos >24h)')
 
+  // Devuelve a la rotación las frases de piezas descartadas en Telegram. Va por
+  // sondeo y no por aviso porque n8n (EC2) no puede alcanzar esta app (local).
+  // Se corre al arrancar además de cada 2 h: el PC no está siempre encendido, y
+  // los rechazos se acumulan mientras tanto.
+  if (TAREAS_EXTERNAS) {
+    reconciliarRechazosSeguro()
+    cron.schedule('15 */2 * * *', () => { reconciliarRechazosSeguro() })
+    console.log('Reconciliación de rechazos: activa (al arrancar y cada 2 horas)')
+  } else {
+    console.log('Reconciliación de rechazos: DESACTIVADA (TAREAS_EXTERNAS=false)')
+  }
+
   // Snapshot diario de insights. De madrugada porque no compite con nada y la
   // granularidad de la serie es el día. Best-effort: si el token o la red fallan,
   // se pierde un punto de la serie, no la app.
-  cron.schedule('30 4 * * *', async () => {
-    try {
-      const r = await collectInsights(true)
-      console.log(`Insights: snapshot de ${r.ok}/${r.total} publicaciones`)
-    } catch (err: any) {
-      console.error('Insights: fallo al recoger —', err.message)
-    }
-  })
-  console.log('Insights: activo (snapshot diario 4:30)')
+  if (TAREAS_EXTERNAS) {
+    cron.schedule('30 4 * * *', async () => {
+      try {
+        const r = await collectInsights(true)
+        console.log(`Insights: snapshot de ${r.ok}/${r.total} publicaciones`)
+      } catch (err: any) {
+        console.error('Insights: fallo al recoger —', err.message)
+      }
+    })
+    console.log('Insights: activo (snapshot diario 4:30)')
+  } else {
+    console.log('Insights: DESACTIVADO (TAREAS_EXTERNAS=false)')
+  }
 
   // Red de seguridad del cron: n8n publica con el PC apagado, pero el recolector
   // vive aquí — si la máquina no estaba encendida a las 4:30, ese día no habría
   // snapshot y el punto se perdería. Al arrancar se recoge lo que falte del día.
   // Condicionado a que no haya snapshot de hoy: si no, cada reinicio del server
   // repetiría ~60 llamadas a la Graph API sin añadir nada a la serie.
-  if (!haySnapshotDeHoy()) {
-    collectInsights(true)
-      .then((r) => console.log(`Insights: snapshot de arranque, ${r.ok}/${r.total} publicaciones`))
-      .catch((err) => console.error('Insights (arranque): fallo al recoger —', err.message))
-  } else {
-    console.log('Insights: ya hay snapshot de hoy, no se repite al arrancar')
-  }
+  // Encadenado y no `await`: el callback de `app.listen` es síncrono, y volverlo
+  // async convertiría cualquier fallo de aquí dentro en un rechazo sin dueño.
+  if (TAREAS_EXTERNAS) haySnapshotDeHoy()
+    .then((hay) => {
+      if (hay) {
+        console.log('Insights: ya hay snapshot de hoy, no se repite al arrancar')
+        return
+      }
+      return collectInsights(true)
+        .then((r) => console.log(`Insights: snapshot de arranque, ${r.ok}/${r.total} publicaciones`))
+    })
+    .catch((err) => console.error('Insights (arranque): fallo al recoger —', err.message))
 
   // gallery-dl retirado (2026-07-26): duplicaba imágenes que la Pinterest API ya
   // baja. La sincronización queda solo por la Pinterest API v5 (abajo).
-  if (config.pinterest.appId && config.pinterest.boardId) {
+  if (TAREAS_EXTERNAS && config.pinterest.appId && config.pinterest.boardId) {
     console.log('Pinterest API: sincronizando al arranque...')
     syncBoardImages().then((r) => {
       console.log(`Pinterest API sync: ${r.newImages} nuevas imágenes de ${r.totalChecked} pines`)
@@ -102,3 +233,5 @@ app.listen(config.port, () => {
     })
   }
 })
+}
+
