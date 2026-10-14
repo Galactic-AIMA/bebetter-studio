@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import axios from 'axios'
+import { GoogleLogo, WarningCircle } from '@phosphor-icons/react'
 
 /**
  * La puerta de la app.
@@ -11,7 +12,7 @@ import axios from 'axios'
  */
 
 /**
- * Quién hay dentro, para el resto de la app. Lo consume el Header, que solo debe
+ * Quién hay dentro, para el resto de la app. Lo consume la barra lateral, que solo debe
  * enseñar el botón de salir si hay de dónde salir: en local no hay puerta.
  */
 const SesionContext = createContext<Quien | null>(null)
@@ -70,37 +71,39 @@ export default function Puerta({ children }: { children: React.ReactNode }) {
 
   if (quien === null) {
     return (
-      <div className="min-h-screen bg-carbon-900 flex items-center justify-center">
-        <p className="text-bone-700 text-sm tracking-wide">Comprobando la sesión…</p>
+      <div className="flex min-h-[100dvh] items-center justify-center bg-sala">
+        <p className="text-ui text-hueso-3">Comprobando la sesión…</p>
       </div>
     )
   }
 
   if (quien.autenticado) return <SesionContext.Provider value={quien}>{children}</SesionContext.Provider>
 
+  // Estado de entrada (DESIGN.md §3: uno de los tres usos de Anton). La sala a
+  // oscuras con su luz de proyector, el wordmark y una sola acción.
   return (
-    <div className="min-h-screen bg-carbon-900 flex items-center justify-center p-6">
-      <div className="w-full max-w-sm bg-carbon-800 border border-carbon-600 rounded-lg p-8 text-center">
-        <h1 className="text-bone-500 text-2xl font-semibold tracking-tight">bebetter</h1>
-        <p className="text-bone-700 text-sm mt-2 mb-8">Studio</p>
+    <main className="relative flex min-h-[100dvh] items-center justify-center overflow-hidden bg-sala px-4">
+      <div className="luz-proyector encender pointer-events-none absolute inset-0" aria-hidden />
+      <div className="grano fixed inset-0" aria-hidden />
+      <div className="relative flex w-full max-w-sm flex-col items-start gap-8">
+        <h1 className="flex items-baseline gap-3">
+          <span className="pt-[.16em] font-display text-[56px] leading-[.98] tracking-[.02em] text-hueso">BEBETTER</span>
+          <span className="rotulo tracking-[.24em]">Studio</span>
+        </h1>
 
         {motivo && (
-          <p className="text-neon-red text-sm mb-6 leading-relaxed border border-blood-500/40 bg-blood-500/10 rounded px-3 py-2">
-            {motivo}
+          <p role="alert" className="flex items-start gap-2 text-ui text-lacre">
+            <WarningCircle size={16} className="mt-0.5 shrink-0" /> {motivo}
           </p>
         )}
 
-        <a
-          href="/auth/google"
-          className="block w-full bg-gold-500 hover:bg-gold-600 text-carbon-900 font-medium rounded px-4 py-3 transition-colors"
-        >
-          Entrar con Google
-        </a>
-
-        <p className="text-bone-700 text-xs mt-6 leading-relaxed">
-          Solo las cuentas autorizadas pueden entrar.
-        </p>
+        <div className="flex w-full flex-col gap-3">
+          <a href="/auth/google" className="btn-sec h-12 w-full gap-2 border-hueso text-body lg:h-12">
+            <GoogleLogo size={18} /> Entrar con Google
+          </a>
+          <p className="text-ui text-hueso-3">Solo pueden entrar las cuentas autorizadas.</p>
+        </div>
       </div>
-    </div>
+    </main>
   )
 }

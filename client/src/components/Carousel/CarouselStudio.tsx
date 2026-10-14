@@ -1,11 +1,11 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import {
-  Sparkles, Wand2, RefreshCw, ChevronLeft, GalleryHorizontalEnd, AlertCircle, Loader2, Check, Square, Play, Send,
-  Trash2, History, Zap,
-} from 'lucide-react'
+  Sparkle, ArrowsClockwise, CaretLeft, WarningCircle, Check, Stop, Play, PaperPlaneTilt, Queue, Trash,
+} from '@phosphor-icons/react'
 import { carouselsApi, Carousel, CarouselSlide, SlideRole, CarouselFuente } from '../../api'
 import SlideViewer from './SlideViewer'
 import CarouselQueue from './CarouselQueue'
+import { Segmentos, Interruptor } from '../ui/mesa'
 
 type Phase = 'input' | 'script' | 'work'
 type Tipo = 'narrativo' | 'serie'
@@ -18,8 +18,8 @@ const ROLE_LABEL: Record<SlideRole, string> = {
 }
 
 const ASPECTS: { value: string; label: string }[] = [
-  { value: '4:5', label: '4:5 · Carrusel' },
-  { value: '1:1', label: '1:1 · Cuadrado' },
+  { value: '4:5', label: '4:5' },
+  { value: '1:1', label: '1:1' },
 ]
 
 export default function CarouselStudio() {
@@ -325,142 +325,77 @@ export default function CarouselStudio() {
   }
 
   // ── Render ──────────────────────────────────────────────────────────────────
+  const faltan = carousel ? carousel.slides.filter((s) => !s.publicUrl).length : 0
+  // Etiqueta de rol: la portada y el cierre se marcan con luz; el resto, apagado.
+  const rolClase = (rol: SlideRole) => (rol === 'portada' || rol === 'cta' ? 'text-oro' : 'text-hueso-3')
+
   return (
-    <div className="w-full h-full overflow-y-auto px-3 sm:px-6 py-4 sm:py-5">
-      <div className="max-w-4xl mx-auto">
-        {/* Título */}
-        <div className="flex items-center gap-2.5 mb-1">
-          <GalleryHorizontalEnd size={18} className="text-gold-500" />
-          <h1 className="text-base font-semibold tracking-wide text-bone-500">Modo Carrusel</h1>
-        </div>
-        <p className="text-[11px] text-bone-700 mb-5 leading-relaxed">
-          Cada slide es una imagen completa con el texto ya integrado (RAW · STOIC · CINEMATIC), coherente entre slides.
-          Proveedor: KIE (Nano Banana Pro) · ~$0.09/slide. Primero se planifica el guion (gratis) y lo apruebas antes de gastar créditos.
+    <div className="h-full w-full overflow-y-auto px-4 py-5 sm:px-8 sm:py-6">
+      <div className="mx-auto max-w-4xl">
+        <h1 className="mb-1 text-title font-light text-hueso">Carrusel</h1>
+        <p className="mb-6 max-w-[80ch] text-ui text-hueso-2">
+          Cada slide es una imagen completa con el texto ya integrado y coherente con las demás. Primero se
+          planifica el guion, que es gratis, y lo apruebas antes de gastar créditos.
+          <span className="mt-1 block font-mono text-meta text-hueso-3">KIE · Nano Banana Pro · ~$0,09 por slide</span>
         </p>
 
         {error && (
-          <p className="mb-4 text-[11px] text-neon-red bg-neon-red/10 border border-neon-red/30 rounded-lg px-3 py-2 flex items-center gap-2">
-            <AlertCircle size={13} /> {error}
+          <p role="alert" className="mb-4 flex items-start gap-1.5 text-ui text-lacre">
+            <WarningCircle size={16} className="mt-0.5 shrink-0" /> {error}
           </p>
         )}
 
         {/* ── FASE INPUT ── */}
         {phase === 'input' && (
-          <div className="flex flex-col gap-4 bg-carbon-800 rounded-xl p-5 border border-carbon-700">
-            <div>
-              <label className="block text-[11px] font-medium text-bone-500 mb-1.5">Tema o material fuente</label>
+          <section className="flex flex-col gap-5">
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="tema-carrusel" className="text-ui text-hueso-3">Tema o material fuente</label>
               <textarea
+                id="tema-carrusel"
                 value={tema}
                 onChange={(e) => setTema(e.target.value)}
                 rows={4}
-                placeholder='Un tema ("la paciencia") o pega material completo: un capítulo de libro, el resumen de un video, una escena. Cuanta más sustancia, más concretas salen las slides.'
-                className="w-full bg-carbon-900 border border-carbon-600 rounded-lg px-3 py-2 text-xs text-bone-500 leading-relaxed resize-y focus:outline-none focus:border-gold-500/60"
+                placeholder="Un tema («la paciencia») o material completo: un capítulo, el resumen de un vídeo, una escena. Cuanta más sustancia, más concretas salen las slides."
+                className="campo resize-y"
               />
             </div>
 
             {/* Atribución + marca de serie */}
-            <div className="border-t border-carbon-700 pt-4">
-              <label className="block text-[11px] font-medium text-bone-500 mb-1">Referencia (opcional)</label>
-              <p className="text-[10px] text-bone-700 mb-2 leading-relaxed">
-                Da autoridad y convierte varios carruseles en una <span className="text-bone-500">serie</span>. Se
-                muestra solo en la portada y el cierre, discreto.
+            <div className="flex flex-col gap-2 border-t border-linea pt-5">
+              <span className="rotulo">Referencia · opcional</span>
+              <p className="text-ui text-hueso-3">
+                Da autoridad y convierte varios carruseles en una <span className="text-hueso-2">serie</span>. Sale
+                solo en la portada y el cierre, discreta.
               </p>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                <input
-                  value={autor}
-                  onChange={(e) => setAutor(e.target.value)}
-                  placeholder="Autor — Robert Greene"
-                  className="bg-carbon-900 border border-carbon-600 rounded-lg px-3 py-2 text-xs text-bone-500 focus:outline-none focus:border-gold-500/60"
-                />
-                <input
-                  value={obra}
-                  onChange={(e) => setObra(e.target.value)}
-                  placeholder="Obra — Las 48 Leyes del Poder"
-                  className="bg-carbon-900 border border-carbon-600 rounded-lg px-3 py-2 text-xs text-bone-500 focus:outline-none focus:border-gold-500/60"
-                />
-                <input
-                  value={referencia}
-                  onChange={(e) => setReferencia(e.target.value)}
-                  placeholder="Serie — LEY 15"
-                  className="bg-carbon-900 border border-carbon-600 rounded-lg px-3 py-2 text-xs text-bone-500 focus:outline-none focus:border-gold-500/60"
-                />
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                <input value={autor} onChange={(e) => setAutor(e.target.value)} aria-label="Autor" placeholder="Autor: Robert Greene" className="campo" />
+                <input value={obra} onChange={(e) => setObra(e.target.value)} aria-label="Obra" placeholder="Obra: Las 48 leyes del poder" className="campo" />
+                <input value={referencia} onChange={(e) => setReferencia(e.target.value)} aria-label="Serie" placeholder="Serie: LEY 15" className="campo" />
               </div>
-              <label className="flex items-center gap-2 mt-2.5 text-[11px] text-bone-700 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={conHistoria}
-                  onChange={(e) => setConHistoria(e.target.checked)}
-                  className="accent-gold-500"
-                />
-                Incluir una slide con el caso o historia del material
-              </label>
+              <Interruptor label="Incluir una slide con el caso o la historia del material" checked={conHistoria} onChange={setConHistoria} />
             </div>
 
-            <div className="flex flex-wrap gap-5">
-              {/* Tipo */}
-              <div>
-                <label className="block text-[11px] font-medium text-bone-500 mb-1.5">Tipo</label>
-                <div className="flex items-center rounded-lg overflow-hidden border border-carbon-600 text-xs w-max">
-                  {(['narrativo', 'serie'] as Tipo[]).map((t) => (
-                    <button
-                      key={t}
-                      onClick={() => setTipo(t)}
-                      className={`px-3 py-1.5 transition-colors ${
-                        tipo === t ? 'bg-carbon-600 text-gold-500 font-medium' : 'text-bone-700 hover:text-bone-500'
-                      }`}
-                    >
-                      {t === 'narrativo' ? 'Narrativo' : 'Serie de frases'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Nº slides */}
-              <div>
-                <label className="block text-[11px] font-medium text-bone-500 mb-1.5">Nº de slides</label>
-                <div className="flex items-center rounded-lg overflow-hidden border border-carbon-600 text-xs w-max">
-                  {[5, 6, 7, 8].map((n) => (
-                    <button
-                      key={n}
-                      onClick={() => setNSlides(n)}
-                      className={`px-3 py-1.5 transition-colors ${
-                        nSlides === n ? 'bg-carbon-600 text-gold-500 font-medium' : 'text-bone-700 hover:text-bone-500'
-                      }`}
-                    >
-                      {n}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Formato */}
-              <div>
-                <label className="block text-[11px] font-medium text-bone-500 mb-1.5">Formato</label>
-                <div className="flex items-center rounded-lg overflow-hidden border border-carbon-600 text-xs w-max">
-                  {ASPECTS.map((a) => (
-                    <button
-                      key={a.value}
-                      onClick={() => setAspect(a.value)}
-                      className={`px-3 py-1.5 transition-colors ${
-                        aspect === a.value ? 'bg-carbon-600 text-gold-500 font-medium' : 'text-bone-700 hover:text-bone-500'
-                      }`}
-                    >
-                      {a.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
+            <div className="grid grid-cols-1 gap-4 border-t border-linea pt-5 sm:grid-cols-3">
+              <Segmentos
+                label="Tipo"
+                value={tipo}
+                onChange={setTipo}
+                options={[{ value: 'narrativo', label: 'Narrativo' }, { value: 'serie', label: 'Serie de frases' }]}
+              />
+              <Segmentos
+                label="Slides"
+                value={String(nSlides)}
+                onChange={(v) => setNSlides(Number(v))}
+                options={[5, 6, 7, 8].map((n) => ({ value: String(n), label: <span className="font-mono">{n}</span> }))}
+              />
+              <Segmentos label="Formato" value={aspect} onChange={setAspect} options={ASPECTS} />
             </div>
 
-            <button
-              onClick={planScript}
-              disabled={!hasTema || loadingScript}
-              className="self-start flex items-center gap-1.5 text-xs font-medium bg-[#E8E4DC] text-[#0A0A0A] rounded-lg px-4 py-2 hover:bg-white transition-colors disabled:opacity-40"
-            >
-              <Sparkles size={13} className={loadingScript ? 'animate-pulse' : ''} />
+            <button onClick={planScript} disabled={!hasTema || loadingScript} className="btn-sec self-start border-hueso px-4">
+              <Sparkle size={16} />
               {loadingScript ? 'Planificando…' : 'Planificar guion'}
             </button>
-          </div>
+          </section>
         )}
 
         {/* ── Cola de publicación + cadencia semanal (pantalla inicial) ── */}
@@ -468,223 +403,182 @@ export default function CarouselStudio() {
 
         {/* ── Historial de carruseles (siempre visible en la pantalla inicial) ── */}
         {phase === 'input' && (
-          <div className="mt-6">
-            <div className="flex items-center gap-2 mb-2.5">
-              <History size={13} className="text-gold-500" />
-              <h2 className="text-[11px] font-medium text-bone-500">Carruseles anteriores</h2>
-              {history.length > 0 && <span className="text-[10px] text-bone-700">({history.length})</span>}
-              <button
-                onClick={loadHistory}
-                disabled={loadingHistory}
-                className="ml-auto flex items-center gap-1 text-[10px] text-bone-700 hover:text-bone-500 disabled:opacity-40"
-              >
-                <RefreshCw size={10} className={loadingHistory ? 'animate-spin' : ''} /> Actualizar
+          <section className="mt-8 border-t border-linea pt-5">
+            <header className="mb-3 flex items-center gap-2">
+              <h2 className="rotulo">Carruseles anteriores</h2>
+              {history.length > 0 && <span className="font-mono text-meta tabular-nums text-hueso-3">{history.length}</span>}
+              <button onClick={loadHistory} disabled={loadingHistory} className="btn-fantasma ml-auto h-10 px-1 lg:h-8">
+                <ArrowsClockwise size={16} /> Actualizar
               </button>
-            </div>
+            </header>
 
             {loadingHistory && !history.length ? (
-              <p className="text-[11px] text-bone-700">Cargando…</p>
+              <p className="text-ui text-hueso-3">Cargando los carruseles…</p>
             ) : !history.length ? (
-              <p className="text-[11px] text-bone-700">
-                Todavía no hay carruseles guardados. Los que generes aparecerán aquí.
-              </p>
+              <div className="flex flex-col items-start gap-3 py-8">
+                <p className="pt-[.16em] font-display text-display uppercase text-hueso">Sin carruseles</p>
+                <p className="text-body text-hueso-2">Los que generes aparecerán aquí, para abrirlos, rehacer slides o encolarlos.</p>
+              </div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+              <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
                 {history.map((c) => {
                   const cover = c.slides.find((s) => s.publicUrl)?.publicUrl
                   const hechas = c.slides.filter((s) => s.publicUrl).length
                   return (
-                    <div
-                      key={c.id}
-                      className="group relative bg-carbon-800 border border-carbon-700 rounded-lg overflow-hidden hover:border-carbon-600 transition-colors"
-                    >
+                    <li key={c.id} className="group relative">
                       <button onClick={() => openCarousel(c)} className="w-full text-left" title="Abrir este carrusel">
-                        <div className="relative bg-carbon-900" style={{ aspectRatio: '4 / 5' }}>
+                        <span className="relative block overflow-hidden rounded-control border border-linea-2 bg-s2 transition-colors duration-rapido ease-mesa group-hover:border-borde-control" style={{ aspectRatio: '4 / 5' }}>
                           {cover ? (
-                            <img src={cover} alt="" className="w-full h-full object-cover" />
+                            <img src={cover} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
                           ) : (
-                            <div className="w-full h-full flex items-center justify-center text-[10px] text-bone-700">
-                              sin imágenes
-                            </div>
+                            <span className="grid h-full w-full place-items-center text-meta text-hueso-3">sin imágenes</span>
                           )}
-                          <span className="absolute top-1.5 left-1.5 text-[9px] font-mono bg-carbon-900/85 text-bone-500 rounded px-1">
+                          <span className="absolute left-1.5 top-1.5 rounded-[4px] bg-velo px-1 font-mono text-label tracking-normal text-hueso">
                             {hechas}/{c.slides.length}
                           </span>
                           {(c.status === 'queued' || c.status === 'published') && (
-                            <span className="absolute top-1.5 right-1.5 text-[9px] bg-gold-500 text-carbon-900 font-medium rounded px-1">
+                            <span className="absolute right-1.5 top-1.5 rounded-[4px] bg-velo px-1 font-mono text-label tracking-normal text-oro">
                               {c.status === 'queued' ? 'en cola' : 'publicado'}
                             </span>
                           )}
-                        </div>
-                        <div className="p-2">
-                          {c.fuente?.referencia && (
-                            <span className="text-[9px] font-medium text-neon-red block">{c.fuente.referencia}</span>
-                          )}
-                          <p className="text-[10px] text-bone-500 leading-snug line-clamp-2">{c.tema}</p>
-                          <p className="text-[9px] text-bone-700 mt-0.5">
+                        </span>
+                        <span className="block pt-2">
+                          {c.fuente?.referencia && <span className="block font-mono text-meta text-hueso-3">{c.fuente.referencia}</span>}
+                          <span className="line-clamp-2 block text-ui text-hueso">{c.tema}</span>
+                          <span className="block font-mono text-meta text-hueso-3">
                             {new Date(c.createdAt).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })}
-                          </p>
-                        </div>
+                          </span>
+                        </span>
                       </button>
                       <button
                         onClick={() => removeCarousel(c.id)}
-                        className="absolute bottom-1.5 right-1.5 p-1 rounded bg-carbon-900/80 text-bone-700 opacity-0 group-hover:opacity-100 hover:text-neon-red transition-all"
+                        aria-label={`Borrar el carrusel «${c.tema.slice(0, 40)}»`}
                         title="Borrar carrusel"
+                        className="absolute right-1.5 top-9 grid h-8 w-8 place-items-center rounded-control bg-velo text-hueso-2 opacity-100 transition-opacity duration-rapido ease-mesa hover:text-lacre focus-visible:opacity-100 lg:opacity-0 lg:group-hover:opacity-100"
                       >
-                        <Trash2 size={11} />
+                        <Trash size={16} />
                       </button>
-                    </div>
+                    </li>
                   )
                 })}
-              </div>
+              </ul>
             )}
-          </div>
+          </section>
         )}
 
         {/* ── FASE SCRIPT (guion editable) ── */}
         {phase === 'script' && (
-          <div className="flex flex-col gap-3">
+          <section className="flex flex-col gap-4">
             <div className="flex items-center justify-between">
-              <button onClick={() => setPhase('input')} className="flex items-center gap-1 text-[11px] text-bone-700 hover:text-bone-500">
-                <ChevronLeft size={13} /> Cambiar tema
+              <button onClick={() => setPhase('input')} className="btn-fantasma h-10 lg:h-8">
+                <CaretLeft size={16} /> Cambiar tema
               </button>
-              <button
-                onClick={planScript}
-                disabled={loadingScript}
-                className="flex items-center gap-1 text-[10px] text-gold-500 hover:text-gold-400 disabled:opacity-40"
-              >
-                <RefreshCw size={10} className={loadingScript ? 'animate-spin' : ''} /> Reproponer guion
+              <button onClick={planScript} disabled={loadingScript} className="btn-fantasma h-10 lg:h-8">
+                <ArrowsClockwise size={16} /> {loadingScript ? 'Reproponiendo…' : 'Reproponer guion'}
               </button>
             </div>
 
-            <p className="text-[11px] text-bone-700">
-              Revisa y edita el texto de cada slide. Al generar se cobra ~$0.09 por slide.
+            <p className="text-ui text-hueso-2">
+              Revisa y edita el texto de cada slide. Al generar se cobra cerca de <span className="font-mono">$0,09</span> por slide.
             </p>
 
-            {slides.map((s) => (
-              <div key={s.n} className="bg-carbon-800 rounded-lg p-3 border border-carbon-700">
-                <div className="flex items-center gap-2 mb-1.5">
-                  <span className="text-[10px] font-mono text-bone-700">#{s.n}</span>
-                  <span
-                    className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${
-                      s.rol === 'portada'
-                        ? 'bg-neon-red/15 text-neon-red'
-                        : s.rol === 'cta'
-                        ? 'bg-gold-500/15 text-gold-500'
-                        : s.rol === 'historia'
-                        ? 'bg-gold-500/10 text-gold-500/80'
-                        : 'bg-carbon-600 text-bone-700'
-                    }`}
-                  >
-                    {ROLE_LABEL[s.rol]}
+            <ol className="flex flex-col">
+              {slides.map((s) => (
+                <li key={s.n} className="flex flex-col gap-2 border-b border-linea py-4 first:pt-0">
+                  <span className="flex items-baseline gap-2 font-mono text-meta">
+                    <span className="text-hueso-3">#{s.n}</span>
+                    <span className={rolClase(s.rol)}>{ROLE_LABEL[s.rol]}</span>
                   </span>
-                </div>
-                <textarea
-                  value={s.texto}
-                  onChange={(e) => editSlideText(s.n, e.target.value)}
-                  rows={2}
-                  className="w-full bg-carbon-900 border border-carbon-600 rounded-lg px-3 py-2 text-xs text-bone-500 leading-relaxed resize-y focus:outline-none focus:border-gold-500/60"
-                />
-                <div className="flex items-center gap-1.5 mt-1.5">
-                  <span className="text-[10px] text-bone-700 shrink-0" title="Escena visual de la slide (en inglés). Cada slide usa una distinta para no repetir imagen.">🎬 escena</span>
-                  <input
-                    value={s.simbolo ?? ''}
-                    onChange={(e) => editSlideSimbolo(s.n, e.target.value)}
-                    placeholder="p. ej. a lone chisel carving raw stone"
-                    className="flex-1 bg-carbon-900 border border-carbon-600 rounded px-2 py-1 text-[11px] text-bone-700 italic focus:outline-none focus:border-gold-500/60"
+                  <textarea
+                    value={s.texto}
+                    onChange={(e) => editSlideText(s.n, e.target.value)}
+                    aria-label={`Texto de la slide ${s.n}`}
+                    rows={2}
+                    className="campo resize-y"
                   />
-                </div>
-              </div>
-            ))}
+                  <label className="flex items-center gap-2">
+                    <span className="shrink-0 text-ui text-hueso-3" title="Escena visual de la slide, en inglés. Cada slide usa una distinta para no repetir imagen.">Escena</span>
+                    <input
+                      value={s.simbolo ?? ''}
+                      onChange={(e) => editSlideSimbolo(s.n, e.target.value)}
+                      placeholder="p. ej. a lone chisel carving raw stone"
+                      className="campo h-10 py-0 text-ui text-hueso-2 lg:h-8"
+                    />
+                  </label>
+                </li>
+              ))}
+            </ol>
 
+            {/* El único botón relleno de esta pantalla: aquí es donde se gasta. */}
             <button
               onClick={createAndGenerate}
-              className="self-start flex items-center gap-1.5 text-xs font-medium bg-[#E8E4DC] text-[#0A0A0A] rounded-lg px-4 py-2 hover:bg-white transition-colors mt-1"
+              className="relative z-10 inline-flex h-12 items-center gap-3 self-start rounded-full bg-sangre px-7 text-[15px] font-medium text-hueso shadow-[0_10px_40px_-12px_rgb(139_26_26/.9),inset_0_1px_0_rgb(255_255_255/.1)] transition-[background-color,transform] duration-rapido ease-mesa hover:bg-sangre-hover active:scale-[.98]"
             >
-              <Wand2 size={13} /> Generar carrusel ({slides.length} slides)
+              <span aria-hidden className="h-[9px] w-[9px] rounded-full bg-hueso" />
+              Generar carrusel · <span className="font-mono">{slides.length}</span> slides
             </button>
-          </div>
+          </section>
         )}
 
         {/* ── FASE WORK (generando / generado) ── */}
         {phase === 'work' && carousel && (
-          <div className="flex flex-col gap-4">
-            <div className="flex items-center justify-between gap-3">
+          <section className="flex flex-col gap-4">
+            <div className="flex flex-wrap items-center gap-3">
               <button
                 onClick={backToStart}
                 disabled={generatingN !== null}
-                className="flex items-center gap-1 text-[11px] text-bone-700 hover:text-bone-500 disabled:opacity-40 shrink-0"
+                className="btn-fantasma h-10 shrink-0 lg:h-8"
                 title="Volver a la pantalla inicial (conserva lo que tuvieras escrito)"
               >
-                <ChevronLeft size={13} /> Volver
+                <CaretLeft size={16} /> Volver
               </button>
-              <div className="text-xs text-bone-500 font-medium truncate min-w-0 flex-1">
-                {carousel.tema}
-                {generatingN !== null && (
-                  <span className="ml-2 text-[10px] text-gold-500 inline-flex items-center gap-1 whitespace-nowrap">
-                    <Loader2 size={11} className="animate-spin" /> generando slide {generatingN}…
-                    {stopping && <span className="text-bone-700">(deteniendo tras esta)</span>}
-                  </span>
-                )}
-                {generatingN === null && paused && carousel.slides.some((s) => !s.publicUrl) && (
-                  <span className="ml-2 text-[10px] text-bone-700 inline-flex items-center gap-1 whitespace-nowrap">
-                    en pausa · faltan {carousel.slides.filter((s) => !s.publicUrl).length}
-                  </span>
-                )}
-                {generatingN === null && carousel.slides.every((s) => s.publicUrl) && (
-                  <span className="ml-2 text-[10px] text-gold-500 inline-flex items-center gap-1">
-                    <Check size={11} /> completo
-                  </span>
-                )}
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-ui text-hueso">{carousel.tema}</p>
+                <p aria-live="polite" className="font-mono text-meta text-hueso-3">
+                  {generatingN !== null ? (
+                    <span className="text-oro">
+                      <span aria-hidden className="mr-1.5 inline-block h-[7px] w-[7px] rounded-full bg-oro" />
+                      generando la slide {generatingN}{stopping && <span className="text-hueso-3"> · se detiene después</span>}
+                    </span>
+                  ) : paused && faltan > 0 ? (
+                    `en pausa · faltan ${faltan}`
+                  ) : faltan === 0 ? (
+                    'completo'
+                  ) : (
+                    `faltan ${faltan}`
+                  )}
+                </p>
               </div>
-              <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
-                {/* Detener la cola en curso */}
+              <div className="flex flex-wrap items-center justify-end gap-2">
                 {generatingN !== null && (
-                  <button
-                    onClick={stopQueue}
-                    disabled={stopping}
-                    className="flex items-center gap-1 text-[11px] text-neon-red border border-neon-red/40 rounded-lg px-2.5 py-1 hover:bg-neon-red/10 disabled:opacity-40 transition-colors"
-                  >
-                    <Square size={11} /> {stopping ? 'Deteniendo…' : 'Detener'}
+                  <button onClick={stopQueue} disabled={stopping} className="btn-destructivo">
+                    <Stop size={16} /> {stopping ? 'Deteniendo…' : 'Detener'}
                   </button>
                 )}
-                {/* Reanudar desde donde quedó */}
-                {generatingN === null && paused && carousel.slides.some((s) => !s.publicUrl) && (
-                  <button
-                    onClick={resumeQueue}
-                    className="flex items-center gap-1 text-[11px] text-carbon-900 bg-gold-500 hover:bg-gold-600 rounded-lg px-2.5 py-1 font-medium transition-colors"
-                  >
-                    <Play size={11} /> Reanudar
+                {generatingN === null && paused && faltan > 0 && (
+                  <button onClick={resumeQueue} className="btn-sec border-hueso">
+                    <Play size={16} /> Reanudar
                   </button>
                 )}
-
-                <button
-                  onClick={startOver}
-                  disabled={generatingN !== null}
-                  className="text-[11px] text-bone-700 hover:text-bone-500 disabled:opacity-40 px-1"
-                >
+                <button onClick={startOver} disabled={generatingN !== null} className="btn-fantasma h-10 px-1 lg:h-8">
                   Nuevo carrusel
                 </button>
-
-                {/* Publicar ya (secundario) */}
                 <button
                   onClick={publishNow}
                   disabled={!canPublish || publishing || publishedOk}
-                  className="flex items-center gap-1.5 text-[11px] text-bone-500 border border-carbon-600 rounded-lg px-3 py-1.5 hover:border-gold-500/60 hover:text-gold-500 disabled:opacity-40 disabled:hover:border-carbon-600 disabled:hover:text-bone-500 transition-colors"
+                  className="btn-sec"
                   title="Publica el carrusel en Instagram ahora mismo, sin esperar a la cadencia"
                 >
-                  <Zap size={11} />
+                  <PaperPlaneTilt size={16} />
                   {publishing ? 'Publicando…' : publishedOk ? 'Publicado' : 'Publicar ya'}
                 </button>
-
-                {/* Enviar a la cola (primario) */}
                 <button
                   onClick={queueCarousel}
                   disabled={!canPublish || queueing || queuedEta !== null || publishedOk}
-                  className="flex items-center gap-1.5 text-[11px] font-medium text-carbon-900 bg-gold-500 hover:bg-gold-600 rounded-lg px-3 py-1.5 disabled:opacity-40 transition-colors"
-                  title="Sube las slides, genera el caption y lo deja en cola; se publica solo en su franja de cadencia"
+                  className="btn-sec border-hueso"
+                  title="Sube las slides, genera el caption y lo deja en cola; sale solo en su franja de cadencia"
                 >
-                  <Send size={11} />
+                  <Queue size={16} />
                   {queueing ? 'Encolando…' : queuedEta !== null ? 'En la cola' : 'Enviar a la cola'}
                 </button>
               </div>
@@ -692,34 +586,32 @@ export default function CarouselStudio() {
 
             {/* Confirmaciones / avisos, siempre visibles sin hacer scroll */}
             {(queuedEta !== null || publishedOk || tooManySlides) && (
-              <div className="flex flex-col gap-1">
+              <div className="flex flex-col gap-1 text-ui">
                 {publishedOk && (
-                  <span className="flex items-center gap-1.5 text-[11px] text-gold-500">
-                    <Check size={12} /> Publicado en Instagram
-                  </span>
+                  <span className="flex items-center gap-1.5 text-hueso-2"><Check size={16} className="text-oro" /> Publicado en Instagram</span>
                 )}
                 {queuedEta !== null && !publishedOk && (
-                  <span className="flex items-center gap-1.5 text-[11px] text-gold-500">
-                    <Check size={12} />
-                    {queuedEta ? `En la cola — se publicará el ${queuedEta}` : 'En la cola — se publicará en su franja'}
+                  <span className="flex items-center gap-1.5 text-hueso-2">
+                    <Check size={16} className="text-oro" />
+                    {queuedEta ? `En la cola: sale el ${queuedEta}` : 'En la cola: sale en su franja'}
                   </span>
                 )}
                 {tooManySlides && (
-                  <span className="text-[11px] text-neon-red">
-                    Instagram admite máximo 10 slides (este tiene {carousel.slides.length})
+                  <span className="flex items-center gap-1.5 text-lacre">
+                    <WarningCircle size={16} /> Instagram admite 10 slides como máximo y este tiene {carousel.slides.length}.
                   </span>
                 )}
               </div>
             )}
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               {carousel.slides.map((s) => {
                 const isGen = generatingN === s.n
                 const err = slideErrors[s.n]
                 return (
-                  <div key={s.n} className="flex flex-col gap-1.5">
+                  <li key={s.n} className="flex flex-col gap-1.5">
                     <div
-                      className="relative rounded-lg overflow-hidden bg-carbon-900 border border-carbon-700 flex items-center justify-center"
+                      className={`relative flex items-center justify-center overflow-hidden rounded-control border bg-s2 ${isGen ? 'border-oro' : 'border-linea-2'}`}
                       style={{ aspectRatio }}
                     >
                       {s.publicUrl ? (
@@ -729,46 +621,38 @@ export default function CarouselStudio() {
                             const i = done.findIndex((x) => x.n === s.n)
                             if (i >= 0) setViewerIdx(i)
                           }}
-                          className="group w-full h-full cursor-zoom-in"
-                          title="Ver en grande"
+                          className="group h-full w-full cursor-zoom-in"
+                          aria-label={`Ver la slide ${s.n} en grande`}
                         >
-                          <img
-                            src={s.publicUrl}
-                            alt={`Slide ${s.n}`}
-                            className="w-full h-full object-cover transition-opacity group-hover:opacity-80"
-                          />
+                          <img src={s.publicUrl} alt="" className="h-full w-full object-cover transition-opacity duration-rapido ease-mesa group-hover:opacity-80" />
                         </button>
                       ) : isGen ? (
-                        <Loader2 size={22} className="animate-spin text-gold-500" />
+                        <span className="font-mono text-meta text-oro">generando</span>
                       ) : err ? (
-                        <AlertCircle size={20} className="text-neon-red" />
+                        <WarningCircle size={20} className="text-lacre" />
                       ) : (
-                        <span className="text-[10px] text-bone-700">en cola…</span>
+                        <span className="font-mono text-meta text-hueso-3">en espera</span>
                       )}
-                      <span className="absolute top-1.5 left-1.5 text-[9px] font-mono bg-carbon-900/80 text-bone-500 rounded px-1">
-                        #{s.n} {s.rol === 'portada' ? '· portada' : s.rol === 'cta' ? '· cta' : s.rol === 'historia' ? '· historia' : ''}
+                      <span className="absolute left-1.5 top-1.5 rounded-[4px] bg-velo px-1 font-mono text-label tracking-normal text-hueso">
+                        #{s.n}{s.rol !== 'desarrollo' && <span className={rolClase(s.rol)}> {ROLE_LABEL[s.rol].toLowerCase()}</span>}
                       </span>
                     </div>
-                    {err && <span className="text-[9px] text-neon-red leading-tight">{err}</span>}
-                    <button
-                      onClick={() => regenerateSlide(s.n)}
-                      disabled={generatingN !== null}
-                      className="flex items-center justify-center gap-1 text-[10px] text-bone-700 hover:text-bone-500 border border-carbon-600 rounded py-1 disabled:opacity-30 transition-colors"
-                    >
-                      <RefreshCw size={10} className={isGen ? 'animate-spin' : ''} />
+                    {err && <span className="text-meta text-lacre">{err}</span>}
+                    <button onClick={() => regenerateSlide(s.n)} disabled={generatingN !== null} className="btn-sec">
+                      <ArrowsClockwise size={14} />
                       {s.publicUrl ? 'Regenerar' : 'Generar'}
                     </button>
-                  </div>
+                  </li>
                 )
               })}
-            </div>
+            </ul>
 
-            <p className="text-[10px] text-bone-700 leading-relaxed">
-              Toca una slide para verla en grande. <span className="text-bone-500">Enviar a la cola</span> lo publica
-              solo en la próxima franja de cadencia (puedes encolar varios en una sesión);{' '}
-              <span className="text-bone-500">Publicar ya</span> lo sube a Instagram al instante.
+            <p className="text-ui text-hueso-3">
+              Toca una slide para verla en grande. <span className="text-hueso-2">Enviar a la cola</span> lo publica
+              solo en la próxima franja de la cadencia (puedes encolar varios seguidos);{' '}
+              <span className="text-hueso-2">Publicar ya</span> lo sube a Instagram al momento.
             </p>
-          </div>
+          </section>
         )}
 
         {/* Visor ampliado */}

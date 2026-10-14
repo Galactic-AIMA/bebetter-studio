@@ -1,7 +1,9 @@
-import { X, Wand2, Sparkles, RefreshCw } from 'lucide-react'
+import { MagicWand, Sparkle, WarningCircle } from '@phosphor-icons/react'
 import { useEffect, useState } from 'react'
 import { aiImagesApi } from '../../api'
 import { ImageItem } from '../../types'
+import PanelDeslizante from '../ui/PanelDeslizante'
+import { Segmentos } from '../ui/mesa'
 
 interface Props {
   phrase: string
@@ -12,9 +14,9 @@ interface Props {
 }
 
 const ASPECTS: { value: string; label: string }[] = [
-  { value: '9:16', label: '9:16 · Reel' },
-  { value: '4:5', label: '4:5 · Carrusel' },
-  { value: '1:1', label: '1:1 · Post' },
+  { value: '9:16', label: '9:16 reel' },
+  { value: '4:5', label: '4:5 carrusel' },
+  { value: '1:1', label: '1:1 post' },
 ]
 
 const hasPhrase = (p: string) => p && p !== 'Tu frase aquí...' && p.length >= 10
@@ -58,105 +60,69 @@ export default function AIImageModal({ phrase, phraseId, textY, onClose, onGener
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-2 sm:p-4"
-      onClick={(e) => {
-        if (e.target === e.currentTarget && !generating) onClose()
-      }}
+    <PanelDeslizante
+      titulo="Fondo con IA"
+      onClose={onClose}
+      pie={
+        <>
+          <span aria-live="polite" className="text-ui text-hueso-2">
+            {generating && 'Generando. Tarda cerca de un minuto.'}
+          </span>
+          <button onClick={handleGenerate} disabled={generating || !prompt.trim()} className="btn-sec ml-auto border-hueso">
+            <MagicWand size={16} />
+            {generating ? 'Generando…' : 'Generar fondo'}
+          </button>
+        </>
+      }
     >
-      <div className="relative w-full max-w-lg bg-carbon-800 rounded-xl overflow-hidden shadow-2xl flex flex-col max-h-[90dvh]">
-        {/* Header */}
-        <div className="flex items-center gap-2.5 px-4 py-3 border-b border-carbon-700 shrink-0">
-          <Wand2 size={15} className="text-gold-500" />
-          <h2 className="text-sm font-semibold tracking-wide text-bone-500">Generar imagen con IA</h2>
-          <button
-            onClick={onClose}
+      <div className="flex flex-col gap-5 px-5 py-5">
+        <p className="text-ui text-hueso-2">
+          Un fondo simbólico con la estética de la marca, <span className="text-hueso">sin texto</span>, para
+          poner la frase encima. Se guarda en el banco y entra en el emparejamiento.
+          <span className="mt-1 block font-mono text-meta text-hueso-3">KIE · Nano Banana Pro</span>
+        </p>
+
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center justify-between">
+            <label htmlFor="prompt-ia" className="text-ui text-hueso-3">Prompt</label>
+            <button
+              onClick={proposePrompt}
+              disabled={loadingPrompt || generating || !hasPhrase(phrase)}
+              className="btn-fantasma h-10 px-1 lg:h-8"
+              title={hasPhrase(phrase) ? 'Vuelve a proponerlo desde la frase activa' : 'Elige una frase primero'}
+            >
+              <Sparkle size={16} />
+              {loadingPrompt ? 'Proponiendo…' : 'Proponer desde la frase'}
+            </button>
+          </div>
+          <textarea
+            id="prompt-ia"
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
             disabled={generating}
-            className="ml-auto p-1.5 rounded-lg bg-carbon-700/80 text-bone-700 hover:text-bone-500 transition-colors disabled:opacity-40"
-          >
-            <X size={14} />
-          </button>
+            rows={9}
+            placeholder={
+              hasPhrase(phrase)
+                ? 'Proponiendo un prompt a partir de la frase…'
+                : 'Escribe un prompt, o elige una frase para que se proponga solo.'
+            }
+            className="campo resize-y text-ui disabled:opacity-60"
+          />
         </div>
 
-        <div className="overflow-y-auto flex-1 p-4 flex flex-col gap-4">
-          <p className="text-[11px] leading-relaxed text-bone-700">
-            Se genera un fondo simbólico con estética de marca (RAW · STOIC · CINEMATIC),{' '}
-            <span className="text-bone-500">sin texto</span>, para poner la frase encima. Se guarda en
-            el banco y entra al matching automáticamente. Proveedor: KIE (Nano Banana Pro).
+        <Segmentos
+          label="Formato"
+          value={aspect}
+          onChange={setAspect}
+          options={ASPECTS.map((a) => ({ value: a.value, label: a.label, disabled: generating && a.value !== aspect }))}
+        />
+
+        {error && (
+          <p role="alert" className="flex items-start gap-1.5 text-ui text-lacre">
+            <WarningCircle size={16} className="mt-0.5 shrink-0" /> {error}
           </p>
-
-          {/* Prompt editable */}
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="text-[11px] font-medium text-bone-500">Prompt (editable)</label>
-              <button
-                onClick={proposePrompt}
-                disabled={loadingPrompt || generating || !hasPhrase(phrase)}
-                className="flex items-center gap-1 text-[10px] text-gold-500 hover:text-gold-400 transition-colors disabled:opacity-40"
-                title={hasPhrase(phrase) ? 'Reproponer desde la frase activa' : 'Selecciona una frase primero'}
-              >
-                <Sparkles size={10} className={loadingPrompt ? 'animate-pulse' : ''} />
-                {loadingPrompt ? 'Proponiendo…' : 'Proponer desde la frase'}
-              </button>
-            </div>
-            <textarea
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              disabled={generating}
-              rows={8}
-              placeholder={
-                hasPhrase(phrase)
-                  ? 'Cargando prompt propuesto…'
-                  : 'Escribe un prompt o selecciona una frase para proponerlo automáticamente.'
-              }
-              className="w-full bg-carbon-900 border border-carbon-600 rounded-lg px-3 py-2 text-xs text-bone-500 leading-relaxed resize-y focus:outline-none focus:border-gold-500/60 disabled:opacity-60"
-            />
-          </div>
-
-          {/* Formato */}
-          <div>
-            <label className="block text-[11px] font-medium text-bone-500 mb-1.5">Formato</label>
-            <div className="flex items-center rounded-lg overflow-hidden border border-carbon-600 text-xs w-max">
-              {ASPECTS.map((a) => (
-                <button
-                  key={a.value}
-                  onClick={() => setAspect(a.value)}
-                  disabled={generating}
-                  className={`px-3 py-1.5 transition-colors disabled:opacity-40 ${
-                    aspect === a.value ? 'bg-carbon-600 text-gold-500 font-medium' : 'text-bone-700 hover:text-bone-500'
-                  }`}
-                >
-                  {a.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {error && (
-            <p className="text-[11px] text-neon-red bg-neon-red/10 border border-neon-red/30 rounded-lg px-3 py-2">
-              {error}
-            </p>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="flex items-center gap-2 px-4 py-3 border-t border-carbon-700 shrink-0">
-          {generating && (
-            <span className="text-[11px] text-gold-500 flex items-center gap-1.5">
-              <RefreshCw size={11} className="animate-spin" />
-              Generando… puede tardar ~1 min
-            </span>
-          )}
-          <button
-            onClick={handleGenerate}
-            disabled={generating || !prompt.trim()}
-            className="ml-auto flex items-center gap-1.5 text-xs font-medium bg-[#E8E4DC] text-[#0A0A0A] rounded-lg px-4 py-2 hover:bg-white transition-colors disabled:opacity-40"
-          >
-            <Wand2 size={13} />
-            {generating ? 'Generando…' : 'Generar'}
-          </button>
-        </div>
+        )}
       </div>
-    </div>
+    </PanelDeslizante>
   )
 }

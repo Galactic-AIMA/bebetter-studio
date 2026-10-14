@@ -23,25 +23,11 @@ const sala = {
   velo: 'rgb(12 11 10 / .72)',
 }
 
-/*
- * ⚠️ ALIAS DE TRANSICIÓN (2026-10-05). Los nombres viejos apuntan ya a la paleta
- * nueva para que TODA la app cambie de golpe —incluidos los componentes que aún no
- * se han migrado— y el neón #FF3B3B desaparezca hoy. Se borran al terminar la
- * migración (handoff, paso 3+): no usarlos en código nuevo.
- */
-const aliasViejos = {
-  carbon: { 900: sala.sala, 800: sala.s1, 700: sala.s2, 600: sala.s3 },
-  bone: { 500: sala.hueso, 700: sala['hueso-2'] },
-  gold: { 500: sala.oro, 600: '#B08D4B' },
-  blood: { 500: sala.sangre },
-  neon: { red: sala.lacre },
-}
-
 export default {
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
   theme: {
     extend: {
-      colors: { ...sala, ...aliasViejos },
+      colors: sala,
       fontFamily: {
         sans: ['"IBM Plex Sans"', 'system-ui', 'sans-serif'],
         mono: ['"IBM Plex Mono"', 'ui-monospace', 'monospace'],
